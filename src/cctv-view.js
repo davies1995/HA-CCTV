@@ -1056,10 +1056,11 @@ export class CctvView extends LitElement {
         <div class="picker-head">
           <strong>Detection recordings</strong>
           <span class="hint">
-            When any site-wide linked detection sensor triggers, HA starts saving
-            clips for <em>all</em> available cameras until sensors clear.
-            Uses <code>camera.record</code> (30s chunks + lookback) with snapshot fallback.
-            Sensor links are shared for every HA user; your mosaic selection stays personal.
+            When any site-wide linked detection sensor triggers, HA logs the event for
+            the shared timeline and (if enabled) saves clips for <em>all</em> available
+            cameras until sensors clear. Timeline + saved detections survive reboot and
+            are purged only after retention days. Uses <code>camera.record</code>
+            (30s chunks + lookback) with snapshot fallback. Mosaic selection stays personal.
           </span>
         </div>
         <div class="settings-grid">
@@ -1102,7 +1103,7 @@ export class CctvView extends LitElement {
             <strong>Saved detections</strong>
             <span class="hint">
               Time, what was detected, and file size. Click to load Play.
-              Kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
+              Shared for all users; survives reboot; kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
             </span>
           </div>
           <button class="btn" type="button" @click=${() => this._refreshSessions()}>

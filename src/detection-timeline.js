@@ -1,14 +1,11 @@
 import { LitElement, html, nothing } from "lit";
 import {
   DETECTION_KINDS,
-  describeLinkedSensors,
-  fetchSensorHistory,
   formatClock,
   formatDuration,
-  isSensorActive,
   mergeOverlappingSegments,
-  segmentsFromHistory,
 } from "./detection-sensors.js";
+import { listDetections } from "./recordings-api.js";
 
 const WINDOW_OPTIONS = [
   { value: 15 * 60 * 1000, label: "15m" },
@@ -17,15 +14,13 @@ const WINDOW_OPTIONS = [
   { value: 24 * 60 * 60 * 1000, label: "24h" },
 ];
 
-/** History poll while the CCTV panel is visible (no work when suspended/away). */
+/** Poll shared detection store while the CCTV panel is visible. */
 const HISTORY_POLL_MS = 90_000;
-/** Cap linked sensors per history WS call to keep HA history light. */
-const MAX_HISTORY_ENTITIES = 24;
 
 /**
  * Horizontal detection timeline.
- * Lanes stay grouped by type (person/car/…); overlapping same-type sensors
- * merge into one event. Click an event for details.
+ * Reads site-wide persisted detection events (survives reboot; retention-purged).
+ * Lanes stay grouped by type; overlapping same-type sensors merge into one event.
  */
 export class CctvDetectionTimeline extends LitElement {
   static properties = {
@@ -164,9 +159,9 @@ export class CctvDetectionTimeline extends LitElement {
     if (typeof document !== "undefined" && document.hidden) return;
 
     const showLoading = Boolean(opts.showLoading);
-    const entityIds = this._linkedEntityIds().slice(0, MAX_HISTORY_ENTITIES);
-    const entityKey = `${entityIds.join(",")}|${this._windowMs}`;
-    if (!this.hass || !entityIds.length) {
+    const cams = [...(this.cameras || [])];
+    const entityKey = `${cams.join(",")}|${this._windowMs}`;
+    if (!this.hass) {
       this._rows = [];
       this._error = "";
       this._selected = null;
@@ -183,21 +178,21 @@ export class CctvDetectionTimeline extends LitElement {
     const start = end - this._windowMs;
 
     try {
-      const history = await fetchSensorHistory(
-        this.hass,
-        entityIds,
-        new Date(start),
-        new Date(end)
-      );
+      const events = await listDetections(this.hass, {
+        start,
+        end,
+        cameras: cams.length ? cams : undefined,
+        limit: 500,
+      });
       if (token !== this._fetchToken || !this.active) return;
       this._lastEntityKey = entityKey;
-      this._rows = this._buildRows(history, start, end);
+      this._rows = this._buildRowsFromEvents(events, start, end);
       this._now = end;
       this._syncSelected();
     } catch (err) {
       if (token !== this._fetchToken || !this.active) return;
-      this._error = err?.message || "Could not load detection history";
-      this._rows = this._buildRows({}, start, end);
+      this._error = err?.message || "Could not load saved detections";
+      this._rows = this._buildRowsFromEvents([], start, end);
       this._syncSelected();
     } finally {
       if (token === this._fetchToken) this._loading = false;
@@ -220,49 +215,90 @@ export class CctvDetectionTimeline extends LitElement {
     return [...new Set(ids)];
   }
 
+  _sensorName(entityId) {
+    return (
+      this.hass?.states?.[entityId]?.attributes?.friendly_name ||
+      String(entityId || "").replace(/^[^.]+\./, "") ||
+      entityId
+    );
+  }
+
   /**
-   * One lane per detection type; merged events carry cameras/sensors for detail.
+   * Build type lanes from persisted shared detection events.
+   * @param {Array<any>} events
+   * @param {number} start
+   * @param {number} end
    */
-  _buildRows(history, start, end) {
+  _buildRowsFromEvents(events, start, end) {
     /** @type {Map<string, { kind: { id: string, label: string }, raw: any[], active: boolean }>} */
     const byKind = new Map();
+    const visible = new Set(this.cameras || []);
 
+    for (const event of events || []) {
+      const kindId = event.kind || "other";
+      const kindMeta =
+        DETECTION_KINDS.find((k) => k.id === kindId) ||
+        DETECTION_KINDS[DETECTION_KINDS.length - 1];
+      const kind = {
+        id: kindMeta.id,
+        label: event.kind_label || kindMeta.label,
+      };
+      const evStart = Date.parse(event.start);
+      const evEnd = event.end ? Date.parse(event.end) : end;
+      if (!Number.isFinite(evStart)) continue;
+      const clipStart = Math.max(start, evStart);
+      const clipEnd = Math.min(end, Number.isFinite(evEnd) ? evEnd : end);
+      if (clipEnd <= clipStart) continue;
+
+      let cameras = (event.cameras || []).map(String);
+      if (visible.size) {
+        cameras = cameras.filter((id) => visible.has(id));
+        if (!cameras.length && (event.cameras || []).length) continue;
+      }
+
+      let bucket = byKind.get(kind.id);
+      if (!bucket) {
+        bucket = { kind, raw: [], active: false };
+        byKind.set(kind.id, bucket);
+      }
+      bucket.raw.push({
+        start: clipStart,
+        end: clipEnd,
+        cameras,
+        sensors: event.sensor_id
+          ? [
+              {
+                entityId: event.sensor_id,
+                name: this._sensorName(event.sensor_id),
+              },
+            ]
+          : [],
+        sourceId: event.id,
+        active: Boolean(event.active || event.end == null),
+      });
+      if (event.active || event.end == null) bucket.active = true;
+    }
+
+    // Ensure lanes exist for kinds linked to visible cams even if quiet.
     for (const cam of this.cameras || []) {
-      const linked = describeLinkedSensors(this.hass, this.sensorLinks?.[cam] || []);
-      for (const sensor of linked) {
-        const kind = sensor.kind || { id: "other", label: "Other" };
-        const points =
-          history?.[sensor.entityId] || history?.[sensor.entityId.toLowerCase()] || [];
-        let segments = segmentsFromHistory(
-          points,
-          start,
-          end,
-          (state) => isSensorActive({ state })
-        );
-
-        if (sensor.active && !sensor.missing) {
-          const last = segments[segments.length - 1];
-          if (last && last.end >= end - 5000) {
-            last.end = end;
-          } else if (!points.length) {
-            segments = [{ start: Math.max(start, end - 60_000), end }];
-          }
-        }
-
-        let bucket = byKind.get(kind.id);
-        if (!bucket) {
-          bucket = { kind, raw: [], active: false };
-          byKind.set(kind.id, bucket);
-        }
-        for (const seg of segments) {
-          bucket.raw.push({
-            start: seg.start,
-            end: seg.end,
-            cameras: [cam],
-            sensors: [{ entityId: sensor.entityId, name: sensor.name }],
+      for (const sensorId of this.sensorLinks?.[cam] || []) {
+        const stateObj = this.hass?.states?.[sensorId];
+        const blob = `${sensorId} ${stateObj?.attributes?.friendly_name || ""}`.toLowerCase();
+        const kindMeta =
+          DETECTION_KINDS.find(
+            (k) =>
+              k.id !== "other" &&
+              k.tokens.some((t) =>
+                new RegExp(`(^|[_\\s.-])${t}([_\\s.-]|$)`, "i").test(blob)
+              )
+          ) || DETECTION_KINDS[DETECTION_KINDS.length - 1];
+        if (!byKind.has(kindMeta.id)) {
+          byKind.set(kindMeta.id, {
+            kind: { id: kindMeta.id, label: kindMeta.label },
+            raw: [],
+            active: false,
           });
         }
-        if (sensor.active && !sensor.missing) bucket.active = true;
       }
     }
 
@@ -270,10 +306,10 @@ export class CctvDetectionTimeline extends LitElement {
     return [...byKind.values()]
       .map((bucket) => {
         const merged = mergeOverlappingSegments(bucket.raw, 1000);
-        const events = merged.map((seg, index) => {
+        const eventsOut = merged.map((seg, index) => {
           const cameraIds = seg.cameras || [];
           return {
-            id: `${bucket.kind.id}:${seg.start}:${seg.end}:${index}`,
+            id: seg.sourceId || `${bucket.kind.id}:${seg.start}:${seg.end}:${index}`,
             kind: bucket.kind,
             start: seg.start,
             end: seg.end,
@@ -281,16 +317,17 @@ export class CctvDetectionTimeline extends LitElement {
             cameras: cameraIds,
             cameraNames: cameraIds.map((id) => this.cameraNames?.[id] || id),
             sensors: seg.sensors || [],
-            active: bucket.active && seg.end >= end - 5000,
+            active: Boolean(bucket.active && seg.end >= end - 5000),
           };
         });
         return {
           kind: bucket.kind,
-          events,
-          totalMs: events.reduce((sum, ev) => sum + ev.durationMs, 0),
+          events: eventsOut,
+          totalMs: eventsOut.reduce((sum, ev) => sum + ev.durationMs, 0),
           active: bucket.active,
         };
       })
+      .filter((row) => row.events.length || row.active || this._linkedEntityIds().length)
       .sort(
         (a, b) =>
           (kindOrder.get(a.kind.id) ?? 99) - (kindOrder.get(b.kind.id) ?? 99) ||
@@ -354,7 +391,7 @@ export class CctvDetectionTimeline extends LitElement {
             <strong>Detection timeline</strong>
             <span class="hint">
               ${linkedCount
-                ? `Horizontal timeline by type — click an event for details`
+                ? `Shared for all users — survives reboot; kept for retention days`
                 : `Link detection sensors in a camera’s settings to see events here`}
             </span>
           </div>

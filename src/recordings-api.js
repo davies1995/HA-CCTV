@@ -94,6 +94,28 @@ export async function listRecordings(hass, limit = 40) {
 }
 
 /**
+ * Shared detection timeline events (all users; survives HA reboot).
+ * @param {any} hass
+ * @param {{ start?: number, end?: number, cameras?: string[], limit?: number }} [opts]
+ */
+export async function listDetections(hass, opts = {}) {
+  if (!hass?.callWS) return [];
+  try {
+    const result = await hass.callWS({
+      type: "cctv_dashboard/list_detections",
+      start: opts.start,
+      end: opts.end,
+      cameras: opts.cameras,
+      limit: opts.limit ?? 500,
+    });
+    return result?.events || [];
+  } catch (err) {
+    console.warn("CCTV: failed to list detections", err);
+    return [];
+  }
+}
+
+/**
  * @param {any} hass
  * @param {string} sessionId
  */

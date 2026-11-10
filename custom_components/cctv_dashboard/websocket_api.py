@@ -21,6 +21,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_settings)
     websocket_api.async_register_command(hass, ws_set_sensor_links)
     websocket_api.async_register_command(hass, ws_list_recordings)
+    websocket_api.async_register_command(hass, ws_list_detections)
     websocket_api.async_register_command(hass, ws_delete_recording)
     # Backward-compatible alias used by older frontend builds.
     websocket_api.async_register_command(hass, ws_sync_panel)
@@ -169,6 +170,41 @@ async def ws_list_recordings(
         return
     connection.send_result(
         msg["id"], {"sessions": manager.list_sessions(limit=msg["limit"])}
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cctv_dashboard/list_detections",
+        vol.Optional("start"): vol.Coerce(int),
+        vol.Optional("end"): vol.Coerce(int),
+        vol.Optional("cameras"): [str],
+        vol.Optional("limit", default=500): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=2000)
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_list_detections(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Shared detection timeline events (all users; survives reboot)."""
+    manager = _manager(hass)
+    if not manager:
+        connection.send_error(msg["id"], "not_ready", "Recording manager not ready")
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "events": manager.list_detections(
+                start_ms=msg.get("start"),
+                end_ms=msg.get("end"),
+                cameras=msg.get("cameras"),
+                limit=msg["limit"],
+            )
+        },
     )
 
 
