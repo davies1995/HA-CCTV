@@ -32,6 +32,11 @@ export class CctvStreamPlayer extends LitElement {
     mosaic: { type: Boolean, reflect: true },
     eager: { type: Boolean },
     posterOnly: { type: Boolean, attribute: "poster-only" },
+    /**
+     * When false, fully unload live media (WebRTC/HLS/MJPEG/ha-camera-stream)
+     * and release stream slots. Panel sets this false when hidden/away.
+     */
+    active: { type: Boolean },
     _mode: { state: true },
     _error: { state: true },
     _hlsUrl: { state: true },
@@ -142,6 +147,7 @@ export class CctvStreamPlayer extends LitElement {
     this.mosaic = false;
     this.eager = false;
     this.posterOnly = false;
+    this.active = true;
     this._mode = "loading";
     this._error = "";
     this._hlsUrl = "";
@@ -162,13 +168,14 @@ export class CctvStreamPlayer extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._bindObserver();
+    if (this.active) this._reconcilePlayback();
+    else this._unloadCompletely();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._unbindObserver();
-    this._releaseSlot();
-    this._stopLive();
+    this._unloadCompletely();
   }
 
   /**
@@ -185,6 +192,11 @@ export class CctvStreamPlayer extends LitElement {
       this._bindObserver();
     }
 
+    if (changed.has("active") && !this.active) {
+      this._unloadCompletely();
+      return;
+    }
+
     let hassRelevant = changed.has("hass");
     if (hassRelevant && changed.size === 1) {
       const prev = changed.get("hass");
@@ -198,7 +210,8 @@ export class CctvStreamPlayer extends LitElement {
       changed.has("quality") ||
       changed.has("context") ||
       changed.has("eager") ||
-      changed.has("posterOnly")
+      changed.has("posterOnly") ||
+      (changed.has("active") && this.active)
     ) {
       this._reconcilePlayback();
     }
@@ -269,6 +282,8 @@ export class CctvStreamPlayer extends LitElement {
   }
 
   _wantsLive() {
+    if (!this.active) return false;
+    if (typeof document !== "undefined" && document.hidden) return false;
     if (this.posterOnly) return false;
     if (this.eager) return true;
     return this._visible;
@@ -285,6 +300,43 @@ export class CctvStreamPlayer extends LitElement {
     this._mjpegUrl = cameraMjpegStreamUrl(this.hass, cam);
   }
 
+  /**
+   * Drop client media handles so browsers close MJPEG/HLS/WebRTC sockets.
+   */
+  _clearMediaElements() {
+    const root = this.renderRoot;
+    if (!root) return;
+    root.querySelectorAll("video").forEach((video) => {
+      try {
+        video.pause?.();
+        const stream = video.srcObject;
+        if (stream && typeof stream.getTracks === "function") {
+          stream.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {
+              /* ignore */
+            }
+          });
+        }
+        video.srcObject = null;
+        video.removeAttribute("src");
+        video.load?.();
+      } catch {
+        /* ignore */
+      }
+    });
+    root.querySelectorAll("img.media").forEach((img) => {
+      try {
+        img.removeAttribute("src");
+        // Break lingering MJPEG camera_proxy_stream connections.
+        img.src = "";
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
   _stopLive() {
     this._startToken += 1;
     if (this._unsubWebRtc) {
@@ -297,6 +349,20 @@ export class CctvStreamPlayer extends LitElement {
     }
     if (this._pc) {
       try {
+        this._pc.getSenders?.().forEach((sender) => {
+          try {
+            sender.track?.stop?.();
+          } catch {
+            /* ignore */
+          }
+        });
+        this._pc.getReceivers?.().forEach((receiver) => {
+          try {
+            receiver.track?.stop?.();
+          } catch {
+            /* ignore */
+          }
+        });
         this._pc.close();
       } catch {
         /* ignore */
@@ -305,6 +371,7 @@ export class CctvStreamPlayer extends LitElement {
     }
     this._sessionId = null;
     this._hlsUrl = "";
+    this._clearMediaElements();
   }
 
   _releaseSlot() {
@@ -315,8 +382,33 @@ export class CctvStreamPlayer extends LitElement {
     this._queued = false;
   }
 
+  /**
+   * Hard unload used when the panel is hidden/disconnected — frees HA stream
+   * workers and browser CPU/RAM (no posters, no MJPEG, no peer connections).
+   */
+  _unloadCompletely() {
+    this._releaseSlot();
+    this._stopLive();
+    this._stillUrl = "";
+    this._mjpegUrl = "";
+    this._mode = "empty";
+    this._error = "";
+    this._playKey = "";
+    this._idleReason = "suspended";
+    this._queued = false;
+  }
+
   _showIdle(reason = "idle") {
     this._stopLive();
+    // Suspended / inactive: do not open still/MJPEG proxies either.
+    if (!this.active || (typeof document !== "undefined" && document.hidden)) {
+      this._stillUrl = "";
+      this._mjpegUrl = "";
+      this._mode = "empty";
+      this._error = "";
+      this._idleReason = reason;
+      return;
+    }
     this._refreshPosterUrls(this._streamCamera || this.camera);
     if (!this.hass || !this.camera?.stateObj) {
       this._mode = "empty";
@@ -328,6 +420,11 @@ export class CctvStreamPlayer extends LitElement {
   }
 
   _reconcilePlayback() {
+    if (!this.active || (typeof document !== "undefined" && document.hidden)) {
+      this._unloadCompletely();
+      return;
+    }
+
     const max = Number(this.config?.max_streams);
     if (Number.isFinite(max) && max > 0) {
       streamSlots.setMax(max);

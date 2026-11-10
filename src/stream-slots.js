@@ -86,6 +86,21 @@ class StreamSlotManager {
     this._drain();
   }
 
+  /** Drop every holder/queue entry (panel suspend / hard reset). */
+  releaseAll() {
+    const ids = [...this.holders.keys()];
+    this.queue = [];
+    for (const id of ids) {
+      const holder = this.holders.get(id);
+      this.holders.delete(id);
+      try {
+        holder?.onRevoke?.();
+      } catch (err) {
+        console.warn("CCTV stream slot revoke failed", err);
+      }
+    }
+  }
+
   _lowestHolder() {
     let lowest = null;
     for (const [id, holder] of this.holders) {
