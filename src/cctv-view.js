@@ -811,14 +811,32 @@ export class CctvView extends LitElement {
     this._status = "Recordings refreshed";
   }
 
-  async _deleteSession(sessionId) {
+  _isAdmin() {
+    return Boolean(this.hass?.user?.is_admin);
+  }
+
+  async _deleteSession(sessionId, event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can delete saved detections";
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Delete this saved detection’s recordings for all users?")
+    ) {
+      return;
+    }
     try {
-      await deleteRecording(this.hass, sessionId);
+      const ok = await deleteRecording(this.hass, sessionId);
       this._sessions = await listRecordings(this.hass);
       if (this._playback?.session?.session_id === sessionId) {
         this._stopPlayback();
       }
-      this._status = "Recording deleted";
+      this._status = ok
+        ? "Saved detection deleted for all users"
+        : "Recording was already removed";
     } catch (err) {
       this._status = err?.message || "Could not delete recording";
     }
@@ -892,6 +910,17 @@ export class CctvView extends LitElement {
       await signPlaybackTracks(this.hass, this._playback.tracks);
     } catch (err) {
       console.warn("CCTV: could not sign playback URLs", err);
+      this._status =
+        err?.message ||
+        "Could not sign recording URLs (auth/sign_path failed)";
+      return;
+    }
+    const playable = this._playback.tracks.some((t) =>
+      (t.items || []).some((item) => item.kind === "video" || item.kind === "snapshot")
+    );
+    if (!playable) {
+      this._status = "No playable clips (files missing or empty)";
+      return;
     }
     // Unload live streams by swapping mosaic media to recordings (same tiles).
     this._playback = { ...this._playback, playing: true };
@@ -1314,6 +1343,7 @@ export class CctvView extends LitElement {
 
   _renderRecordings() {
     const sessions = this._sessions || [];
+    const admin = this._isAdmin();
     return html`
       <section class="recordings" aria-label="Saved detections">
         <div class="timeline-head">
@@ -1322,6 +1352,9 @@ export class CctvView extends LitElement {
             <span class="hint">
               Time, what was detected, and file size. Click to load Play.
               Shared for all users; survives reboot; kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
+              ${admin
+                ? " Admins can delete a detection’s file set for everyone."
+                : ""}
             </span>
           </div>
           <button class="btn" type="button" @click=${() => this._refreshSessions()}>
@@ -1332,14 +1365,14 @@ export class CctvView extends LitElement {
           ? html`<p class="empty">No detection recordings yet.</p>`
           : html`
               <div class="recording-list">
-                ${sessions.map((session) => this._renderSession(session))}
+                ${sessions.map((session) => this._renderSession(session, admin))}
               </div>
             `}
       </section>
     `;
   }
 
-  _renderSession(session) {
+  _renderSession(session, admin = false) {
     const when = session.started
       ? new Date(session.started).toLocaleString()
       : "—";
@@ -1350,19 +1383,36 @@ export class CctvView extends LitElement {
     const size = formatBytes(sessionTotalBytes(session));
     const selected =
       this._playback?.session?.session_id === session.session_id;
+    const canPlay = !session.active && (session.clips || []).length;
     return html`
-      <button
-        type="button"
+      <div
         class="recording-item ${session.active ? "active" : ""} ${selected ? "selected" : ""}"
-        ?disabled=${session.active || !(session.clips || []).length}
-        @click=${() => this._selectPlaybackSession(session)}
       >
-        <div class="recording-meta">
-          <span class="recording-when">${when}${session.active ? " · recording…" : ""}</span>
-          <span class="recording-detected">${labels.join(", ")}</span>
-        </div>
-        <span class="recording-size">${size}</span>
-      </button>
+        <button
+          type="button"
+          class="recording-select"
+          ?disabled=${!canPlay}
+          @click=${() => this._selectPlaybackSession(session)}
+        >
+          <div class="recording-meta">
+            <span class="recording-when">${when}${session.active ? " · recording…" : ""}</span>
+            <span class="recording-detected">${labels.join(", ")}</span>
+          </div>
+          <span class="recording-size">${size}</span>
+        </button>
+        ${admin && !session.active
+          ? html`
+              <button
+                type="button"
+                class="btn recording-delete"
+                title="Delete recordings for all users"
+                @click=${(e) => this._deleteSession(session.session_id, e)}
+              >
+                Delete
+              </button>
+            `
+          : nothing}
+      </div>
     `;
   }
 

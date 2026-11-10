@@ -882,23 +882,18 @@ export const sharedStyles = css`
   .recording-item {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 0.35rem 0.85rem;
+    gap: 0.35rem 0.55rem;
     align-items: center;
     width: 100%;
-    text-align: left;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    padding: 0.65rem 0.7rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.35rem;
     border: 1px solid var(--cctv-border);
     border-radius: 8px;
     background: transparent;
   }
 
   .recording-item:hover,
-  .recording-item:focus-visible {
+  .recording-item:focus-within {
     border-color: var(--cctv-accent);
-    outline: none;
   }
 
   .recording-item.active {
@@ -908,6 +903,39 @@ export const sharedStyles = css`
   .recording-item.selected {
     border-color: var(--cctv-accent);
     background: rgba(61, 156, 240, 0.08);
+  }
+
+  .recording-select {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.35rem 0.85rem;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    padding: 0.35rem 0.4rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+  }
+
+  .recording-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .recording-select:focus-visible {
+    outline: 2px solid var(--cctv-accent);
+    outline-offset: 1px;
+  }
+
+  .recording-delete {
+    flex: 0 0 auto;
+    color: var(--cctv-bad);
+    border-color: color-mix(in srgb, var(--cctv-bad) 45%, var(--cctv-border));
   }
 
   .recording-meta {

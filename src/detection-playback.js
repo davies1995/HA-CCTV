@@ -120,22 +120,28 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
       name:
         hass?.states?.[cameraId]?.attributes?.friendly_name ||
         cameraId.replace(/^camera\./, ""),
-      items: ordered.map((clip) => {
-        const bounds = clipTimeBounds(clip);
-        const path = String(clip.url || "");
-        return {
-          path,
-          // Unsigned until Play; signRecordingUrl is required for <video src>.
-          url: recordingMediaUrl(hass, path),
-          kind: clip.kind === "snapshot" ? "snapshot" : "video",
-          size: Number(clip.size) || 0,
-          seq: Number(clip.seq) || 0,
-          started: clip.started,
-          startedMs: bounds.start,
-          durationMs: bounds.durationMs,
-          endMs: bounds.end,
-        };
-      }),
+      items: ordered
+        .filter((clip) => {
+          // Empty/incomplete camera.record files are unplayable in <video>.
+          if (clip.kind === "snapshot") return true;
+          return Number(clip.size) > 0 || !("size" in (clip || {}));
+        })
+        .map((clip) => {
+          const bounds = clipTimeBounds(clip);
+          const path = String(clip.url || "");
+          return {
+            path,
+            // Unsigned until Play; signRecordingUrl is required for <video src>.
+            url: recordingMediaUrl(hass, path),
+            kind: clip.kind === "snapshot" ? "snapshot" : "video",
+            size: Number(clip.size) || 0,
+            seq: Number(clip.seq) || 0,
+            started: clip.started,
+            startedMs: bounds.start,
+            durationMs: bounds.durationMs,
+            endMs: bounds.end,
+          };
+        }),
     };
   });
 }
