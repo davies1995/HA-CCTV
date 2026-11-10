@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCTV Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="eyebrow">Home Assistant</p>
+        <h1>CCTV</h1>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="refresh-btn" class="btn">Refresh</button>
+        <span id="status" class="status" aria-live="polite">Loading…</span>
+      </div>
+    </header>
+
+    <main>
+      <section id="grid-view">
+        <div id="camera-grid" class="grid" role="list"></div>
+        <p id="empty" class="empty hidden">No camera entities found.</p>
+      </section>
+
+      <section id="detail-view" class="detail hidden" hidden>
+        <button type="button" id="back-btn" class="btn linkish">← All cameras</button>
+        <h2 id="detail-title">Camera</h2>
+        <div class="detail-stage">
+          <img id="detail-image" alt="Camera preview" />
+        </div>
+        <dl id="detail-meta" class="meta"></dl>
+        <div id="detail-actions" class="actions"></div>
+      </section>
+    </main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
