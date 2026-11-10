@@ -37,10 +37,10 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 ## Features
 
 - Sidebar **CCTV** panel for all users (no admin gate)
-- **Choose cameras in the panel UI** (checkboxes) — 1 fills the view, 2–4 split equally; selection is saved to your HA user profile
-- **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually in camera settings
+- **Choose cameras in the panel UI** (checkboxes) — 1 fills the view, 2–4 split equally; selection is **per-user**
+- **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually; associations are **site-wide for all HA users**
 - **Bottom timeline** of detection flags for the selected cameras (duration + labels; 15m–24h windows)
-- **Detection recordings** — when a linked sensor on a selected camera triggers, the integration records **all available cameras** until sensors clear (HA `camera.record` chunks; snapshot fallback)
+- **Detection recordings** — when any linked sensor triggers, the integration records **all available cameras** until sensors clear (HA `camera.record` chunks; snapshot fallback)
 - **Retention** configurable in panel **Settings** as days (default **1 day / 24 hours**)
 - Auto-discover `camera.*` (optional include/exclude on cards)
 - Live stream tiles (HA / WebRTC / HLS / MJPEG / still)
@@ -55,7 +55,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - Uses Home Assistant `camera.record` (≈30s chunks + lookback) while the event is active; if record fails, falls back to `camera.snapshot`
 - Files land under the HA **media** folder (`…/cctv_dashboard/recordings`) when media dirs are configured; otherwise under `www`
 - Multi-camera continuous video is CPU/disk heavy — ensure a writable media mount and that cameras support streaming
-- Sensor links must be saved once in the panel so the backend can watch them with the UI closed
+- Sensor links are stored in the integration (shared); saving them once makes them available to every user and to the backend with the UI closed
 - Not a full NVR: no guaranteed pre-roll beyond `lookback`, and overlapping long events create multiple chunk files
 
 ## Lovelace cards (optional)
