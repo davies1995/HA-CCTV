@@ -20,6 +20,14 @@ import {
   resolveStreamCamera,
   writeStoredQuality,
 } from "./quality.js";
+import {
+  deleteRecording,
+  listRecordings,
+  loadRecordingSettings,
+  recordingMediaUrl,
+  saveRecordingSettings,
+  syncPanelToIntegration,
+} from "./recordings-api.js";
 import { loadPanelData, savePanelData } from "./selection-store.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import "./stream-player.js";
@@ -29,7 +37,8 @@ import "./detection-timeline.js";
  * Shared CCTV UI for the sidebar panel and Lovelace cards.
  *
  * Panel mode: pick up to 4 cameras; layout fills 1 / splits 2–4; selection
- * and per-camera detection sensor links persist in HA user data.
+ * and per-camera detection sensor links persist in HA user data and sync to
+ * the integration so detection recordings can run with the panel closed.
  */
 export class CctvView extends LitElement {
   static properties = {
@@ -44,10 +53,16 @@ export class CctvView extends LitElement {
     /** @type {Record<string, string[]>} */
     _sensorLinks: { state: true },
     _pickerOpen: { state: true },
+    _settingsOpen: { state: true },
     _selectionReady: { state: true },
     _saving: { state: true },
     _sensorFilter: { state: true },
     _deviceMapReady: { state: true },
+    _retentionDays: { state: true },
+    _recordOnDetection: { state: true },
+    /** @type {Array<any>} */
+    _sessions: { state: true },
+    _recordDir: { state: true },
   };
 
   static styles = sharedStyles;
@@ -62,10 +77,15 @@ export class CctvView extends LitElement {
     this._visibleIds = [];
     this._sensorLinks = {};
     this._pickerOpen = true;
+    this._settingsOpen = false;
     this._selectionReady = false;
     this._saving = false;
     this._sensorFilter = "";
     this._deviceMapReady = false;
+    this._retentionDays = 1;
+    this._recordOnDetection = true;
+    this._sessions = [];
+    this._recordDir = "";
     this._loadedForUser = null;
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
@@ -96,12 +116,31 @@ export class CctvView extends LitElement {
     this._sensorLinks = stored?.sensorLinks || {};
     this._selectionReady = true;
     this._loadDeviceMap();
+    this._loadRecordingUi();
+    await syncPanelToIntegration(this.hass, {
+      selectedCameras: this._visibleIds,
+      sensorLinks: this._sensorLinks,
+    });
   }
 
   async _loadDeviceMap() {
     if (!this.hass || this._deviceMapReady) return;
     this._deviceMap = await loadEntityDeviceMap(this.hass);
     this._deviceMapReady = true;
+  }
+
+  async _loadRecordingUi() {
+    if (!this.hass) return;
+    const settings = await loadRecordingSettings(this.hass);
+    if (settings) {
+      this._retentionDays = Number(settings.retention_days) || 1;
+      this._recordOnDetection = settings.record_on_detection !== false;
+      this._recordDir = settings.record_dir || "";
+    } else if (this.config?.retention_days) {
+      this._retentionDays = Number(this.config.retention_days) || 1;
+      this._recordOnDetection = this.config.record_on_detection !== false;
+    }
+    this._sessions = await listRecordings(this.hass);
   }
 
   _cameras() {
@@ -229,6 +268,52 @@ export class CctvView extends LitElement {
     }
   }
 
+  async _saveRetentionDays(days) {
+    const value = Math.max(1, Math.min(30, Number(days) || 1));
+    this._retentionDays = value;
+    this._saving = true;
+    try {
+      await saveRecordingSettings(this.hass, { retention_days: value });
+      this._status = `Retention set to ${value} day${value === 1 ? "" : "s"}`;
+    } catch (err) {
+      this._status = err?.message || "Could not save retention";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _toggleRecordOnDetection(enabled) {
+    this._recordOnDetection = enabled;
+    this._saving = true;
+    try {
+      await saveRecordingSettings(this.hass, {
+        record_on_detection: enabled,
+      });
+      this._status = enabled
+        ? "Detection recording enabled"
+        : "Detection recording paused";
+    } catch (err) {
+      this._status = err?.message || "Could not save recording setting";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _refreshSessions() {
+    this._sessions = await listRecordings(this.hass);
+    this._status = "Recordings refreshed";
+  }
+
+  async _deleteSession(sessionId) {
+    try {
+      await deleteRecording(this.hass, sessionId);
+      this._sessions = await listRecordings(this.hass);
+      this._status = "Recording deleted";
+    } catch (err) {
+      this._status = err?.message || "Could not delete recording";
+    }
+  }
+
   render() {
     if (!this.hass) {
       return html`<div class="wrap placeholder">Waiting for Home Assistant…</div>`;
@@ -276,6 +361,16 @@ export class CctvView extends LitElement {
                   >
                     ${this._pickerOpen ? "Hide cameras" : "Choose cameras"}
                   </button>
+                  <button
+                    class="btn"
+                    type="button"
+                    @click=${() => {
+                      this._settingsOpen = !this._settingsOpen;
+                      if (this._settingsOpen) this._loadRecordingUi();
+                    }}
+                  >
+                    ${this._settingsOpen ? "Hide settings" : "Settings"}
+                  </button>
                 `
               : nothing}
             <span class="status">
@@ -292,6 +387,10 @@ export class CctvView extends LitElement {
           ? this._renderPicker(cameras, maxStreams)
           : nothing}
 
+        ${this.panelMode && this._settingsOpen
+          ? this._renderSettings()
+          : nothing}
+
         ${detail
           ? this._renderDetail(detail)
           : this.panelMode
@@ -306,9 +405,123 @@ export class CctvView extends LitElement {
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${cameraNames}
               ></cctv-detection-timeline>
+              ${this._renderRecordings()}
             `
           : nothing}
       </div>
+    `;
+  }
+
+  _renderSettings() {
+    return html`
+      <section class="settings-panel" aria-label="CCTV settings">
+        <div class="picker-head">
+          <strong>Detection recordings</strong>
+          <span class="hint">
+            When a linked sensor on a selected camera triggers, HA starts saving
+            clips for <em>all</em> available cameras until sensors clear.
+            Uses <code>camera.record</code> (30s chunks + lookback) with snapshot fallback.
+          </span>
+        </div>
+        <div class="settings-grid">
+          <label class="settings-field">
+            Retention (days)
+            <input
+              type="number"
+              min="1"
+              max="30"
+              .value=${String(this._retentionDays)}
+              @change=${(e) => this._saveRetentionDays(e.target.value)}
+            />
+          </label>
+          <label class="picker-item settings-toggle">
+            <input
+              type="checkbox"
+              .checked=${this._recordOnDetection}
+              @change=${(e) => this._toggleRecordOnDetection(e.target.checked)}
+            />
+            <span class="picker-name">Record on detection</span>
+            <span class="picker-id">Default retention is 1 day (24 hours).</span>
+          </label>
+        </div>
+        <p class="hint">
+          Storage: ${this._recordDir || "HA media / www /cctv_dashboard/recordings"}.
+          Multi-cam continuous video needs a writable media folder and cameras that support streaming;
+          otherwise snapshots are saved instead. Also configurable under
+          Settings → Devices &amp; services → CCTV Dashboard → Configure.
+        </p>
+      </section>
+    `;
+  }
+
+  _renderRecordings() {
+    const sessions = this._sessions || [];
+    return html`
+      <section class="recordings" aria-label="Detection recordings">
+        <div class="timeline-head">
+          <div>
+            <strong>Saved detections</strong>
+            <span class="hint">
+              Kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}, then deleted.
+            </span>
+          </div>
+          <button class="btn" type="button" @click=${() => this._refreshSessions()}>
+            Refresh
+          </button>
+        </div>
+        ${!sessions.length
+          ? html`<p class="empty">No detection recordings yet.</p>`
+          : html`
+              <div class="recording-list">
+                ${sessions.map((session) => this._renderSession(session))}
+              </div>
+            `}
+      </section>
+    `;
+  }
+
+  _renderSession(session) {
+    const started = session.started
+      ? new Date(session.started).toLocaleString()
+      : "—";
+    const ended = session.active
+      ? "recording…"
+      : session.ended
+        ? new Date(session.ended).toLocaleString()
+        : "—";
+    const clips = session.clips || [];
+    return html`
+      <article class="recording-item ${session.active ? "active" : ""}">
+        <div class="recording-meta">
+          <strong>${session.active ? "Live session" : "Session"} ${session.session_id}</strong>
+          <span class="hint">${started} → ${ended} · ${session.mode || "record"} · ${clips.length} clip${clips.length === 1 ? "" : "s"}</span>
+          <span class="hint">Triggers: ${(session.trigger_sensors || []).join(", ") || "—"}</span>
+        </div>
+        <div class="recording-clips">
+          ${clips.slice(0, 12).map((clip) => {
+            const href = recordingMediaUrl(this.hass, clip.url);
+            return html`
+              <a class="recording-clip" href=${href} target="_blank" rel="noopener">
+                ${clip.kind === "snapshot" ? "JPG" : "MP4"} · ${(clip.camera_id || "").replace("camera.", "")}
+              </a>
+            `;
+          })}
+          ${clips.length > 12
+            ? html`<span class="hint">+${clips.length - 12} more</span>`
+            : nothing}
+        </div>
+        ${session.active
+          ? nothing
+          : html`
+              <button
+                class="btn"
+                type="button"
+                @click=${() => this._deleteSession(session.session_id)}
+              >
+                Delete
+              </button>
+            `}
+      </article>
     `;
   }
 
