@@ -89,6 +89,7 @@ export class CctvStreamPlayer extends LitElement {
       height: 100%;
       display: block;
       object-fit: cover;
+      object-position: center;
       background: #0a0e13;
       border: 0;
     }
@@ -101,11 +102,23 @@ export class CctvStreamPlayer extends LitElement {
       min-height: 220px;
     }
 
+    /*
+     * Mosaic tiles (mixed landscape + doorbell/portrait): always letterbox /
+     * pillarbox so the full frame stays visible — never crop with cover.
+     */
+    :host([large][mosaic]) {
+      background: #0a0e13;
+    }
+
     :host([large][mosaic]) .media,
     :host([large][mosaic]) ha-camera-stream,
     :host([large][mosaic]) video,
     :host([large][mosaic]) img {
       min-height: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
     }
 
     .badge {
@@ -725,6 +738,8 @@ export class CctvStreamPlayer extends LitElement {
   _renderMedia() {
     const streamCamera = this._streamCamera || this.camera;
     if (this._mode === "ha") {
+      // Newer HA builds honor fitMode; mosaic must letterbox mixed aspects.
+      const fitMode = this.mosaic || this.large ? "contain" : "cover";
       return html`
         <ha-camera-stream
           class="media"
@@ -732,6 +747,7 @@ export class CctvStreamPlayer extends LitElement {
           .stateObj=${streamCamera.stateObj}
           .muted=${this.muted}
           .controls=${this.controls}
+          .fitMode=${fitMode}
           @loadeddata=${() => this._probeMediaSize()}
         ></ha-camera-stream>
       `;

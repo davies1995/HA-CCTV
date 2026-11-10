@@ -37,7 +37,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 ## Features
 
 - Sidebar **CCTV** panel for all users (no admin gate)
-- **Choose cameras in the panel UI** (checkboxes) — selection is **per-user**; on **desktop**, tiles pack by each camera’s aspect (landscape + portrait) so all selected cams fit the viewport; on **mobile**, keep the stacked mosaic
+- **Choose cameras in the panel UI** (checkboxes) — selection is **per-user**; on **desktop**, tiles pack by each camera’s aspect (landscape + portrait) so all selected cams fit the viewport; each tile **contains** the full frame (letterbox, no crop) for live and playback; on **mobile**, keep the stacked mosaic
 - **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually; associations are **site-wide for all HA users**
 - **Horizontal detection timeline** (grouped by type) — click events for details; **Play** loads the matching saved recording
 - **Saved detections** — time/date, what was detected, and file size; click then **Play** to replace live mosaic feeds with that event’s recordings for the **same visible cameras**, synced and simultaneous in the same mosaic layout
