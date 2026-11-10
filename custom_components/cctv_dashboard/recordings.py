@@ -124,14 +124,11 @@ class RecordingManager:
         )
 
     def _watched_sensors(self) -> list[str]:
+        # Site-wide links — watch every linked detection sensor for all users.
         links = self.store.data.get("sensor_links") or {}
-        selected = set(self.store.data.get("selected_cameras") or [])
-        # Watch sensors linked to selected cameras; if none selected yet, watch all links.
-        cameras = selected or set(links.keys())
         sensors: list[str] = []
-        for cam in cameras:
-            for sensor in links.get(cam, []):
-                sensors.append(sensor)
+        for linked in links.values():
+            sensors.extend(linked)
         return sorted(set(sensors))
 
     def apply_store_update(self) -> None:

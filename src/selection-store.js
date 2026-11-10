@@ -1,17 +1,16 @@
-/** Persist panel settings in Home Assistant user data (no YAML). */
-
-import { normalizeSensorLinks } from "./detection-sensors.js";
-import { syncPanelToIntegration } from "./recordings-api.js";
+/** Per-user panel prefs in Home Assistant frontend user data (no YAML). */
 
 export const PANEL_SELECTION_KEY = "cctv_dashboard";
 
 /**
- * @typedef {{ selectedCameras: string[], sensorLinks: Record<string, string[]> }} PanelData
+ * @typedef {{ selectedCameras: string[] }} UserPanelData
  */
 
 /**
+ * Load this user's visible-camera selection.
+ * Also returns legacy `sensorLinks` if present (for one-time migration to shared store).
  * @param {any} hass
- * @returns {Promise<PanelData | null>}
+ * @returns {Promise<{ selectedCameras: string[], legacySensorLinks: Record<string, string[]> | null } | null>}
  */
 export async function loadPanelData(hass) {
   if (!hass?.callWS) return null;
@@ -27,18 +26,20 @@ export async function loadPanelData(hass) {
       ? value.selectedCameras.map(String).filter((id) => id.startsWith("camera."))
       : [];
 
-    return {
-      selectedCameras: selected,
-      sensorLinks: normalizeSensorLinks(value.sensorLinks),
-    };
+    const legacySensorLinks =
+      value.sensorLinks && typeof value.sensorLinks === "object"
+        ? value.sensorLinks
+        : null;
+
+    return { selectedCameras: selected, legacySensorLinks };
   } catch (err) {
-    console.warn("CCTV: failed to load panel data", err);
+    console.warn("CCTV: failed to load panel user data", err);
     return null;
   }
 }
 
 /**
- * @param {import("home-assistant-js-websocket").HomeAssistant | any} hass
+ * @param {any} hass
  * @returns {Promise<string[] | null>}
  */
 export async function loadPanelSelection(hass) {
@@ -47,53 +48,47 @@ export async function loadPanelSelection(hass) {
 }
 
 /**
+ * Save this user's camera selection only (site-wide sensor links live in the integration store).
  * @param {any} hass
- * @param {Partial<PanelData>} patch
- * @param {PanelData} [current]
+ * @param {string[]} selectedCameras
+ * @param {{ clearLegacySensorLinks?: boolean }} [opts]
  */
-export async function savePanelData(hass, patch, current) {
+export async function savePanelSelection(hass, selectedCameras, opts = {}) {
   if (!hass?.callWS) return;
 
-  const base = current || (await loadPanelData(hass)) || {
-    selectedCameras: [],
-    sensorLinks: {},
-  };
-
-  const selectedCameras = [
-    ...new Set(
-      (patch.selectedCameras ?? base.selectedCameras)
-        .map(String)
-        .filter((id) => id.startsWith("camera."))
-    ),
+  const cleaned = [
+    ...new Set(selectedCameras.map(String).filter((id) => id.startsWith("camera."))),
   ].slice(0, 4);
 
-  const sensorLinks = normalizeSensorLinks(
-    patch.sensorLinks !== undefined ? patch.sensorLinks : base.sensorLinks
-  );
-
-  const saved = { selectedCameras, sensorLinks };
+  const value = { selectedCameras: cleaned };
+  // Drop legacy per-user sensorLinks once migrated to shared storage.
+  if (!opts.clearLegacySensorLinks) {
+    // Keep payload minimal — never re-write sensorLinks into user data.
+  }
 
   try {
     await hass.callWS({
       type: "frontend/set_user_data",
       key: PANEL_SELECTION_KEY,
-      value: saved,
+      value,
     });
   } catch (err) {
-    console.warn("CCTV: failed to save panel data", err);
+    console.warn("CCTV: failed to save panel selection", err);
     throw err;
   }
 
-  // Backend detection recorder needs the same links (works with panel closed).
-  await syncPanelToIntegration(hass, saved);
-
-  return saved;
+  return { selectedCameras: cleaned };
 }
 
 /**
+ * @deprecated Use savePanelSelection for per-user prefs; sensor links go through recordings-api.
+ * Kept as a thin wrapper so older call sites can pass selectedCameras only.
  * @param {any} hass
- * @param {string[]} selectedCameras
+ * @param {{ selectedCameras?: string[] }} patch
+ * @param {{ selectedCameras?: string[] }} [current]
  */
-export async function savePanelSelection(hass, selectedCameras) {
-  return savePanelData(hass, { selectedCameras });
+export async function savePanelData(hass, patch, current) {
+  const selected =
+    patch.selectedCameras ?? current?.selectedCameras ?? (await loadPanelSelection(hass)) ?? [];
+  return savePanelSelection(hass, selected);
 }

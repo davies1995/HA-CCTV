@@ -40,8 +40,8 @@ def _normalize_links(raw: Any) -> dict[str, list[str]]:
 
 
 def default_data() -> dict[str, Any]:
+    # Site-wide only. Per-user camera mosaic selection stays in frontend user data.
     return {
-        "selected_cameras": [],
         "sensor_links": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
         "record_on_detection": DEFAULT_RECORD_ON_DETECTION,
@@ -49,7 +49,7 @@ def default_data() -> dict[str, Any]:
 
 
 class PanelStore:
-    """JSON store under .storage for links + recording settings."""
+    """JSON store under .storage for site-wide links + recording settings."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -59,11 +59,6 @@ class PanelStore:
         loaded = await self._store.async_load()
         data = default_data()
         if isinstance(loaded, dict):
-            data["selected_cameras"] = [
-                str(x)
-                for x in loaded.get("selected_cameras", [])
-                if str(x).startswith("camera.")
-            ][:4]
             data["sensor_links"] = _normalize_links(loaded.get("sensor_links"))
             try:
                 days = int(loaded.get("retention_days", DEFAULT_RETENTION_DAYS))
@@ -79,12 +74,6 @@ class PanelStore:
     async def async_save(self, patch: dict[str, Any] | None = None) -> dict[str, Any]:
         data = dict(self.data)
         if patch:
-            if "selected_cameras" in patch:
-                data["selected_cameras"] = [
-                    str(x)
-                    for x in patch["selected_cameras"]
-                    if str(x).startswith("camera.")
-                ][:4]
             if "sensor_links" in patch:
                 data["sensor_links"] = _normalize_links(patch["sensor_links"])
             if "retention_days" in patch:

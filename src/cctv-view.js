@@ -23,12 +23,12 @@ import {
 import {
   deleteRecording,
   listRecordings,
-  loadRecordingSettings,
+  loadSharedConfig,
   recordingMediaUrl,
   saveRecordingSettings,
-  syncPanelToIntegration,
+  saveSensorLinks,
 } from "./recordings-api.js";
-import { loadPanelData, savePanelData } from "./selection-store.js";
+import { loadPanelData, savePanelSelection } from "./selection-store.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import "./stream-player.js";
 import "./detection-timeline.js";
@@ -36,9 +36,9 @@ import "./detection-timeline.js";
 /**
  * Shared CCTV UI for the sidebar panel and Lovelace cards.
  *
- * Panel mode: pick up to 4 cameras; layout fills 1 / splits 2–4; selection
- * and per-camera detection sensor links persist in HA user data and sync to
- * the integration so detection recordings can run with the panel closed.
+ * Panel mode: pick up to 4 cameras; layout fills 1 / splits 2–4.
+ * Visible-camera selection is per-user. Detection sensor links and recording
+ * settings are site-wide in the integration store (all HA users share them).
  */
 export class CctvView extends LitElement {
   static properties = {
@@ -102,10 +102,15 @@ export class CctvView extends LitElement {
     if (!this.hass || this._loadedForUser === userId) return;
     this._loadedForUser = userId;
     this._selectionReady = false;
-    const stored = await loadPanelData(this.hass);
+
+    const [userData, shared] = await Promise.all([
+      loadPanelData(this.hass),
+      loadSharedConfig(this.hass),
+    ]);
+
     const all = this._cameras().map((c) => c.entityId);
-    if (stored?.selectedCameras?.length) {
-      this._visibleIds = stored.selectedCameras
+    if (userData?.selectedCameras?.length) {
+      this._visibleIds = userData.selectedCameras
         .filter((id) => all.includes(id))
         .slice(0, this._maxStreams());
       this._pickerOpen = this._visibleIds.length === 0;
@@ -113,14 +118,44 @@ export class CctvView extends LitElement {
       this._visibleIds = [];
       this._pickerOpen = true;
     }
-    this._sensorLinks = stored?.sensorLinks || {};
+
+    let links = shared?.sensorLinks || {};
+    // One-time migrate: older builds stored links in per-user frontend data.
+    const legacy = userData?.legacySensorLinks;
+    if (
+      legacy &&
+      typeof legacy === "object" &&
+      Object.keys(legacy).length &&
+      !Object.keys(links).length
+    ) {
+      try {
+        const saved = await saveSensorLinks(this.hass, legacy);
+        links = saved?.sensor_links
+          ? Object.fromEntries(
+              Object.entries(saved.sensor_links).map(([k, v]) => [k, v])
+            )
+          : legacy;
+        await savePanelSelection(this.hass, this._visibleIds);
+        this._status = "Detection sensor links moved to shared settings";
+      } catch (err) {
+        console.warn("CCTV: legacy sensor-link migration failed", err);
+        links = legacy;
+      }
+    }
+
+    this._sensorLinks = links;
+    if (shared) {
+      this._retentionDays = Number(shared.retention_days) || 1;
+      this._recordOnDetection = shared.record_on_detection !== false;
+      this._recordDir = shared.record_dir || "";
+    } else if (this.config?.retention_days) {
+      this._retentionDays = Number(this.config.retention_days) || 1;
+      this._recordOnDetection = this.config.record_on_detection !== false;
+    }
+
     this._selectionReady = true;
     this._loadDeviceMap();
-    this._loadRecordingUi();
-    await syncPanelToIntegration(this.hass, {
-      selectedCameras: this._visibleIds,
-      sensorLinks: this._sensorLinks,
-    });
+    this._sessions = await listRecordings(this.hass);
   }
 
   async _loadDeviceMap() {
@@ -131,11 +166,12 @@ export class CctvView extends LitElement {
 
   async _loadRecordingUi() {
     if (!this.hass) return;
-    const settings = await loadRecordingSettings(this.hass);
+    const settings = await loadSharedConfig(this.hass);
     if (settings) {
       this._retentionDays = Number(settings.retention_days) || 1;
       this._recordOnDetection = settings.record_on_detection !== false;
       this._recordDir = settings.record_dir || "";
+      if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
@@ -180,28 +216,36 @@ export class CctvView extends LitElement {
     if (this._detailId && !next.includes(this._detailId)) {
       this._detailId = null;
     }
-    await this._persist({ selectedCameras: next });
+    await this._persistSelection(next);
   }
 
-  async _persist(patch) {
+  async _persistSelection(ids) {
     this._saving = true;
     try {
-      const saved = await savePanelData(this.hass, patch, {
-        selectedCameras: this._visibleIds,
-        sensorLinks: this._sensorLinks,
-      });
+      const saved = await savePanelSelection(this.hass, ids);
       if (saved?.selectedCameras) this._visibleIds = saved.selectedCameras;
-      if (saved?.sensorLinks) this._sensorLinks = saved.sensorLinks;
-      if (patch.selectedCameras) {
-        const ids = saved?.selectedCameras || patch.selectedCameras;
-        this._status = ids.length
-          ? `${ids.length} camera${ids.length === 1 ? "" : "s"} on screen`
-          : "No cameras selected";
-      } else if (patch.sensorLinks) {
-        this._status = "Detection sensors saved";
-      }
+      const next = saved?.selectedCameras || ids;
+      this._status = next.length
+        ? `${next.length} camera${next.length === 1 ? "" : "s"} on screen`
+        : "No cameras selected";
     } catch (err) {
-      this._status = err?.message || "Could not save panel settings";
+      this._status = err?.message || "Could not save camera selection";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _persistSensorLinks(next) {
+    this._saving = true;
+    this._sensorLinks = next;
+    try {
+      const saved = await saveSensorLinks(this.hass, next);
+      if (saved?.sensor_links) {
+        this._sensorLinks = saved.sensor_links;
+      }
+      this._status = "Detection sensors saved for all users";
+    } catch (err) {
+      this._status = err?.message || "Could not save detection sensors";
     } finally {
       this._saving = false;
     }
@@ -216,8 +260,7 @@ export class CctvView extends LitElement {
       [cameraId]: [...current],
     };
     if (!next[cameraId].length) delete next[cameraId];
-    this._sensorLinks = next;
-    await this._persist({ sensorLinks: next });
+    await this._persistSensorLinks(next);
   }
 
   async _applySuggestions(cameraId) {
@@ -238,9 +281,8 @@ export class CctvView extends LitElement {
         ]),
       ].slice(0, 16),
     };
-    this._sensorLinks = next;
-    await this._persist({ sensorLinks: next });
-    this._status = `Linked ${suggestions.length} suggested sensor${suggestions.length === 1 ? "" : "s"}`;
+    await this._persistSensorLinks(next);
+    this._status = `Linked ${suggestions.length} suggested sensor${suggestions.length === 1 ? "" : "s"} (all users)`;
   }
 
   _openDetail(entityId) {
@@ -418,9 +460,10 @@ export class CctvView extends LitElement {
         <div class="picker-head">
           <strong>Detection recordings</strong>
           <span class="hint">
-            When a linked sensor on a selected camera triggers, HA starts saving
+            When any site-wide linked detection sensor triggers, HA starts saving
             clips for <em>all</em> available cameras until sensors clear.
             Uses <code>camera.record</code> (30s chunks + lookback) with snapshot fallback.
+            Sensor links are shared for every HA user; your mosaic selection stays personal.
           </span>
         </div>
         <div class="settings-grid">
@@ -533,7 +576,7 @@ export class CctvView extends LitElement {
       <section class="picker" aria-label="Camera selection">
         <div class="picker-head">
           <strong>Visible streams</strong>
-          <span class="hint">Select 1–${maxStreams}. Layout updates automatically. Saved to your HA profile.</span>
+          <span class="hint">Select 1–${maxStreams}. Layout updates automatically. Saved to your HA profile (per user).</span>
         </div>
         <div class="picker-list">
           ${cameras.map((cam) => {
@@ -754,7 +797,9 @@ export class CctvView extends LitElement {
         <div class="picker-head">
           <strong>Detection sensors</strong>
           <span class="hint">
-            Link person / car / animal / package sensors for the timeline. Suggestions use name + device heuristics; confirm or pick manually.
+            Link person / car / animal / package sensors for the timeline and recordings.
+            Associations are <strong>shared for all Home Assistant users</strong> (site-wide).
+            Suggestions use name + device heuristics; confirm or pick manually.
           </span>
         </div>
 

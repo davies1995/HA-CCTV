@@ -1,21 +1,57 @@
-/** Frontend helpers for CCTV recording settings + session list. */
+/** Frontend helpers for shared integration config + recordings. */
+
+import { normalizeSensorLinks } from "./detection-sensors.js";
 
 /**
- * Sync selected cameras + sensor links so the integration can watch detections
- * even when the panel is closed.
+ * Load site-wide settings (sensor links, retention, recording toggle).
+ * @param {any} hass
+ */
+export async function loadSharedConfig(hass) {
+  if (!hass?.callWS) return null;
+  try {
+    const result = await hass.callWS({ type: "cctv_dashboard/get_settings" });
+    if (!result || typeof result !== "object") return null;
+    return {
+      ...result,
+      sensorLinks: normalizeSensorLinks(result.sensor_links || {}),
+    };
+  } catch (err) {
+    console.warn("CCTV: failed to load shared config", err);
+    return null;
+  }
+}
+
+/**
+ * Persist camera↔sensor associations for every HA user (integration store).
+ * @param {any} hass
+ * @param {Record<string, string[]>} sensorLinks
+ */
+export async function saveSensorLinks(hass, sensorLinks) {
+  if (!hass?.callWS) return null;
+  const cleaned = normalizeSensorLinks(sensorLinks);
+  return hass.callWS({
+    type: "cctv_dashboard/set_sensor_links",
+    sensor_links: cleaned,
+  });
+}
+
+/**
+ * @deprecated Prefer saveSensorLinks / loadSharedConfig. Kept for older call sites.
  * @param {any} hass
  * @param {{ selectedCameras?: string[], sensorLinks?: Record<string, string[]> }} data
  */
 export async function syncPanelToIntegration(hass, data) {
   if (!hass?.callWS) return null;
   try {
+    const payload = {};
+    if (data.sensorLinks) payload.sensor_links = normalizeSensorLinks(data.sensorLinks);
+    if (!Object.keys(payload).length) return null;
     return await hass.callWS({
-      type: "cctv_dashboard/sync_panel",
-      selected_cameras: data.selectedCameras,
-      sensor_links: data.sensorLinks,
+      type: "cctv_dashboard/set_sensor_links",
+      ...payload,
     });
   } catch (err) {
-    console.warn("CCTV: failed to sync panel to integration", err);
+    console.warn("CCTV: failed to sync sensor links to integration", err);
     return null;
   }
 }
@@ -24,13 +60,7 @@ export async function syncPanelToIntegration(hass, data) {
  * @param {any} hass
  */
 export async function loadRecordingSettings(hass) {
-  if (!hass?.callWS) return null;
-  try {
-    return await hass.callWS({ type: "cctv_dashboard/get_settings" });
-  } catch (err) {
-    console.warn("CCTV: failed to load recording settings", err);
-    return null;
-  }
+  return loadSharedConfig(hass);
 }
 
 /**
