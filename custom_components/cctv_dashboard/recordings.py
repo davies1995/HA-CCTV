@@ -73,6 +73,8 @@ class RecordingManager:
         self._cleanup_task: asyncio.Task | None = None
         self._index_path = self.record_dir / "index.json"
         self._sessions_meta: list[dict[str, Any]] = []
+        # path -> (size, mtime) so list_sessions does not re-stat every poll
+        self._size_cache: dict[str, tuple[int, float]] = {}
 
     def _resolve_record_dir(self) -> Path:
         media_dirs = getattr(self.hass.config, "media_dirs", None) or {}
@@ -400,18 +402,27 @@ class RecordingManager:
             items.append(self._enrich_session({**meta, "active": False}))
         return items[:limit]
 
+    def _cached_file_size(self, path: Path) -> int:
+        key = str(path)
+        try:
+            st = path.stat()
+        except OSError:
+            self._size_cache.pop(key, None)
+            return 0
+        cached = self._size_cache.get(key)
+        if cached and cached[1] == st.st_mtime:
+            return cached[0]
+        size = int(st.st_size)
+        self._size_cache[key] = (size, st.st_mtime)
+        return size
+
     def _enrich_session(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Attach on-disk file sizes for the Saved detections UI / playback."""
         clips_out: list[dict[str, Any]] = []
         total = 0
         for clip in meta.get("clips") or []:
             path = Path(clip.get("path") or "")
-            size = 0
-            if path.is_file():
-                try:
-                    size = int(path.stat().st_size)
-                except OSError:
-                    size = 0
+            size = self._cached_file_size(path) if path.name else 0
             total += size
             clips_out.append({**clip, "size": size})
         return {**meta, "clips": clips_out, "total_bytes": total}

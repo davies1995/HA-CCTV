@@ -21,10 +21,12 @@ import {
   writeStoredQuality,
 } from "./quality.js";
 import {
+  clipPositionAtTime,
   detectionLabelsFromTriggers,
   findSessionForTimelineEvent,
   formatBytes,
   playbackTracksFromSession,
+  playbackWindow,
   sessionTotalBytes,
 } from "./detection-playback.js";
 import {
@@ -80,7 +82,7 @@ export class CctvView extends LitElement {
     _aspectById: { state: true },
     /** @type {Record<string, string>} */
     _packStyles: { state: true },
-    /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[] } | null} */
+    /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[], windowStart: number, windowEnd: number } | null} */
     _playback: { state: true },
   };
 
@@ -113,11 +115,63 @@ export class CctvView extends LitElement {
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
     this._packObserver = null;
+    this._packObservedEl = null;
     this._mq = null;
     this._onMq = null;
     this._packRaf = 0;
     /** @type {Map<string, number>} */
     this._playbackIndex = new Map();
+    /** @type {Map<string, number>} */
+    this._playbackSeek = new Map();
+    /** @type {Map<string, boolean>} */
+    this._playbackDone = new Map();
+    this._cameraNamesCache = {};
+    this._cameraNamesKey = "";
+    this._lastHassSig = "";
+  }
+
+  /**
+   * Skip pure hass churn that does not touch visible cams / linked sensors.
+   * @param {Map<string, unknown>} changed
+   */
+  shouldUpdate(changed) {
+    if (!changed.has("hass")) return true;
+    if (changed.size > 1) return true;
+    const prev = changed.get("hass");
+    const next = this.hass;
+    if (!prev || !next) return true;
+    return this._hassRelevantChanged(prev, next);
+  }
+
+  /**
+   * @param {any} prev
+   * @param {any} next
+   */
+  _hassRelevantChanged(prev, next) {
+    const ids = this._watchedEntityIds();
+    for (const id of ids) {
+      const a = prev.states?.[id];
+      const b = next.states?.[id];
+      if (a === b) continue;
+      if (!a || !b) return true;
+      if (a.state !== b.state) return true;
+      if (a.last_changed !== b.last_changed) return true;
+      if (a.attributes?.access_token !== b.attributes?.access_token) return true;
+      if (a.attributes?.friendly_name !== b.attributes?.friendly_name) return true;
+    }
+    if ((prev.user?.id || "") !== (next.user?.id || "")) return true;
+    return false;
+  }
+
+  _watchedEntityIds() {
+    const ids = new Set(this._visibleIds || []);
+    if (this._pickerOpen || this._settingsOpen) {
+      for (const cam of this._cameras()) ids.add(cam.entityId);
+    }
+    for (const camId of this._visibleIds || []) {
+      for (const sensor of this._sensorLinks?.[camId] || []) ids.add(sensor);
+    }
+    return ids;
   }
 
   connectedCallback() {
@@ -162,8 +216,8 @@ export class CctvView extends LitElement {
         changed.has("_playback"))
     ) {
       this._schedulePack();
+      this.updateComplete.then(() => this._bindPackObserver());
     }
-    this.updateComplete.then(() => this._bindPackObserver());
   }
 
   _bindPackObserver() {
@@ -172,10 +226,16 @@ export class CctvView extends LitElement {
       if (this._packObserver) {
         this._packObserver.disconnect();
         this._packObserver = null;
+        this._packObservedEl = null;
       }
       return;
     }
+    if (this._packObserver && this._packObservedEl === el) {
+      this._recomputePack();
+      return;
+    }
     if (this._packObserver) this._packObserver.disconnect();
+    this._packObservedEl = el;
     if (typeof ResizeObserver === "undefined") {
       this._recomputePack();
       return;
@@ -205,19 +265,12 @@ export class CctvView extends LitElement {
     const boxH = Math.max(0, rect.height);
     if (boxW < 8 || boxH < 8) return;
 
-    let items;
-    if (this._playback?.playing) {
-      items = (this._playback.tracks || []).map((track) => ({
-        id: track.cameraId,
-        aspect: normalizeAspect(this._aspectById[track.cameraId] || DEFAULT_ASPECT),
-      }));
-    } else {
-      const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
-      items = cameras.map((cam) => ({
-        id: cam.entityId,
-        aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
-      }));
-    }
+    // Always pack the same visible mosaic cameras (live or playback).
+    const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
+    const items = cameras.map((cam) => ({
+      id: cam.entityId,
+      aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
+    }));
     const cells = packAspectMosaic(items, boxW, boxH, 10);
     this._packStyles = cellsToPercentStyles(cells, boxW, boxH);
   }
@@ -492,29 +545,46 @@ export class CctvView extends LitElement {
     }
   }
 
-  _selectPlaybackSession(session) {
+  /**
+   * @param {any} session
+   * @param {{ start?: number, end?: number } | null} [event]
+   */
+  _selectPlaybackSession(session, event = null) {
     if (!session || session.active || !(session.clips || []).length) {
       this._status = "No playable recording for that detection";
+      return;
+    }
+    const visibleIds = this._visibleIds.slice(0, this._maxStreams());
+    if (!visibleIds.length) {
+      this._status = "Select cameras in the mosaic before playing a detection";
       return;
     }
     const labels = detectionLabelsFromTriggers(
       this.hass,
       session.trigger_sensors || []
     );
-    const tracks = playbackTracksFromSession(this.hass, session);
-    if (!tracks.length) {
-      this._status = "Recording has no clips yet";
-      return;
-    }
+    // Only the user's currently visible mosaic cameras — same order/slots as live.
+    const tracks = playbackTracksFromSession(this.hass, session, visibleIds);
+    const window = playbackWindow(session, event);
     this._detailId = null;
-    this._playbackIndex = new Map(tracks.map((t) => [t.cameraId, 0]));
+    this._playbackIndex = new Map();
+    this._playbackSeek = new Map();
+    this._playbackDone = new Map();
+    for (const track of tracks) {
+      const pos = clipPositionAtTime(track, window.start);
+      this._playbackIndex.set(track.cameraId, pos.index);
+      this._playbackSeek.set(track.cameraId, pos.seekSec);
+      this._playbackDone.set(track.cameraId, !track.items.length);
+    }
     this._playback = {
       session,
       labels,
       playing: false,
       tracks,
+      windowStart: window.start,
+      windowEnd: window.end,
     };
-    this._status = `Selected ${labels.join(", ")} recording — press Play`;
+    this._status = `Selected ${labels.join(", ")} — Play replaces live mosaic for ${visibleIds.length} cam${visibleIds.length === 1 ? "" : "s"}`;
     this._schedulePack();
   }
 
@@ -525,41 +595,84 @@ export class CctvView extends LitElement {
       this._status = "No saved recording overlaps that timeline event";
       return;
     }
-    this._selectPlaybackSession(session);
+    this._selectPlaybackSession(session, detail);
   }
 
   _startPlayback() {
     if (!this._playback?.tracks?.length) return;
+    // Unload live streams by swapping mosaic media to recordings (same tiles).
     this._playback = { ...this._playback, playing: true };
-    this._status = `Playing ${this._playback.labels.join(", ")}`;
+    this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     this.updateComplete.then(() => this._kickPlaybackVideos());
   }
 
   _stopPlayback() {
+    this._teardownPlaybackMedia();
     this._playback = null;
     this._playbackIndex = new Map();
+    this._playbackSeek = new Map();
+    this._playbackDone = new Map();
     this._status = "Live mosaic";
     this._schedulePack();
   }
 
   _pausePlaybackToLive() {
     if (!this._playback) return;
+    this._teardownPlaybackMedia();
     this._playback = { ...this._playback, playing: false };
     this._status = "Stopped — back to live mosaic";
     this._schedulePack();
   }
 
-  _kickPlaybackVideos() {
+  _teardownPlaybackMedia() {
     const root = this.renderRoot;
     if (!root) return;
     root.querySelectorAll("video.playback-media").forEach((video) => {
       try {
-        video.currentTime = 0;
-        video.play?.().catch(() => undefined);
+        video.pause?.();
+        video.removeAttribute("src");
+        video.load?.();
       } catch {
         /* ignore */
       }
     });
+  }
+
+  _kickPlaybackVideos() {
+    const root = this.renderRoot;
+    if (!root || !this._playback?.playing) return;
+    const videos = [...root.querySelectorAll("video.playback-media")];
+    // Start every visible camera together (not one-at-a-time).
+    for (const video of videos) {
+      const cameraId = video.getAttribute("data-camera") || "";
+      const seek = this._playbackSeek.get(cameraId) || 0;
+      try {
+        const start = () => {
+          try {
+            if (seek > 0 && Number.isFinite(video.duration) && seek < video.duration) {
+              video.currentTime = seek;
+            } else if (seek > 0) {
+              video.currentTime = seek;
+            }
+          } catch {
+            /* seek may fail until metadata loads */
+          }
+          video.play?.().catch(() => undefined);
+        };
+        if (video.readyState >= 1) start();
+        else video.addEventListener("loadedmetadata", start, { once: true });
+        video.play?.().catch(() => undefined);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  _playbackVideoEl(cameraId) {
+    const safeId = String(cameraId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return this.renderRoot?.querySelector?.(
+      `video.playback-media[data-camera="${safeId}"]`
+    );
   }
 
   _onPlaybackEnded(cameraId) {
@@ -567,34 +680,75 @@ export class CctvView extends LitElement {
     const track = this._playback.tracks.find((t) => t.cameraId === cameraId);
     if (!track) return;
     const idx = this._playbackIndex.get(cameraId) || 0;
-    if (idx + 1 < track.items.length) {
-      this._playbackIndex.set(cameraId, idx + 1);
-      this._playback = { ...this._playback };
-      this.updateComplete.then(() => {
-        const safeId = String(cameraId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        const video = this.renderRoot?.querySelector?.(
-          `video.playback-media[data-camera="${safeId}"]`
-        );
-        video?.play?.().catch(() => undefined);
-      });
-      return;
+    const next = idx + 1;
+    const windowEnd = Number(this._playback.windowEnd);
+
+    if (next < track.items.length) {
+      const item = track.items[next];
+      // Stay inside the event time window when advancing chunks.
+      if (
+        Number.isFinite(windowEnd) &&
+        Number.isFinite(item.startedMs) &&
+        item.startedMs >= windowEnd
+      ) {
+        this._markPlaybackCameraDone(cameraId);
+        return;
+      }
+      this._playbackIndex.set(cameraId, next);
+      this._playbackSeek.set(cameraId, 0);
+      // Advance only this camera's element — do not re-render/remount siblings.
+      const video = this._playbackVideoEl(cameraId);
+      if (video && item.kind !== "snapshot") {
+        try {
+          video.src = item.url;
+          video.load?.();
+          video.play?.().catch(() => undefined);
+        } catch {
+          this._markPlaybackCameraDone(cameraId);
+        }
+        return;
+      }
+      if (item.kind === "snapshot") {
+        this.requestUpdate();
+        return;
+      }
     }
-    // Finished this camera's playlist — if all video cams are done, return to live.
-    this._playbackIndex.set(cameraId, track.items.length);
-    const allDone = this._playback.tracks.every((t) => {
+
+    this._markPlaybackCameraDone(cameraId);
+  }
+
+  _markPlaybackCameraDone(cameraId) {
+    this._playbackDone.set(cameraId, true);
+    const tracks = this._playback?.tracks || [];
+    const allDone = tracks.every((t) => {
+      if (!t.items.length) return true;
       if (t.items.every((item) => item.kind === "snapshot")) return true;
-      const i = this._playbackIndex.get(t.cameraId) || 0;
-      return i >= t.items.length;
+      return this._playbackDone.get(t.cameraId);
     });
     if (allDone) this._pausePlaybackToLive();
   }
 
+  _trackForCamera(cameraId) {
+    return this._playback?.tracks?.find((t) => t.cameraId === cameraId) || null;
+  }
+
   _currentPlaybackItem(track) {
+    if (!track?.items?.length) return null;
     const idx = Math.min(
       this._playbackIndex.get(track.cameraId) || 0,
       Math.max(0, track.items.length - 1)
     );
     return track.items[idx] || null;
+  }
+
+  _stableCameraNames(cameras) {
+    const key = cameras.map((c) => `${c.entityId}:${c.name}`).join("|");
+    if (key === this._cameraNamesKey) return this._cameraNamesCache;
+    this._cameraNamesKey = key;
+    this._cameraNamesCache = Object.fromEntries(
+      cameras.map((c) => [c.entityId, c.name])
+    );
+    return this._cameraNamesCache;
   }
 
   render() {
@@ -623,9 +777,8 @@ export class CctvView extends LitElement {
       ? this._visibleCameras(cameras)
       : cameras;
 
-    const cameraNames = Object.fromEntries(
-      cameras.map((c) => [c.entityId, c.name])
-    );
+    const cameraNames = this._stableCameraNames(cameras);
+    const playing = Boolean(this._playback?.playing);
 
     return html`
       <div class=${this.panelMode ? "panel-wrap wrap" : "wrap"}>
@@ -659,7 +812,7 @@ export class CctvView extends LitElement {
             <span class="status">
               ${this._status ||
               (this.panelMode
-                ? `${visible.length}/${maxStreams} selected · ${streamSlots.activeCount()} live`
+                ? `${visible.length}/${maxStreams} selected · ${playing ? "playback" : `${streamSlots.activeCount()} live`}`
                 : `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · ${streamSlots.activeCount()}/${maxStreams} live`)}
               ${this._saving ? " · saving…" : ""}
             </span>
@@ -680,11 +833,9 @@ export class CctvView extends LitElement {
 
         ${detail
           ? this._renderDetail(detail)
-          : this.panelMode && this._playback?.playing
-            ? this._renderPlaybackLayout()
-            : this.panelMode
-              ? this._renderLayout(visible)
-              : this._renderCardGrid(cameras)}
+          : this.panelMode
+            ? this._renderLayout(visible)
+            : this._renderCardGrid(cameras)}
 
         ${this.panelMode && !detail
           ? html`
@@ -731,63 +882,6 @@ export class CctvView extends LitElement {
           </button>
         </div>
       </div>
-    `;
-  }
-
-  _renderPlaybackLayout() {
-    const tracks = this._playback?.tracks || [];
-    if (!tracks.length) {
-      return html`<p class="empty">No clips in this recording.</p>`;
-    }
-
-    if (!this._isDesktop) {
-      return html`
-        <div class="layout layout-${Math.min(tracks.length, 4)}" role="list">
-          ${tracks.slice(0, 4).map((track) => this._renderPlaybackTile(track, false))}
-        </div>
-      `;
-    }
-
-    return html`
-      <div class="layout layout-pack" role="list">
-        ${tracks.map((track) => this._renderPlaybackTile(track, true))}
-      </div>
-    `;
-  }
-
-  _renderPlaybackTile(track, packed) {
-    const item = this._currentPlaybackItem(track);
-    const packStyle = packed ? this._packStyles?.[track.cameraId] : "";
-    const positioned = Boolean(packed && packStyle);
-    return html`
-      <article
-        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
-        role="listitem"
-        style=${positioned ? packStyle : nothing}
-      >
-        <div class="tile-media">
-          ${!item
-            ? html`<div class="playback-empty">No clip</div>`
-            : item.kind === "snapshot"
-              ? html`<img class="playback-media" alt="" src=${item.url} />`
-              : html`
-                  <video
-                    class="playback-media"
-                    data-camera=${track.cameraId}
-                    src=${item.url}
-                    autoplay
-                    playsinline
-                    muted
-                    controls
-                    @ended=${() => this._onPlaybackEnded(track.cameraId)}
-                  ></video>
-                `}
-        </div>
-        <div class="tile-body pack-caption">
-          <p class="tile-title">${track.name}</p>
-          <p class="tile-meta">Playback</p>
-        </div>
-      </article>
     `;
   }
 
@@ -961,6 +1055,9 @@ export class CctvView extends LitElement {
     const linked = this._linksFor(cam.entityId).length;
     const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
     const positioned = Boolean(packed && packStyle);
+    const playing = Boolean(this._playback?.playing);
+    const track = playing ? this._trackForCamera(cam.entityId) : null;
+    const item = track ? this._currentPlaybackItem(track) : null;
     return html`
       <article
         class="tile layout-tile ${positioned ? "pack-tile" : ""}"
@@ -968,29 +1065,57 @@ export class CctvView extends LitElement {
         style=${positioned ? packStyle : nothing}
       >
         <div class="tile-media">
-          <cctv-stream-player
-            large
-            ?mosaic=${packed}
-            eager
-            .hass=${this.hass}
-            .camera=${cam}
-            .config=${this.config}
-            .quality=${quality}
-            context="mosaic"
-            muted
-          ></cctv-stream-player>
+          ${playing
+            ? !item
+              ? html`<div class="playback-empty">No recording for this camera</div>`
+              : item.kind === "snapshot"
+                ? html`<img class="playback-media" alt="" src=${item.url} />`
+                : html`
+                    <video
+                      class="playback-media"
+                      data-camera=${cam.entityId}
+                      src=${item.url}
+                      autoplay
+                      playsinline
+                      muted
+                      controls
+                      @ended=${() => this._onPlaybackEnded(cam.entityId)}
+                    ></video>
+                  `
+            : html`
+                <cctv-stream-player
+                  large
+                  ?mosaic=${packed}
+                  eager
+                  .hass=${this.hass}
+                  .camera=${cam}
+                  .config=${this.config}
+                  .quality=${quality}
+                  context="mosaic"
+                  muted
+                ></cctv-stream-player>
+              `}
         </div>
-        <button
-          type="button"
-          class="tile-body tile-open ${packed ? "pack-caption" : ""}"
-          @click=${() => this._openDetail(cam.entityId)}
-        >
-          <p class="tile-title">${cam.name}</p>
-          <p class="tile-meta">
-            <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
-            ${linked ? html` · ${linked} detection` : nothing}
-          </p>
-        </button>
+        ${playing
+          ? html`
+              <div class="tile-body ${packed ? "pack-caption" : ""}">
+                <p class="tile-title">${cam.name}</p>
+                <p class="tile-meta">Playback</p>
+              </div>
+            `
+          : html`
+              <button
+                type="button"
+                class="tile-body tile-open ${packed ? "pack-caption" : ""}"
+                @click=${() => this._openDetail(cam.entityId)}
+              >
+                <p class="tile-title">${cam.name}</p>
+                <p class="tile-meta">
+                  <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
+                  ${linked ? html` · ${linked} detection` : nothing}
+                </p>
+              </button>
+            `}
       </article>
     `;
   }

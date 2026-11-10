@@ -404,7 +404,8 @@ export async function fetchSensorHistory(hass, entityIds, start, end) {
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       entity_ids: entityIds,
-      significant_changes_only: false,
+      // Leaner payload — on/off edges are enough for detection segments.
+      significant_changes_only: true,
       minimal_response: true,
       no_attributes: true,
     });

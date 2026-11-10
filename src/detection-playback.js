@@ -43,11 +43,51 @@ export function sessionTotalBytes(session) {
 }
 
 /**
- * Group session clips by camera, sorted by seq for sequential playback.
+ * Parse clip/session stamp to epoch ms.
+ * Accepts ISO strings or compact `YYYYMMDDTHHMMSSZ`.
+ * @param {string | number | Date | null | undefined} value
+ */
+export function parseClipStartedMs(value) {
+  if (value == null || value === "") return NaN;
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (value instanceof Date) return value.getTime();
+  const raw = String(value).trim();
+  const compact = raw.match(
+    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/i
+  );
+  if (compact) {
+    const iso = `${compact[1]}-${compact[2]}-${compact[3]}T${compact[4]}:${compact[5]}:${compact[6]}Z`;
+    return Date.parse(iso);
+  }
+  return Date.parse(raw);
+}
+
+/**
+ * Absolute start/end for a clip item (ms).
+ * @param {{ started?: string, duration?: number }} clip
+ */
+export function clipTimeBounds(clip) {
+  const start = parseClipStartedMs(clip?.started);
+  const durationSec = Number(clip?.duration);
+  const durationMs = Number.isFinite(durationSec) && durationSec > 0
+    ? durationSec * 1000
+    : 30_000;
+  return {
+    start,
+    end: Number.isFinite(start) ? start + durationMs : NaN,
+    durationMs,
+  };
+}
+
+/**
+ * Group session clips by camera.
+ * When `cameraIds` is provided, return tracks in that exact order (visible mosaic
+ * order) and only for those cameras — never extra cams from the recording.
  * @param {any} hass
  * @param {any} session
+ * @param {string[] | null} [cameraIds]
  */
-export function playbackTracksFromSession(hass, session) {
+export function playbackTracksFromSession(hass, session, cameraIds = null) {
   /** @type {Map<string, Array<any>>} */
   const byCam = new Map();
   for (const clip of session?.clips || []) {
@@ -57,25 +97,96 @@ export function playbackTracksFromSession(hass, session) {
     byCam.get(cam).push(clip);
   }
 
-  return [...byCam.entries()]
-    .map(([cameraId, clips]) => {
-      const ordered = [...clips].sort(
-        (a, b) => Number(a.seq || 0) - Number(b.seq || 0)
-      );
-      return {
-        cameraId,
-        name:
-          hass?.states?.[cameraId]?.attributes?.friendly_name ||
-          cameraId.replace(/^camera\./, ""),
-        items: ordered.map((clip) => ({
+  const ids =
+    cameraIds && cameraIds.length
+      ? cameraIds.map(String)
+      : [...byCam.keys()].sort((a, b) => {
+          const na =
+            hass?.states?.[a]?.attributes?.friendly_name ||
+            a.replace(/^camera\./, "");
+          const nb =
+            hass?.states?.[b]?.attributes?.friendly_name ||
+            b.replace(/^camera\./, "");
+          return na.localeCompare(nb);
+        });
+
+  return ids.map((cameraId) => {
+    const clips = byCam.get(cameraId) || [];
+    const ordered = [...clips].sort(
+      (a, b) => Number(a.seq || 0) - Number(b.seq || 0)
+    );
+    return {
+      cameraId,
+      name:
+        hass?.states?.[cameraId]?.attributes?.friendly_name ||
+        cameraId.replace(/^camera\./, ""),
+      items: ordered.map((clip) => {
+        const bounds = clipTimeBounds(clip);
+        return {
           url: recordingMediaUrl(hass, clip.url),
           kind: clip.kind === "snapshot" ? "snapshot" : "video",
           size: Number(clip.size) || 0,
           seq: Number(clip.seq) || 0,
-        })),
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+          started: clip.started,
+          startedMs: bounds.start,
+          durationMs: bounds.durationMs,
+          endMs: bounds.end,
+        };
+      }),
+    };
+  });
+}
+
+/**
+ * Pick clip index + seek seconds so playback aligns to absolute event time.
+ * @param {{ items: Array<any> }} track
+ * @param {number} atMs
+ */
+export function clipPositionAtTime(track, atMs) {
+  const items = track?.items || [];
+  if (!items.length || !Number.isFinite(atMs)) {
+    return { index: 0, seekSec: 0 };
+  }
+
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    const start = Number(item.startedMs);
+    const end = Number(item.endMs);
+    if (!Number.isFinite(start)) continue;
+    if (atMs < start) {
+      return { index: i, seekSec: 0 };
+    }
+    if (!Number.isFinite(end) || atMs < end) {
+      const seekSec = Math.max(0, (atMs - start) / 1000);
+      return { index: i, seekSec };
+    }
+  }
+
+  return { index: Math.max(0, items.length - 1), seekSec: 0 };
+}
+
+/**
+ * Session / timeline window for synced multi-cam playback.
+ * @param {any} session
+ * @param {{ start?: number, end?: number } | null} [event]
+ */
+export function playbackWindow(session, event = null) {
+  const eventStart = Number(event?.start);
+  const eventEnd = Number(event?.end);
+  const sessionStart = parseClipStartedMs(session?.started);
+  const sessionEnd = parseClipStartedMs(session?.ended || session?.started);
+
+  const start = Number.isFinite(eventStart)
+    ? eventStart
+    : sessionStart;
+  let end = Number.isFinite(eventEnd) ? eventEnd : sessionEnd;
+  if (!Number.isFinite(end) && Number.isFinite(start)) {
+    end = start + 60_000;
+  }
+  if (Number.isFinite(start) && Number.isFinite(end) && end < start) {
+    end = start;
+  }
+  return { start, end };
 }
 
 /**
