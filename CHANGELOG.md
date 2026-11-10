@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0 — 2026-11-10
+
+### Fixed
+
+- Leave CCTV sidebar unloads streams/history/timers without IntersectionObserver remount flicker (`location-changed` / path leave + tab hide + disconnect)
+- Detection **Play** auth: clips served via signed `/api/cctv_dashboard/media/…` (fixes unauthorized/unsupported media errors)
+
+### Added
+
+- Home Assistant **admins** can delete a saved detection’s recording file set for all users from Saved detections
+
+
 ## 0.10.0 — 2026-11-10
 
 ### Fixed
