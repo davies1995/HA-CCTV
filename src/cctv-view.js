@@ -625,6 +625,7 @@ export class CctvView extends LitElement {
               <div class="tile-media">
                 <cctv-stream-player
                   large
+                  mosaic
                   eager
                   .hass=${this.hass}
                   .camera=${cam}

@@ -13,6 +13,15 @@ export const sharedStyles = css`
     --cctv-bad: var(--error-color, #e35d6a);
   }
 
+  /* Desktop panel: fill HA content area so the mosaic can use remaining height. */
+  @media (min-width: 801px) {
+    :host([panel-mode]) {
+      height: calc(100dvh - var(--app-header-height, 56px));
+      max-height: calc(100dvh - var(--app-header-height, 56px));
+      overflow: hidden;
+    }
+  }
+
   .wrap {
     padding: 1rem 1.25rem 1.5rem;
   }
@@ -22,6 +31,47 @@ export const sharedStyles = css`
     background:
       radial-gradient(ellipse 80% 50% at 10% -10%, rgba(61, 156, 240, 0.18) 0%, transparent 55%),
       var(--primary-background-color, #0f1419);
+  }
+
+  @media (min-width: 801px) {
+    .panel-wrap {
+      box-sizing: border-box;
+      height: 100%;
+      max-height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 0.75rem;
+    }
+
+    .panel-wrap > .top,
+    .panel-wrap > .picker,
+    .panel-wrap > .settings-panel,
+    .panel-wrap > .empty,
+    .panel-wrap > .placeholder {
+      flex: 0 0 auto;
+    }
+
+    .panel-wrap > .layout {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      max-height: none;
+    }
+
+    .panel-wrap > cctv-detection-timeline,
+    .panel-wrap > .recordings {
+      flex: 0 1 auto;
+      max-height: 24vh;
+      overflow: auto;
+      margin-top: 0.75rem;
+      min-height: 0;
+    }
+
+    .panel-wrap > cctv-detection-timeline .timeline {
+      margin-top: 0;
+    }
   }
 
   .top {
@@ -345,6 +395,23 @@ export const sharedStyles = css`
 
   .layout-1 .layout-tile cctv-stream-player {
     min-height: min(65vh, 640px);
+  }
+
+  /* Desktop: scale every selected tile into the shared mosaic height (no cam-to-cam scroll). */
+  @media (min-width: 801px) {
+    .panel-wrap .layout {
+      min-height: 0;
+    }
+
+    .panel-wrap .layout-tile .tile-body {
+      padding: 0.45rem 0.65rem 0.55rem;
+    }
+
+    .panel-wrap .layout-tile cctv-stream-player,
+    .panel-wrap .layout-1 .layout-tile cctv-stream-player {
+      min-height: 0;
+      height: 100%;
+    }
   }
 
   @media (max-width: 800px) {

@@ -37,7 +37,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 ## Features
 
 - Sidebar **CCTV** panel for all users (no admin gate)
-- **Choose cameras in the panel UI** (checkboxes) — 1 fills the view, 2–4 split equally; selection is **per-user**
+- **Choose cameras in the panel UI** (checkboxes) — 1 fills the view, 2–4 split equally; selection is **per-user**; on desktop all selected cameras fit on screen without scrolling
 - **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually; associations are **site-wide for all HA users**
 - **Bottom timeline** of detection flags for the selected cameras, **grouped by type** (person/car/…); overlapping same-type sensors merge into one event (15m–24h windows)
 - **Detection recordings** — when any linked sensor triggers, the integration records **all available cameras** until sensors clear (HA `camera.record` chunks; snapshot fallback)
