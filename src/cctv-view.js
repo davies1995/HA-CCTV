@@ -1814,10 +1814,7 @@ export class CctvView extends LitElement {
                   )}
                 </select>
               </label>
-              <span class="hint">
-                Shared for all users after Save. Use 1920×2560 / 3:4 for
-                portrait doorbells when auto fit fails.
-              </span>
+              <span class="hint">Shared for all users.</span>
             </div>
             ${showCustomAspect
               ? html`
