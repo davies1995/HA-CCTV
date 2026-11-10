@@ -8,7 +8,8 @@ This is **not** a Supervisor add-on. Cameras must already exist in Home Assistan
 
 - Auto-discover all `camera.*` entities (optional include/exclude lists)
 - **Live stream tiles** early in v1 (not stills-only)
-- Per-camera detail with controls (turn on/off, snapshot, more-info)
+- **Lazy mosaic streaming** — off-screen tiles stay on stills until visible
+- Per-camera controls from registered safe `camera` services (on/off/toggle, snapshot, motion) + more-info
 - Shared bundle registers:
   - **Panel:** `cctv-dashboard-panel` (sidebar; all users)
   - **Grid card:** `custom:cctv-cameras-card`
@@ -82,6 +83,8 @@ Each tile tries, in order:
 3. HLS via `camera/stream` when the browser can play HLS natively
 4. MJPEG `/api/camera_proxy_stream/...`
 5. Still image fallback
+
+Grid tiles only open a live session while (near) visible; scrolled-away tiles drop back to a still. Detail view and the single-camera card stream eagerly while open.
 
 Chrome HLS without HLS.js falls through to MJPEG/WebRTC — that is intentional for a thin v1 bundle.
 

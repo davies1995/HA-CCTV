@@ -1,6 +1,7 @@
 import { LitElement, html } from "lit";
 import { sharedStyles } from "./styles.js";
 import {
+  availableCameraActions,
   callCameraService,
   cameraFromState,
   openMoreInfo,
@@ -8,7 +9,7 @@ import {
 import "./stream-player.js";
 
 /**
- * Single-camera Lovelace card with live stream + basic controls.
+ * Single-camera Lovelace card with live stream + available controls.
  */
 class CctvCameraCard extends LitElement {
   static properties = {
@@ -68,6 +69,7 @@ class CctvCameraCard extends LitElement {
     const stateObj = this.hass.states?.[this._config.entity];
     const camera = cameraFromState(this._config.entity, stateObj);
     const title = this._config.title || camera.name;
+    const actions = availableCameraActions(this.hass, camera);
 
     return html`
       <ha-card>
@@ -81,6 +83,7 @@ class CctvCameraCard extends LitElement {
           <div class="detail-stage">
             <cctv-stream-player
               large
+              eager
               .hass=${this.hass}
               .camera=${camera}
               .muted=${this._config.muted !== false}
@@ -88,15 +91,17 @@ class CctvCameraCard extends LitElement {
             ></cctv-stream-player>
           </div>
           <div class="actions" style="margin-top: 0.75rem">
-            <button class="btn primary" type="button" @click=${() => this._run("turn_on")}>
-              Turn on
-            </button>
-            <button class="btn primary" type="button" @click=${() => this._run("turn_off")}>
-              Turn off
-            </button>
-            <button class="btn primary" type="button" @click=${() => this._run("snapshot")}>
-              Snapshot
-            </button>
+            ${actions.map(
+              (action) => html`
+                <button
+                  class="btn primary"
+                  type="button"
+                  @click=${() => this._run(action.service)}
+                >
+                  ${action.label}
+                </button>
+              `
+            )}
             <button
               class="btn"
               type="button"

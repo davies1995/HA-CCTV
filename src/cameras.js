@@ -2,8 +2,33 @@
 
 const UNAVAILABLE = new Set(["unavailable", "unknown", "none", ""]);
 
+/** CameraEntityFeature.ON_OFF */
+export const CAMERA_SUPPORT_ON_OFF = 1;
 /** CameraEntityFeature.STREAM */
 export const CAMERA_SUPPORT_STREAM = 2;
+
+/**
+ * Safe camera-domain services we may expose as buttons when registered in HA.
+ * Avoid speculative PTZ / record flows that need extra fields.
+ */
+const SAFE_CAMERA_ACTIONS = [
+  { service: "turn_on", label: "Turn on", feature: CAMERA_SUPPORT_ON_OFF },
+  { service: "turn_off", label: "Turn off", feature: CAMERA_SUPPORT_ON_OFF },
+  { service: "toggle", label: "Toggle", feature: CAMERA_SUPPORT_ON_OFF },
+  { service: "snapshot", label: "Snapshot" },
+  {
+    service: "enable_motion_detection",
+    label: "Motion on",
+    attr: "motion_detection",
+    attrValue: false,
+  },
+  {
+    service: "disable_motion_detection",
+    label: "Motion off",
+    attr: "motion_detection",
+    attrValue: true,
+  },
+];
 
 export function listCameras(hass, config = {}) {
   const states = hass?.states ?? {};
@@ -118,6 +143,33 @@ export async function fetchWebRtcClientConfiguration(hass, entityId) {
 export async function callCameraService(hass, service, entityId, data = {}) {
   if (!hass?.callService) throw new Error("hass.callService is unavailable");
   return hass.callService("camera", service, { entity_id: entityId, ...data });
+}
+
+/**
+ * Return labeled camera actions that exist on this HA instance and make sense
+ * for the entity (feature bits / motion attribute when available).
+ */
+export function availableCameraActions(hass, camera) {
+  const registered = hass?.services?.camera || {};
+  const features = Number(camera?.supportedFeatures || 0);
+  const attrs = camera?.stateObj?.attributes || {};
+
+  return SAFE_CAMERA_ACTIONS.filter((action) => {
+    if (!registered[action.service]) return false;
+
+    if (action.feature != null && features) {
+      if ((features & action.feature) === 0) return false;
+    }
+
+    if (action.attr) {
+      if (!(action.attr in attrs)) return false;
+      if (action.attrValue != null && Boolean(attrs[action.attr]) !== action.attrValue) {
+        return false;
+      }
+    }
+
+    return true;
+  }).map(({ service, label }) => ({ service, label }));
 }
 
 export function openMoreInfo(host, entityId) {

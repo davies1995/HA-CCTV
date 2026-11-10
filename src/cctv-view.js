@@ -1,13 +1,12 @@
 import { LitElement, html, nothing } from "lit";
 import { sharedStyles } from "./styles.js";
-import { callCameraService, listCameras, openMoreInfo } from "./cameras.js";
+import {
+  availableCameraActions,
+  callCameraService,
+  listCameras,
+  openMoreInfo,
+} from "./cameras.js";
 import "./stream-player.js";
-
-const ACTIONS = [
-  { service: "turn_on", label: "Turn on" },
-  { service: "turn_off", label: "Turn off" },
-  { service: "snapshot", label: "Snapshot" },
-];
 
 /**
  * Shared CCTV grid + detail UI used by the panel and Lovelace cards.
@@ -116,12 +115,14 @@ export class CctvView extends LitElement {
   }
 
   _renderDetail(cam) {
+    const actions = availableCameraActions(this.hass, cam);
     return html`
       <button class="btn linkish" type="button" @click=${this._back}>← All cameras</button>
       <h2>${cam.name}</h2>
       <div class="detail-stage">
         <cctv-stream-player
           large
+          eager
           .hass=${this.hass}
           .camera=${cam}
           .muted=${false}
@@ -139,17 +140,19 @@ export class CctvView extends LitElement {
         <dd>${cam.model || "—"}</dd>
       </dl>
       <div class="actions">
-        ${ACTIONS.map(
-          (action) => html`
-            <button
-              class="btn primary"
-              type="button"
-              @click=${() => this._run(action.service, cam.entityId)}
-            >
-              ${action.label}
-            </button>
-          `
-        )}
+        ${actions.length
+          ? actions.map(
+              (action) => html`
+                <button
+                  class="btn primary"
+                  type="button"
+                  @click=${() => this._run(action.service, cam.entityId)}
+                >
+                  ${action.label}
+                </button>
+              `
+            )
+          : html`<span class="placeholder">No camera services available</span>`}
         <button
           class="btn"
           type="button"

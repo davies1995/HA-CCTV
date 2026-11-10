@@ -12,6 +12,10 @@ import {
 
 /**
  * Live camera tile: prefer HA native stream element, then WebRTC / HLS / MJPEG / still.
+ *
+ * Mosaic tiles should leave `eager` unset/false so IntersectionObserver only
+ * opens live streams while the tile is (near) visible. Detail / single-camera
+ * views set `eager` to keep the stream active while mounted.
  */
 export class CctvStreamPlayer extends LitElement {
   static properties = {
@@ -20,12 +24,15 @@ export class CctvStreamPlayer extends LitElement {
     muted: { type: Boolean },
     controls: { type: Boolean },
     large: { type: Boolean, reflect: true },
+    /** When true, stream immediately while connected (detail / single card). */
+    eager: { type: Boolean },
     posterOnly: { type: Boolean, attribute: "poster-only" },
     _mode: { state: true },
     _error: { state: true },
     _hlsUrl: { state: true },
     _mjpegUrl: { state: true },
     _stillUrl: { state: true },
+    _visible: { state: true },
   };
 
   static styles = css`
@@ -96,38 +103,103 @@ export class CctvStreamPlayer extends LitElement {
     this.muted = true;
     this.controls = false;
     this.large = false;
+    this.eager = false;
     this.posterOnly = false;
     this._mode = "loading";
     this._error = "";
     this._hlsUrl = "";
     this._mjpegUrl = "";
     this._stillUrl = "";
+    this._visible = false;
     this._pc = null;
     this._unsubWebRtc = null;
     this._sessionId = null;
     this._startToken = 0;
+    this._observer = null;
+    this._live = false;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._bindObserver();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._teardown();
+    this._unbindObserver();
+    this._stopLive();
   }
 
   updated(changed) {
+    if (changed.has("eager")) {
+      this._bindObserver();
+      this._reconcilePlayback();
+    }
     if (
       changed.has("hass") ||
       changed.has("camera") ||
       changed.has("posterOnly")
     ) {
-      this._start();
+      this._reconcilePlayback();
     }
-    if (changed.has("muted") && this._pc) {
+    if (changed.has("muted")) {
       const video = this.renderRoot?.querySelector("video");
       if (video) video.muted = this.muted;
     }
   }
 
-  _teardown() {
+  _bindObserver() {
+    this._unbindObserver();
+    if (this.eager || this.posterOnly) {
+      this._visible = true;
+      return;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      this._visible = true;
+      return;
+    }
+    this._observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some((entry) => entry.isIntersecting);
+        if (visible === this._visible) return;
+        this._visible = visible;
+        this._reconcilePlayback();
+      },
+      {
+        root: null,
+        // Start a bit before the tile enters the viewport.
+        rootMargin: "120px 0px",
+        threshold: 0.15,
+      }
+    );
+    this._observer.observe(this);
+  }
+
+  _unbindObserver() {
+    if (this._observer) {
+      this._observer.disconnect();
+      this._observer = null;
+    }
+  }
+
+  _shouldStream() {
+    if (this.posterOnly) return false;
+    if (this.eager) return true;
+    return this._visible;
+  }
+
+  _refreshPosterUrls() {
+    if (!this.hass || !this.camera?.stateObj) {
+      this._stillUrl = "";
+      this._mjpegUrl = "";
+      return;
+    }
+    this._stillUrl = cameraPreviewUrl(this.hass, this.camera, true);
+    this._mjpegUrl = cameraMjpegStreamUrl(this.hass, this.camera);
+  }
+
+  _stopLive() {
+    this._live = false;
     this._startToken += 1;
     if (this._unsubWebRtc) {
       try {
@@ -146,31 +218,44 @@ export class CctvStreamPlayer extends LitElement {
       this._pc = null;
     }
     this._sessionId = null;
+    this._hlsUrl = "";
   }
 
-  async _start() {
-    this._teardown();
-    const token = this._startToken;
-    this._error = "";
-    this._hlsUrl = "";
-    this._mjpegUrl = "";
-    this._stillUrl = "";
-
+  _showIdlePoster() {
+    this._stopLive();
+    this._refreshPosterUrls();
     if (!this.hass || !this.camera?.stateObj) {
       this._mode = "empty";
       return;
     }
+    this._mode = this._stillUrl ? "still" : "empty";
+    if (!this._stillUrl) this._error = "No preview";
+  }
 
-    this._stillUrl = cameraPreviewUrl(this.hass, this.camera, true);
-    this._mjpegUrl = cameraMjpegStreamUrl(this.hass, this.camera);
-
-    if (this.posterOnly) {
-      this._mode = this._stillUrl ? "still" : "empty";
+  _reconcilePlayback() {
+    if (!this.hass || !this.camera?.stateObj) {
+      this._stopLive();
+      this._mode = "empty";
       return;
     }
+    if (!this._shouldStream()) {
+      this._showIdlePoster();
+      return;
+    }
+    this._startLive();
+  }
+
+  async _startLive() {
+    this._stopLive();
+    const token = this._startToken;
+    this._live = true;
+    this._error = "";
+    this._mode = "loading";
+    this._refreshPosterUrls();
 
     // 1) Prefer HA's own stream element when already loaded by the frontend.
     if (customElements.get("ha-camera-stream")) {
+      if (token !== this._startToken) return;
       this._mode = "ha";
       return;
     }
@@ -180,7 +265,8 @@ export class CctvStreamPlayer extends LitElement {
     const types = caps?.frontend_stream_types || [];
     const legacy = this.camera.frontendStreamType;
     const wantsWebRtc = types.includes("web_rtc") || legacy === "web_rtc";
-    const wantsHls = types.includes("hls") || legacy === "hls" || supportsStream(this.camera);
+    const wantsHls =
+      types.includes("hls") || legacy === "hls" || supportsStream(this.camera);
 
     // 2) WebRTC via Core websocket API
     if (wantsWebRtc && typeof RTCPeerConnection !== "undefined") {
@@ -262,7 +348,10 @@ export class CctvStreamPlayer extends LitElement {
       ).catch(() => undefined);
     };
 
-    const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+    const offer = await pc.createOffer({
+      offerToReceiveVideo: true,
+      offerToReceiveAudio: true,
+    });
     await pc.setLocalDescription(offer);
 
     this._unsubWebRtc = await subscribeWebRtcOffer(
@@ -276,7 +365,10 @@ export class CctvStreamPlayer extends LitElement {
           return;
         }
         if (event.type === "answer") {
-          await this._pc.setRemoteDescription({ type: "answer", sdp: event.answer });
+          await this._pc.setRemoteDescription({
+            type: "answer",
+            sdp: event.answer,
+          });
           return;
         }
         if (event.type === "candidate" && event.candidate) {
@@ -303,9 +395,16 @@ export class CctvStreamPlayer extends LitElement {
       return html`<div class="error">${this._error || "No preview"}</div>`;
     }
 
+    const badge =
+      this._live && this._mode !== "still"
+        ? this._mode
+        : this._shouldStream()
+          ? this._mode
+          : "idle";
+
     return html`
       ${this._renderMedia()}
-      <span class="badge">${this._mode}</span>
+      <span class="badge">${badge}</span>
     `;
   }
 
