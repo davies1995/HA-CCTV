@@ -1,6 +1,5 @@
 {
   "name": "CCTV Dashboard",
-  "filename": "cctv-dashboard.js",
-  "render_readme": true,
-  "homeassistant": "2024.11.0"
+  "homeassistant": "2024.11.0",
+  "render_readme": true
 }
