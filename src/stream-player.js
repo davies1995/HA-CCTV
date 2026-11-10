@@ -45,6 +45,8 @@ export class CctvStreamPlayer extends LitElement {
     _visible: { state: true },
     _slotHeld: { state: true },
     _queued: { state: true },
+    /** Tile box width/height — required by ha-camera-stream for contain letterboxing. */
+    _tileAspect: { state: true },
   };
 
   static styles = css`
@@ -117,8 +119,16 @@ export class CctvStreamPlayer extends LitElement {
       min-height: 0;
       width: 100%;
       height: 100%;
+      max-width: 100%;
+      max-height: 100%;
       object-fit: contain;
       object-position: center;
+    }
+
+    /* HA host is a custom element — force it to fill the tile box. */
+    :host([large][mosaic]) ha-camera-stream {
+      display: block;
+      overflow: hidden;
     }
 
     .badge {
@@ -174,13 +184,18 @@ export class CctvStreamPlayer extends LitElement {
     this._sessionId = null;
     this._startToken = 0;
     this._observer = null;
+    this._hostRo = null;
     this._slotId = "";
     this._streamCamera = null;
+    this._stableStateObj = null;
+    this._tileAspect = 0;
+    this._lastEmittedAspect = 0;
   }
 
   connectedCallback() {
     super.connectedCallback();
     this._bindObserver();
+    this._bindHostResize();
     if (this.active) this._reconcilePlayback();
     else this._unloadCompletely();
   }
@@ -188,21 +203,37 @@ export class CctvStreamPlayer extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._unbindObserver();
+    this._unbindHostResize();
     this._unloadCompletely();
   }
 
   /**
+   * Skip hass/camera/config identity churn that does not affect the live session.
    * @param {Map<string, unknown>} changed
    */
   shouldUpdate(changed) {
-    if (!changed.has("hass")) return true;
-    if (changed.size > 1) return true;
-    return this._cameraHassChanged(changed.get("hass"), this.hass);
+    for (const key of changed.keys()) {
+      if (key.startsWith("_")) return true;
+      if (!["hass", "camera", "config"].includes(key)) return true;
+    }
+    if (changed.has("hass") && this._cameraHassChanged(changed.get("hass"), this.hass)) {
+      return true;
+    }
+    if (changed.has("camera") && this._cameraMeaningful(changed.get("camera"), this.camera)) {
+      return true;
+    }
+    if (changed.has("config") && this._configMeaningful(changed.get("config"), this.config)) {
+      return true;
+    }
+    return false;
   }
 
   updated(changed) {
     if (changed.has("eager") || changed.has("posterOnly")) {
       this._bindObserver();
+    }
+    if (changed.has("large") || changed.has("mosaic")) {
+      this._bindHostResize();
     }
 
     if (changed.has("active") && !this.active) {
@@ -210,16 +241,17 @@ export class CctvStreamPlayer extends LitElement {
       return;
     }
 
-    let hassRelevant = changed.has("hass");
-    if (hassRelevant && changed.size === 1) {
-      const prev = changed.get("hass");
-      hassRelevant = this._cameraHassChanged(prev, this.hass);
-    }
+    const hassRelevant =
+      changed.has("hass") && this._cameraHassChanged(changed.get("hass"), this.hass);
+    const cameraRelevant =
+      changed.has("camera") && this._cameraMeaningful(changed.get("camera"), this.camera);
+    const configRelevant =
+      changed.has("config") && this._configMeaningful(changed.get("config"), this.config);
 
     if (
       hassRelevant ||
-      changed.has("camera") ||
-      changed.has("config") ||
+      cameraRelevant ||
+      configRelevant ||
       changed.has("quality") ||
       changed.has("context") ||
       changed.has("eager") ||
@@ -232,8 +264,15 @@ export class CctvStreamPlayer extends LitElement {
       const video = this.renderRoot?.querySelector("video");
       if (video) video.muted = this.muted;
     }
-    if (changed.has("_mode") || changed.has("camera")) {
-      this.updateComplete.then(() => this._probeMediaSize());
+    if (
+      changed.has("_mode") ||
+      cameraRelevant ||
+      changed.has("_tileAspect")
+    ) {
+      this.updateComplete.then(() => {
+        this._probeMediaSize();
+        this._forceNestedContain();
+      });
     }
   }
 
@@ -243,17 +282,92 @@ export class CctvStreamPlayer extends LitElement {
    * @param {any} next
    */
   _cameraHassChanged(prev, next) {
-    const entityId = this.camera?.entityId;
+    const entityId = this._streamCamera?.entityId || this.camera?.entityId;
     if (!entityId) return true;
     const a = prev?.states?.[entityId];
     const b = next?.states?.[entityId];
     if (a === b) return false;
     if (!a || !b) return true;
+    const unavail = (s) =>
+      !s || ["unavailable", "unknown"].includes(String(s.state).trim().toLowerCase());
     return (
-      a.state !== b.state ||
-      a.last_changed !== b.last_changed ||
+      unavail(a) !== unavail(b) ||
       a.attributes?.access_token !== b.attributes?.access_token
     );
+  }
+
+  /**
+   * @param {any} prev
+   * @param {any} next
+   */
+  _cameraMeaningful(prev, next) {
+    if (prev === next) return false;
+    if (!prev || !next) return true;
+    return (
+      prev.entityId !== next.entityId ||
+      Boolean(prev.unavailable) !== Boolean(next.unavailable) ||
+      prev.stateObj?.attributes?.access_token !== next.stateObj?.attributes?.access_token
+    );
+  }
+
+  /**
+   * @param {any} prev
+   * @param {any} next
+   */
+  _configMeaningful(prev, next) {
+    if (prev === next) return false;
+    if (!prev || !next) return true;
+    return (
+      prev.max_streams !== next.max_streams ||
+      prev.quality !== next.quality ||
+      JSON.stringify(prev.camera_settings || null) !==
+        JSON.stringify(next.camera_settings || null) ||
+      JSON.stringify(prev.cameras_settings || null) !==
+        JSON.stringify(next.cameras_settings || null)
+    );
+  }
+
+  _bindHostResize() {
+    this._unbindHostResize();
+    this._updateTileAspect();
+    if (typeof ResizeObserver === "undefined") return;
+    this._hostRo = new ResizeObserver(() => this._updateTileAspect());
+    this._hostRo.observe(this);
+  }
+
+  _unbindHostResize() {
+    if (this._hostRo) {
+      this._hostRo.disconnect();
+      this._hostRo = null;
+    }
+  }
+
+  _updateTileAspect() {
+    const w = this.clientWidth;
+    const h = this.clientHeight;
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 2 || h < 2) return;
+    const aspect = w / h;
+    if (this._tileAspect && Math.abs(this._tileAspect - aspect) < 0.005) return;
+    this._tileAspect = aspect;
+  }
+
+  /**
+   * HA nested media ignores host object-fit; fitMode+aspectRatio is the real API.
+   * As a fallback for older builds, force contain on nested video/img.
+   */
+  _forceNestedContain() {
+    if (!(this.mosaic || this.large) || this._mode !== "ha") return;
+    const ha = this.renderRoot?.querySelector("ha-camera-stream");
+    const root = ha?.shadowRoot;
+    if (!root) return;
+    root.querySelectorAll("video, img").forEach((el) => {
+      el.style.objectFit = "contain";
+      el.style.objectPosition = "center";
+      el.style.width = "100%";
+      el.style.height = "100%";
+      el.style.maxWidth = "100%";
+      el.style.maxHeight = "100%";
+    });
   }
 
   get _effectiveQuality() {
@@ -302,15 +416,42 @@ export class CctvStreamPlayer extends LitElement {
     return this._visible;
   }
 
-  _refreshPosterUrls(streamCamera) {
+  _refreshPosterUrls(streamCamera, { cacheBust = false } = {}) {
     const cam = streamCamera || this.camera;
     if (!this.hass || !cam?.stateObj) {
       this._stillUrl = "";
       this._mjpegUrl = "";
       return;
     }
-    this._stillUrl = cameraPreviewUrl(this.hass, cam, true);
-    this._mjpegUrl = cameraMjpegStreamUrl(this.hass, cam);
+    const nextStill = cameraPreviewUrl(this.hass, cam, cacheBust);
+    const nextMjpeg = cameraMjpegStreamUrl(this.hass, cam);
+    // Avoid rewriting reactive URLs when unchanged (Date.now cache-bust flickered tiles).
+    if (this._stillUrl !== nextStill) this._stillUrl = nextStill;
+    if (this._mjpegUrl !== nextMjpeg) this._mjpegUrl = nextMjpeg;
+  }
+
+  /**
+   * Keep a stable stateObj reference for ha-camera-stream so routine hass
+   * ticks do not tear down WebRTC/HLS inside HA's element.
+   * @param {any} streamCamera
+   */
+  _syncStableStreamCamera(streamCamera) {
+    const next = streamCamera?.stateObj || null;
+    const prev = this._stableStateObj;
+    const unavail = (s) =>
+      !s || ["unavailable", "unknown"].includes(String(s.state).trim().toLowerCase());
+    const changed =
+      !prev ||
+      !next ||
+      prev.entity_id !== next.entity_id ||
+      prev.attributes?.access_token !== next.attributes?.access_token ||
+      unavail(prev) !== unavail(next);
+    if (changed) {
+      this._stableStateObj = next;
+      this._streamCamera = streamCamera;
+    } else if (!this._streamCamera) {
+      this._streamCamera = streamCamera;
+    }
   }
 
   /**
@@ -409,6 +550,8 @@ export class CctvStreamPlayer extends LitElement {
     this._playKey = "";
     this._idleReason = "suspended";
     this._queued = false;
+    this._stableStateObj = null;
+    this._streamCamera = null;
   }
 
   _showIdle(reason = "idle") {
@@ -422,7 +565,7 @@ export class CctvStreamPlayer extends LitElement {
       this._idleReason = reason;
       return;
     }
-    this._refreshPosterUrls(this._streamCamera || this.camera);
+    this._refreshPosterUrls(this._streamCamera || this.camera, { cacheBust: true });
     if (!this.hass || !this.camera?.stateObj) {
       this._mode = "empty";
       return;
@@ -448,18 +591,19 @@ export class CctvStreamPlayer extends LitElement {
       this._stopLive();
       this._mode = "empty";
       this._playKey = "";
+      this._stableStateObj = null;
       return;
     }
 
-    this._streamCamera = resolveStreamCamera(
+    const resolved = resolveStreamCamera(
       this.hass,
       this.camera,
       this.config,
       this._effectiveQuality,
       this.context
     );
-    this._slotId = this._streamCamera.entityId || this.camera.entityId;
-    this._refreshPosterUrls(this._streamCamera);
+    this._syncStableStreamCamera(resolved);
+    this._slotId = this._streamCamera?.entityId || this.camera.entityId;
 
     const want = this._wantsLive();
     const playKey = [
@@ -478,6 +622,7 @@ export class CctvStreamPlayer extends LitElement {
     }
 
     // Avoid tearing down a healthy live session on routine hass state churn.
+    // Do not refresh poster URLs here — cache-busting _stillUrl forced re-renders.
     if (
       this._slotHeld &&
       this._playKey === playKey &&
@@ -487,6 +632,8 @@ export class CctvStreamPlayer extends LitElement {
     ) {
       return;
     }
+
+    this._refreshPosterUrls(this._streamCamera, { cacheBust: false });
 
     const onGrant = () => {
       this._slotHeld = true;
@@ -531,7 +678,7 @@ export class CctvStreamPlayer extends LitElement {
     this._idleReason = "";
 
     const streamCamera = this._streamCamera || this.camera;
-    this._refreshPosterUrls(streamCamera);
+    this._refreshPosterUrls(streamCamera, { cacheBust: false });
     const transports = preferredTransports(
       this._effectiveQuality,
       this.context
@@ -711,9 +858,14 @@ export class CctvStreamPlayer extends LitElement {
       return;
     }
     const haStream = root.querySelector("ha-camera-stream");
-    const nested = haStream?.shadowRoot?.querySelector?.("video");
-    if (nested?.videoWidth && nested?.videoHeight) {
-      this._emitMediaAspect(nested.videoWidth, nested.videoHeight);
+    const nestedVideo = haStream?.shadowRoot?.querySelector?.("video");
+    if (nestedVideo?.videoWidth && nestedVideo?.videoHeight) {
+      this._emitMediaAspect(nestedVideo.videoWidth, nestedVideo.videoHeight);
+      return;
+    }
+    const nestedImg = haStream?.shadowRoot?.querySelector?.("img");
+    if (nestedImg?.naturalWidth && nestedImg?.naturalHeight) {
+      this._emitMediaAspect(nestedImg.naturalWidth, nestedImg.naturalHeight);
     }
   }
 
@@ -738,17 +890,30 @@ export class CctvStreamPlayer extends LitElement {
   _renderMedia() {
     const streamCamera = this._streamCamera || this.camera;
     if (this._mode === "ha") {
-      // Newer HA builds honor fitMode; mosaic must letterbox mixed aspects.
+      // HA letterboxes only when fitMode=contain AND aspectRatio is the tile box
+      // ratio. Without aspectRatio, portrait MJPEG stays intrinsically tall and
+      // is clipped by overflow:hidden (looks like crop).
       const fitMode = this.mosaic || this.large ? "contain" : "cover";
+      const tileAspect =
+        this._tileAspect > 0
+          ? this._tileAspect
+          : this.clientWidth > 1 && this.clientHeight > 1
+            ? this.clientWidth / this.clientHeight
+            : undefined;
+      const stateObj = this._stableStateObj || streamCamera?.stateObj;
       return html`
         <ha-camera-stream
           class="media"
           .hass=${this.hass}
-          .stateObj=${streamCamera.stateObj}
+          .stateObj=${stateObj}
           .muted=${this.muted}
           .controls=${this.controls}
           .fitMode=${fitMode}
-          @loadeddata=${() => this._probeMediaSize()}
+          .aspectRatio=${tileAspect}
+          @loadeddata=${() => {
+            this._probeMediaSize();
+            this._forceNestedContain();
+          }}
         ></ha-camera-stream>
       `;
     }

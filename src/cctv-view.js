@@ -138,6 +138,7 @@ export class CctvView extends LitElement {
     this._lastHassSig = "";
     this._visibilityIo = null;
     this._onDocVisibility = null;
+    this._inactiveTimer = 0;
     this._loadToken = 0;
     this._everVisible = false;
   }
@@ -170,8 +171,9 @@ export class CctvView extends LitElement {
       const b = next.states?.[id];
       if (a === b) continue;
       if (!a || !b) return true;
+      // Ignore last_changed-only churn — it re-renders mosaic tiles and was
+      // feeding stream-player prop updates. State / token / name still update UI.
       if (a.state !== b.state) return true;
-      if (a.last_changed !== b.last_changed) return true;
       if (a.attributes?.access_token !== b.attributes?.access_token) return true;
       if (a.attributes?.friendly_name !== b.attributes?.friendly_name) return true;
     }
@@ -180,12 +182,11 @@ export class CctvView extends LitElement {
   }
 
   _watchedEntityIds() {
+    // Only cameras — linked motion/person sensors flip often and would
+    // re-render the whole mosaic (restarting streams). Timeline polls itself.
     const ids = new Set(this._visibleIds || []);
     if (this._pickerOpen || this._settingsOpen) {
       for (const cam of this._cameras()) ids.add(cam.entityId);
-    }
-    for (const camId of this._visibleIds || []) {
-      for (const sensor of this._sensorLinks?.[camId] || []) ids.add(sensor);
     }
     return ids;
   }
@@ -210,7 +211,15 @@ export class CctvView extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._setPanelActive(false);
+    if (this._inactiveTimer) {
+      clearTimeout(this._inactiveTimer);
+      this._inactiveTimer = 0;
+    }
+    // Force-suspend immediately on disconnect (skip debounce).
+    if (this._panelActive) {
+      this._panelActive = false;
+      this._suspendResources();
+    }
     this._unbindPanelVisibility();
     if (this._mq && this._onMq) {
       if (this._mq.removeEventListener) this._mq.removeEventListener("change", this._onMq);
@@ -229,7 +238,7 @@ export class CctvView extends LitElement {
 
     this._onDocVisibility = () => {
       if (typeof document !== "undefined" && document.hidden) {
-        this._setPanelActive(false);
+        this._setPanelActive(false, { immediate: true });
       } else if (this.isConnected) {
         this._setPanelActive(this._isPanelOnScreen());
       }
@@ -282,20 +291,47 @@ export class CctvView extends LitElement {
 
   /**
    * @param {boolean} active
+   * @param {{ immediate?: boolean }} [opts]
    */
-  _setPanelActive(active) {
+  _setPanelActive(active, opts = {}) {
     const next = Boolean(active);
-    if (this._panelActive === next) {
-      if (!next) this._suspendResources();
-      return;
-    }
-    this._panelActive = next;
     if (next) {
+      if (this._inactiveTimer) {
+        clearTimeout(this._inactiveTimer);
+        this._inactiveTimer = 0;
+      }
+      if (this._panelActive === true) return;
+      this._panelActive = true;
       this._status = this._status === "Suspended — streams unloaded" ? "" : this._status;
       this._schedulePack();
-    } else {
-      this._suspendResources();
+      return;
     }
+    // Already inactive: pure no-op (do not re-suspend / bump load tokens).
+    if (this._panelActive === false) {
+      if (this._inactiveTimer) {
+        clearTimeout(this._inactiveTimer);
+        this._inactiveTimer = 0;
+      }
+      return;
+    }
+    const goInactive = () => {
+      this._inactiveTimer = 0;
+      if (this._panelActive === false) return;
+      if (!opts.immediate && this._isPanelOnScreen()) return;
+      this._panelActive = false;
+      this._suspendResources();
+    };
+    if (opts.immediate) {
+      if (this._inactiveTimer) {
+        clearTimeout(this._inactiveTimer);
+        this._inactiveTimer = 0;
+      }
+      goInactive();
+      return;
+    }
+    // Debounce off-screen so brief layout/IO blips do not tear down streams.
+    if (this._inactiveTimer) return;
+    this._inactiveTimer = window.setTimeout(goInactive, 280);
   }
 
   /** Unload streams/playback/timers/observers while panel is away. */
@@ -419,7 +455,24 @@ export class CctvView extends LitElement {
       aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
     }));
     const cells = packAspectMosaic(items, boxW, boxH, 10);
-    this._packStyles = cellsToPercentStyles(cells, boxW, boxH);
+    const nextStyles = cellsToPercentStyles(cells, boxW, boxH);
+    if (!this._packStylesEqual(this._packStyles, nextStyles)) {
+      this._packStyles = nextStyles;
+    }
+  }
+
+  /**
+   * @param {Record<string, string>} a
+   * @param {Record<string, string>} b
+   */
+  _packStylesEqual(a, b) {
+    const ak = Object.keys(a || {});
+    const bk = Object.keys(b || {});
+    if (ak.length !== bk.length) return false;
+    for (const key of ak) {
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
   }
 
   _onMediaAspect(event) {
@@ -428,6 +481,22 @@ export class CctvView extends LitElement {
     if (!entityId) return;
     if (Math.abs((this._aspectById[entityId] || 0) - aspect) < 0.01) return;
     this._aspectById = { ...this._aspectById, [entityId]: aspect };
+  }
+
+  /**
+   * Feed playback intrinsic size into the desktop pack so portrait doorbells
+   * get portrait-shaped cells (same path as live cctv-media-aspect).
+   * @param {string} entityId
+   * @param {number} width
+   * @param {number} height
+   */
+  _onPlaybackMediaSize(entityId, width, height) {
+    const w = Number(width);
+    const h = Number(height);
+    if (!entityId || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      return;
+    }
+    this._onMediaAspect({ detail: { entityId, aspect: w / h } });
   }
 
   async _ensureSelectionLoaded() {
@@ -1329,7 +1398,17 @@ export class CctvView extends LitElement {
             ? !item
               ? html`<div class="playback-empty">No recording for this camera</div>`
               : item.kind === "snapshot"
-                ? html`<img class="playback-media" alt="" src=${item.url} />`
+                ? html`<img
+                    class="playback-media"
+                    alt=""
+                    src=${item.url}
+                    @load=${(e) =>
+                      this._onPlaybackMediaSize(
+                        cam.entityId,
+                        e.target.naturalWidth,
+                        e.target.naturalHeight
+                      )}
+                  />`
                 : html`
                     <video
                       class="playback-media"
@@ -1343,13 +1422,19 @@ export class CctvView extends LitElement {
                       .muted=${true}
                       .playsInline=${true}
                       controls
+                      @loadedmetadata=${(e) =>
+                        this._onPlaybackMediaSize(
+                          cam.entityId,
+                          e.target.videoWidth,
+                          e.target.videoHeight
+                        )}
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
                     ></video>
                   `
             : html`
                 <cctv-stream-player
                   large
-                  ?mosaic=${packed}
+                  mosaic
                   eager
                   .active=${streamsActive}
                   .hass=${this.hass}

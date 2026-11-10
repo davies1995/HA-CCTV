@@ -394,19 +394,36 @@ export const sharedStyles = css`
 
   .layout-tile cctv-stream-player {
     height: 100%;
-    min-height: 180px;
+    min-height: 0;
     aspect-ratio: auto;
+  }
+
+  @media (max-width: 800px) {
+    .layout-tile cctv-stream-player {
+      min-height: 160px;
+    }
   }
 
   /* Live + playback: fit entire frame inside the tile (letterbox), never crop. */
   .layout-tile .playback-media,
   .layout-tile .tile-media > img.playback-media,
   .layout-tile .tile-media > video.playback-media {
+    display: block;
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
     object-position: center;
     background: #0a0e13;
+  }
+
+  .layout-tile .tile-media > cctv-stream-player {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
   }
 
   .layout-1 .layout-tile cctv-stream-player {
