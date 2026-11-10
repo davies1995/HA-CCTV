@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-11-10
+
+### Fixed
+
+- Detection **Play** keeps the same visible mosaic cameras/layout, unloads live streams, and plays those recordings **simultaneously** seek-synced to the event window (not other cams, not one-at-a-time)
+
+### Changed
+
+- Lighter HA frontend load: skip unrelated state re-renders, quieter timeline history refreshes, cached recording file sizes
+
 ## 0.6.0 — 2026-11-10
 
 ### Added
