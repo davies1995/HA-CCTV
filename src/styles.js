@@ -361,6 +361,228 @@ export const sharedStyles = css`
     }
   }
 
+  .sensor-settings {
+    margin: 1.25rem 0 0;
+    padding: 0.85rem 1rem 1rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 10px;
+    background: var(--cctv-surface);
+    max-width: 960px;
+  }
+
+  .sensor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-end;
+    margin: 0.85rem 0;
+  }
+
+  .sensor-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--cctv-muted);
+    flex: 1 1 220px;
+  }
+
+  .sensor-filter input {
+    font: inherit;
+    color: inherit;
+    background: var(--primary-background-color, #0f1419);
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+  }
+
+  .sensor-linked,
+  .sensor-candidates {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .sensor-item {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 0.55rem;
+    row-gap: 0.1rem;
+    align-items: center;
+    padding: 0.4rem 0.45rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .sensor-item:hover {
+    background: rgba(61, 156, 240, 0.08);
+  }
+
+  .sensor-item input {
+    grid-row: 1 / span 2;
+  }
+
+  .sensor-kind {
+    grid-row: 1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cctv-accent);
+  }
+
+  .sensor-name {
+    grid-column: 3;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .sensor-state {
+    grid-column: 4;
+    grid-row: 1 / span 2;
+    font-size: 0.75rem;
+    color: var(--cctv-muted);
+  }
+
+  .sensor-state.on {
+    color: var(--cctv-ok);
+  }
+
+  .sensor-item .picker-id {
+    grid-column: 3;
+  }
+
+  .kind-person { color: #5eb1ff; }
+  .kind-car { color: #f0b45a; }
+  .kind-animal { color: #7dcf8a; }
+  .kind-package { color: #c9a0ff; }
+  .kind-bicycle { color: #67d5c8; }
+  .kind-motion { color: #e6d36a; }
+  .kind-other { color: var(--cctv-muted); }
+
+  .timeline {
+    margin: 1.25rem 0 0;
+    padding: 0.85rem 1rem 1rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 10px;
+    background: var(--cctv-surface);
+  }
+
+  .timeline-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
+  .timeline-windows {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .timeline-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--cctv-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .timeline-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .timeline-row {
+    display: grid;
+    grid-template-columns: minmax(160px, 240px) 1fr;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .timeline-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
+  .timeline-kind {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .timeline-cam {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .timeline-sensor,
+  .timeline-total {
+    font-size: 0.72rem;
+    color: var(--cctv-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .timeline-track {
+    position: relative;
+    height: 1.15rem;
+    border-radius: 6px;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0,
+        rgba(255, 255, 255, 0.04) 1px,
+        transparent 1px,
+        transparent 10%
+      ),
+      rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+  }
+
+  .timeline-flag {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    border-radius: 4px;
+    background: var(--cctv-accent);
+    opacity: 0.9;
+    min-width: 3px;
+  }
+
+  .timeline-flag.kind-person { background: #5eb1ff; }
+  .timeline-flag.kind-car { background: #f0b45a; }
+  .timeline-flag.kind-animal { background: #7dcf8a; }
+  .timeline-flag.kind-package { background: #c9a0ff; }
+  .timeline-flag.kind-bicycle { background: #67d5c8; }
+  .timeline-flag.kind-motion { background: #e6d36a; }
+  .timeline-flag.kind-other { background: #8b9aab; }
+
+  .timeline-error {
+    color: var(--cctv-bad);
+    font-size: 0.85rem;
+  }
+
+  .timeline-loading {
+    margin: 0.5rem 0 0;
+  }
+
+  @media (max-width: 800px) {
+    .timeline-row {
+      grid-template-columns: 1fr;
+      gap: 0.35rem;
+    }
+  }
+
   ha-card {
     overflow: hidden;
   }
