@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 — 2026-11-10
+
+### Fixed
+
+- Mosaic streams stay live while watching (removed PR20 host IntersectionObserver that remounted tiles on layout blips)
+- Leave-page unload kept via tab hide + panel disconnect only
+
+### Added
+
+- Shared per-camera **force aspect ratio** override (e.g. 9:16 doorbell) for all HA users when auto pack/fit fails
+
+
 ## 0.9.0 — 2026-11-10
 
 ### Fixed
