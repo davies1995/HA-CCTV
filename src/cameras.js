@@ -1,6 +1,9 @@
-/** Shared helpers for discovering and previewing HA camera entities. */
+/** Shared helpers for discovering and streaming HA camera entities. */
 
 const UNAVAILABLE = new Set(["unavailable", "unknown", "none", ""]);
+
+/** CameraEntityFeature.STREAM */
+export const CAMERA_SUPPORT_STREAM = 2;
 
 export function listCameras(hass, config = {}) {
   const states = hass?.states ?? {};
@@ -15,20 +18,27 @@ export function listCameras(hass, config = {}) {
   ids = ids.filter((id) => !exclude.has(id.toLowerCase()));
 
   return ids
-    .map((entityId) => {
-      const stateObj = states[entityId];
-      const attrs = stateObj?.attributes ?? {};
-      return {
-        entityId,
-        stateObj,
-        state: stateObj?.state ?? "unknown",
-        name: attrs.friendly_name || entityId,
-        brand: attrs.brand,
-        model: attrs.model,
-        unavailable: !stateObj || UNAVAILABLE.has(String(stateObj.state).trim().toLowerCase()),
-      };
-    })
+    .map((entityId) => cameraFromState(entityId, states[entityId]))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+export function cameraFromState(entityId, stateObj) {
+  const attrs = stateObj?.attributes ?? {};
+  return {
+    entityId,
+    stateObj,
+    state: stateObj?.state ?? "unknown",
+    name: attrs.friendly_name || entityId,
+    brand: attrs.brand,
+    model: attrs.model,
+    frontendStreamType: attrs.frontend_stream_type,
+    supportedFeatures: Number(attrs.supported_features || 0),
+    unavailable: !stateObj || UNAVAILABLE.has(String(stateObj.state).trim().toLowerCase()),
+  };
+}
+
+export function supportsStream(camera) {
+  return Boolean(camera?.supportedFeatures & CAMERA_SUPPORT_STREAM);
 }
 
 export function cameraPreviewUrl(hass, camera, cacheBust = true) {
@@ -43,6 +53,66 @@ export function cameraPreviewUrl(hass, camera, cacheBust = true) {
   if (!cacheBust) return base;
   const sep = base.includes("?") ? "&" : "?";
   return `${base}${sep}t=${Date.now()}`;
+}
+
+export function cameraMjpegStreamUrl(hass, camera) {
+  const token = camera?.stateObj?.attributes?.access_token;
+  if (!hass || !camera?.entityId || !token) return "";
+  const path = `/api/camera_proxy_stream/${camera.entityId}?token=${token}`;
+  return typeof hass.hassUrl === "function" ? hass.hassUrl(path) : path;
+}
+
+export async function fetchCameraCapabilities(hass, entityId) {
+  if (!hass?.callWS) return null;
+  try {
+    return await hass.callWS({ type: "camera/capabilities", entity_id: entityId });
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHlsStreamUrl(hass, entityId) {
+  if (!hass?.callWS) return "";
+  const stream = await hass.callWS({
+    type: "camera/stream",
+    entity_id: entityId,
+  });
+  const url = stream?.url || "";
+  if (!url) return "";
+  return typeof hass.hassUrl === "function" ? hass.hassUrl(url) : url;
+}
+
+export function subscribeWebRtcOffer(hass, entityId, offer, callback) {
+  if (!hass?.connection?.subscribeMessage) {
+    throw new Error("WebSocket connection unavailable");
+  }
+  return hass.connection.subscribeMessage(callback, {
+    type: "camera/webrtc/offer",
+    entity_id: entityId,
+    offer,
+  });
+}
+
+export async function addWebRtcCandidate(hass, entityId, sessionId, candidate) {
+  if (!hass?.callWS) return;
+  await hass.callWS({
+    type: "camera/webrtc/candidate",
+    entity_id: entityId,
+    session_id: sessionId,
+    candidate,
+  });
+}
+
+export async function fetchWebRtcClientConfiguration(hass, entityId) {
+  if (!hass?.callWS) return null;
+  try {
+    return await hass.callWS({
+      type: "camera/webrtc/get_client_config",
+      entity_id: entityId,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function callCameraService(hass, service, entityId, data = {}) {

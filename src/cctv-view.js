@@ -1,11 +1,7 @@
 import { LitElement, html, nothing } from "lit";
 import { sharedStyles } from "./styles.js";
-import {
-  cameraPreviewUrl,
-  callCameraService,
-  listCameras,
-  openMoreInfo,
-} from "./cameras.js";
+import { callCameraService, listCameras, openMoreInfo } from "./cameras.js";
+import "./stream-player.js";
 
 const ACTIONS = [
   { service: "turn_on", label: "Turn on" },
@@ -14,12 +10,7 @@ const ACTIONS = [
 ];
 
 /**
- * Shared CCTV grid + detail UI used by the panel and the Lovelace card.
- *
- * Properties:
- * - hass
- * - config (cameras / exclude / title / refresh_seconds)
- * - panelMode (adds full-page chrome)
+ * Shared CCTV grid + detail UI used by the panel and Lovelace cards.
  */
 export class CctvView extends LitElement {
   static properties = {
@@ -27,7 +18,6 @@ export class CctvView extends LitElement {
     config: { attribute: false },
     panelMode: { type: Boolean, attribute: "panel-mode" },
     _selected: { state: true },
-    _tick: { state: true },
     _status: { state: true },
   };
 
@@ -38,37 +28,7 @@ export class CctvView extends LitElement {
     this.config = {};
     this.panelMode = false;
     this._selected = null;
-    this._tick = 0;
     this._status = "";
-    this._timer = null;
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this._schedule();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this._timer) clearInterval(this._timer);
-  }
-
-  updated(changed) {
-    if (changed.has("config") || changed.has("hass")) {
-      this._schedule();
-    }
-  }
-
-  get _refreshSeconds() {
-    const value = Number(this.config?.refresh_seconds ?? 5);
-    return Number.isFinite(value) ? Math.min(60, Math.max(1, value)) : 5;
-  }
-
-  _schedule() {
-    if (this._timer) clearInterval(this._timer);
-    this._timer = setInterval(() => {
-      this._tick += 1;
-    }, this._refreshSeconds * 1000);
   }
 
   _cameras() {
@@ -88,7 +48,6 @@ export class CctvView extends LitElement {
     try {
       await callCameraService(this.hass, service, entityId);
       this._status = `${service} ok`;
-      this._tick += 1;
     } catch (err) {
       this._status = err?.message || String(err);
     }
@@ -111,10 +70,9 @@ export class CctvView extends LitElement {
             <h1>${title}</h1>
           </div>
           <div class="top-actions">
-            <button class="btn" type="button" @click=${() => (this._tick += 1)}>Refresh</button>
             <span class="status">
               ${this._status ||
-              `${cameras.length} camera${cameras.length === 1 ? "" : "s"}`}
+              `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · live`}
             </span>
           </div>
         </div>
@@ -130,46 +88,45 @@ export class CctvView extends LitElement {
     }
     return html`
       <div class="grid" role="list">
-        ${cameras.map((cam) => {
-          const base = cameraPreviewUrl(this.hass, cam);
-          const src = base
-            ? `${base}${base.includes("?") ? "&" : "?"}k=${this._tick}`
-            : "";
-          return html`
-            <button
-              type="button"
-              class="tile"
-              role="listitem"
-              @click=${() => this._select(cam.entityId)}
-            >
-              ${src
-                ? html`<img alt=${cam.name} src=${src} loading="lazy" />`
-                : html`<div class="placeholder tile-body">No preview</div>`}
-              <div class="tile-body">
+        ${cameras.map(
+          (cam) => html`
+            <article class="tile" role="listitem">
+              <div class="tile-media">
+                <cctv-stream-player
+                  .hass=${this.hass}
+                  .camera=${cam}
+                  muted
+                ></cctv-stream-player>
+              </div>
+              <button
+                type="button"
+                class="tile-body tile-open"
+                @click=${() => this._select(cam.entityId)}
+              >
                 <p class="tile-title">${cam.name}</p>
                 <p class="tile-meta">
                   <span class="dot ${cam.state}"></span>${cam.state} · ${cam.entityId}
                 </p>
-              </div>
-            </button>
-          `;
-        })}
+              </button>
+            </article>
+          `
+        )}
       </div>
     `;
   }
 
   _renderDetail(cam) {
-    const base = cameraPreviewUrl(this.hass, cam);
-    const src = base
-      ? `${base}${base.includes("?") ? "&" : "?"}k=${this._tick}`
-      : "";
     return html`
       <button class="btn linkish" type="button" @click=${this._back}>← All cameras</button>
       <h2>${cam.name}</h2>
       <div class="detail-stage">
-        ${src
-          ? html`<img alt=${cam.name} src=${src} />`
-          : html`<div class="placeholder tile-body">No preview</div>`}
+        <cctv-stream-player
+          large
+          .hass=${this.hass}
+          .camera=${cam}
+          .muted=${false}
+          controls
+        ></cctv-stream-player>
       </div>
       <dl class="meta">
         <dt>Entity</dt>

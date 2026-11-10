@@ -11,7 +11,6 @@ class CctvCamerasCard extends LitElement {
   static styles = sharedStyles;
 
   static getConfigElement() {
-    // Visual editor can come later; YAML config is enough for scaffold.
     return null;
   }
 
@@ -21,7 +20,6 @@ class CctvCamerasCard extends LitElement {
       .slice(0, 4);
     return {
       title: "CCTV",
-      refresh_seconds: 5,
       ...(cameras.length ? { cameras } : {}),
     };
   }
@@ -32,7 +30,6 @@ class CctvCamerasCard extends LitElement {
     }
     this._config = {
       title: "CCTV",
-      refresh_seconds: 5,
       ...config,
     };
   }
@@ -65,7 +62,8 @@ if (!window.customCards.some((card) => card.type === "cctv-cameras-card")) {
     type: "cctv-cameras-card",
     name: "CCTV Cameras",
     preview: true,
-    description: "Grid of Home Assistant camera entities with detail view and basic controls.",
+    description:
+      "Live stream grid of Home Assistant camera entities with detail view and basic controls.",
     documentationURL: "https://github.com/davies1995/HA-CCTV",
   });
 }

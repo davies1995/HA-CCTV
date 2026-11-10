@@ -24,7 +24,6 @@ class CctvDashboardPanel extends LitElement {
     const { _panel_custom, ...rest } = fromPanel;
     return {
       title: "CCTV",
-      refresh_seconds: 5,
       ...rest,
     };
   }

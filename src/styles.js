@@ -65,34 +65,44 @@ export const sharedStyles = css`
   }
 
   .tile {
-    appearance: none;
     border: 1px solid var(--cctv-border);
     background: var(--cctv-surface);
     border-radius: 10px;
     overflow: hidden;
     padding: 0;
+    color: inherit;
+  }
+
+  .tile:hover,
+  .tile:focus-within {
+    border-color: var(--cctv-accent);
+  }
+
+  .tile-open {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    width: 100%;
     cursor: pointer;
     text-align: left;
     color: inherit;
     font: inherit;
+    padding: 0;
   }
 
-  .tile:hover,
-  .tile:focus-visible {
-    border-color: var(--cctv-accent);
-    outline: none;
+  .tile-open:focus-visible {
+    outline: 2px solid var(--cctv-accent);
+    outline-offset: -2px;
   }
 
-  .tile img,
-  .detail-stage img {
-    width: 100%;
+  .tile-media {
     display: block;
-    background: #0a0e13;
-    object-fit: cover;
+    width: 100%;
   }
 
-  .tile img {
-    aspect-ratio: 16 / 10;
+  .tile cctv-stream-player,
+  .detail-stage cctv-stream-player {
+    width: 100%;
   }
 
   .tile-body {

@@ -1,5 +1,6 @@
 import "./panel.js";
 import "./card.js";
+import "./camera-card.js";
 
 export const VERSION = "0.1.0";
 
