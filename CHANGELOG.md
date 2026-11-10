@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-11-10
+
+### Added
+
+- Saved detections list shows **time/date**, **what was detected**, and **file sizes**
+- Click a saved detection or timeline **Play** to replace the live mosaic with that event’s multi-camera recordings until stop/end
+- Horizontal detection timeline with clickable event details
+- Desktop mosaic packs by camera aspect so all selected cams fit the viewport
+
 All notable changes to this project are documented in this file.
 
 ## 0.5.0 — 2026-11-10
