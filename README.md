@@ -37,6 +37,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 ## Features
 
 - Sidebar **CCTV** panel for all users (no admin gate)
+- **Choose cameras in the panel UI** (checkboxes) — 1 fills the view, 2–4 split equally; selection is saved to your HA user profile
 - Auto-discover `camera.*` (optional include/exclude on cards)
 - Live stream tiles (HA / WebRTC / HLS / MJPEG / still)
 - Max **4** concurrent live streams by default (`max_streams`)

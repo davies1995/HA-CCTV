@@ -243,6 +243,124 @@ export const sharedStyles = css`
     color: var(--cctv-muted);
   }
 
+  .picker {
+    margin: 0 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 10px;
+    background: var(--cctv-surface);
+  }
+
+  .picker-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    align-items: baseline;
+    margin-bottom: 0.75rem;
+  }
+
+  .picker-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.45rem 0.75rem;
+  }
+
+  .picker-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 0.55rem;
+    align-items: center;
+    padding: 0.35rem 0.45rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .picker-item input {
+    grid-row: 1 / span 2;
+  }
+
+  .picker-item.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .picker-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .picker-id {
+    font-size: 0.75rem;
+    color: var(--cctv-muted);
+  }
+
+  .layout {
+    display: grid;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: min(70vh, 720px);
+  }
+
+  .layout-1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .layout-2 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .layout-3 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .layout-3 .layout-tile:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .layout-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .layout-tile {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .layout-tile .tile-media {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .layout-tile cctv-stream-player {
+    height: 100%;
+    min-height: 180px;
+    aspect-ratio: auto;
+  }
+
+  .layout-1 .layout-tile cctv-stream-player {
+    min-height: min(65vh, 640px);
+  }
+
+  @media (max-width: 800px) {
+    .layout-2,
+    .layout-3,
+    .layout-4 {
+      grid-template-columns: 1fr;
+      grid-template-rows: none;
+      min-height: 0;
+    }
+
+    .layout-3 .layout-tile:nth-child(3) {
+      grid-column: auto;
+    }
+  }
+
   ha-card {
     overflow: hidden;
   }
