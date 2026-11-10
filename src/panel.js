@@ -6,9 +6,9 @@ import "./cctv-view.js";
  * HA sets hass, narrow, route, and panel.
  *
  * Note: Home Assistant's partial-panel-resolver may keep this element mounted
- * for ~5 minutes after navigate-away (suspendWhenHidden). cctv-view watches
- * intersection + document visibility and fully unloads streams/timers while
- * the panel is off-screen so HA is not kept busy in the background.
+ * for ~5 minutes after navigate-away (suspendWhenHidden). cctv-view unloads on
+ * tab hide and disconnect (not IntersectionObserver — that caused in-panel
+ * stream restarts while watching).
  */
 class CctvDashboardPanel extends LitElement {
   static properties = {

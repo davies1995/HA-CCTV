@@ -20,6 +20,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_settings)
     websocket_api.async_register_command(hass, ws_set_settings)
     websocket_api.async_register_command(hass, ws_set_sensor_links)
+    websocket_api.async_register_command(hass, ws_set_force_aspect)
     websocket_api.async_register_command(hass, ws_list_recordings)
     websocket_api.async_register_command(hass, ws_list_detections)
     websocket_api.async_register_command(hass, ws_delete_recording)
@@ -119,6 +120,27 @@ async def ws_set_sensor_links(
     data = await store.async_save({"sensor_links": msg["sensor_links"]})
     if manager:
         manager.apply_store_update()
+    connection.send_result(msg["id"], data)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cctv_dashboard/set_force_aspect",
+        vol.Required("force_aspect"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_set_force_aspect(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save site-wide per-camera mosaic aspect overrides for all HA users."""
+    store = _store(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "CCTV store not ready")
+        return
+    data = await store.async_save({"force_aspect": msg["force_aspect"]})
     connection.send_result(msg["id"], data)
 
 

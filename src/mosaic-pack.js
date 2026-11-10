@@ -7,6 +7,60 @@
 
 export const DEFAULT_ASPECT = 16 / 9;
 
+/** Shared UI / store labels for forced mosaic packing. */
+export const FORCE_ASPECT_OPTIONS = [
+  { value: "auto", label: "Auto (detect)", ratio: null },
+  { value: "16:9", label: "16:9 landscape", ratio: 16 / 9 },
+  { value: "9:16", label: "9:16 portrait (doorbell)", ratio: 9 / 16 },
+  { value: "4:3", label: "4:3 landscape", ratio: 4 / 3 },
+  { value: "3:4", label: "3:4 portrait", ratio: 3 / 4 },
+  { value: "1:1", label: "1:1 square", ratio: 1 },
+  { value: "3:2", label: "3:2 landscape", ratio: 3 / 2 },
+  { value: "2:3", label: "2:3 portrait", ratio: 2 / 3 },
+];
+
+/**
+ * @param {string | null | undefined} label
+ * @returns {string} normalized label or "auto"
+ */
+export function normalizeForceAspectLabel(label) {
+  const value = String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (!value || value === "auto" || value === "default" || value === "none") {
+    return "auto";
+  }
+  return FORCE_ASPECT_OPTIONS.some((opt) => opt.value === value) ? value : "auto";
+}
+
+/**
+ * @param {string | null | undefined} label
+ * @returns {number | null}
+ */
+export function forceAspectRatio(label) {
+  const normalized = normalizeForceAspectLabel(label);
+  const opt = FORCE_ASPECT_OPTIONS.find((row) => row.value === normalized);
+  return opt?.ratio ?? null;
+}
+
+/**
+ * @param {Record<string, string> | null | undefined} raw
+ * @returns {Record<string, string>}
+ */
+export function normalizeForceAspectMap(raw) {
+  if (!raw || typeof raw !== "object") return {};
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [cameraId, label] of Object.entries(raw)) {
+    if (!String(cameraId).startsWith("camera.")) continue;
+    const normalized = normalizeForceAspectLabel(label);
+    if (normalized === "auto") continue;
+    out[cameraId] = normalized;
+  }
+  return out;
+}
+
 /**
  * @param {number | null | undefined} value
  * @returns {number}
