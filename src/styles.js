@@ -583,34 +583,6 @@ export const sharedStyles = css`
     gap: 0.35rem;
   }
 
-  .timeline-axis {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    color: var(--cctv-muted);
-    margin-bottom: 0.35rem;
-  }
-
-  .timeline-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-
-  .timeline-row {
-    display: grid;
-    grid-template-columns: minmax(160px, 240px) 1fr;
-    gap: 0.65rem;
-    align-items: center;
-  }
-
-  .timeline-label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    min-width: 0;
-  }
-
   .timeline-kind {
     font-size: 0.7rem;
     font-weight: 700;
@@ -618,61 +590,206 @@ export const sharedStyles = css`
     text-transform: uppercase;
   }
 
-  .timeline-cam {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .timeline-sensor,
   .timeline-total {
     font-size: 0.72rem;
     color: var(--cctv-muted);
+  }
+
+  .timeline-board {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.35rem 0 0.15rem;
+  }
+
+  .timeline-ruler {
+    position: relative;
+    height: 1.35rem;
+    margin-left: min(28%, 9.5rem);
+  }
+
+  .timeline-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .timeline-tick-line {
+    width: 1px;
+    height: 0.45rem;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .timeline-tick-label {
+    font-size: 0.68rem;
+    color: var(--cctv-muted);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  .timeline-lanes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .timeline-lane {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 28%) 1fr;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .timeline-lane-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
   }
 
   .timeline-track {
     position: relative;
-    height: 1.15rem;
-    border-radius: 6px;
+    height: 1.55rem;
+    border-radius: 8px;
     background:
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.04),
+        rgba(255, 255, 255, 0.02)
+      ),
       repeating-linear-gradient(
         90deg,
-        rgba(255, 255, 255, 0.04) 0,
-        rgba(255, 255, 255, 0.04) 1px,
+        rgba(255, 255, 255, 0.05) 0,
+        rgba(255, 255, 255, 0.05) 1px,
         transparent 1px,
-        transparent 10%
+        transparent 12.5%
       ),
-      rgba(0, 0, 0, 0.25);
+      rgba(0, 0, 0, 0.28);
     overflow: hidden;
   }
 
-  .timeline-flag {
+  .timeline-event {
+    appearance: none;
     position: absolute;
-    top: 2px;
-    bottom: 2px;
-    border-radius: 4px;
-    background: var(--cctv-accent);
-    opacity: 0.9;
-    min-width: 3px;
+    top: 3px;
+    bottom: 3px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+    min-width: 4px;
   }
 
-  .timeline-flag.kind-person { background: #5eb1ff; }
-  .timeline-flag.kind-car { background: #f0b45a; }
-  .timeline-flag.kind-animal { background: #7dcf8a; }
-  .timeline-flag.kind-package { background: #c9a0ff; }
-  .timeline-flag.kind-bicycle { background: #67d5c8; }
-  .timeline-flag.kind-motion { background: #e6d36a; }
-  .timeline-flag.kind-other { background: #8b9aab; }
+  .timeline-event-mark {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--cctv-accent);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+    opacity: 0.92;
+  }
+
+  .timeline-event.kind-person .timeline-event-mark { background: #5eb1ff; }
+  .timeline-event.kind-car .timeline-event-mark { background: #f0b45a; }
+  .timeline-event.kind-animal .timeline-event-mark { background: #7dcf8a; }
+  .timeline-event.kind-package .timeline-event-mark { background: #c9a0ff; }
+  .timeline-event.kind-bicycle .timeline-event-mark { background: #67d5c8; }
+  .timeline-event.kind-motion .timeline-event-mark { background: #e6d36a; }
+  .timeline-event.kind-other .timeline-event-mark { background: #8b9aab; }
+
+  .timeline-event:hover .timeline-event-mark,
+  .timeline-event:focus-visible .timeline-event-mark {
+    outline: 2px solid #fff;
+    outline-offset: 1px;
+    opacity: 1;
+  }
+
+  .timeline-event.selected .timeline-event-mark {
+    outline: 2px solid #fff;
+    outline-offset: 1px;
+    filter: brightness(1.15);
+  }
+
+  .timeline-event.live .timeline-event-mark {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+
+  .timeline-hint,
+  .timeline-loading {
+    margin: 0.55rem 0 0;
+  }
+
+  .timeline-detail {
+    margin-top: 0.75rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+  }
+
+  .timeline-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    margin-bottom: 0.55rem;
+  }
+
+  .timeline-detail-head .btn {
+    margin-left: auto;
+  }
+
+  .timeline-live-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cctv-ok);
+  }
+
+  .timeline-detail-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 0.85rem;
+    margin: 0;
+  }
+
+  .timeline-detail-grid dt {
+    color: var(--cctv-muted);
+    font-size: 0.8rem;
+  }
+
+  .timeline-detail-grid dd {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .timeline-detail-sensors {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .timeline-detail-sensors li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+  }
 
   .timeline-error {
     color: var(--cctv-bad);
     font-size: 0.85rem;
-  }
-
-  .timeline-loading {
-    margin: 0.5rem 0 0;
   }
 
   .settings-panel,
@@ -771,9 +888,14 @@ export const sharedStyles = css`
   }
 
   @media (max-width: 800px) {
-    .timeline-row {
+    .timeline-ruler {
+      margin-left: 0;
+      height: 1.5rem;
+    }
+
+    .timeline-lane {
       grid-template-columns: 1fr;
-      gap: 0.35rem;
+      gap: 0.3rem;
     }
 
     .recording-item {
