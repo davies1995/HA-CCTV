@@ -122,8 +122,11 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
         cameraId.replace(/^camera\./, ""),
       items: ordered.map((clip) => {
         const bounds = clipTimeBounds(clip);
+        const path = String(clip.url || "");
         return {
-          url: recordingMediaUrl(hass, clip.url),
+          path,
+          // Unsigned until Play; signRecordingUrl is required for <video src>.
+          url: recordingMediaUrl(hass, path),
           kind: clip.kind === "snapshot" ? "snapshot" : "video",
           size: Number(clip.size) || 0,
           seq: Number(clip.seq) || 0,
