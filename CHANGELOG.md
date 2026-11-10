@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 — 2026-11-10
+
+### Fixed
+
+- Mosaic cameras no longer flicker/restart while in use (hass/config/sensor churn no longer tears down live streams)
+- Portrait doorbells **contain**-fit mosaic tiles for live and playback (pass tile `aspectRatio` to `ha-camera-stream`; mosaic attr on all layout tiles)
+
+
 ## 0.8.0 — 2026-11-10
 
 ### Fixed
