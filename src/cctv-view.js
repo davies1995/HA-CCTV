@@ -41,6 +41,8 @@ import {
   loadSharedConfig,
   saveRecordingSettings,
   saveSensorLinks,
+  signPlaybackTracks,
+  signRecordingUrl,
 } from "./recordings-api.js";
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
@@ -702,7 +704,7 @@ export class CctvView extends LitElement {
    * @param {any} session
    * @param {{ start?: number, end?: number } | null} [event]
    */
-  _selectPlaybackSession(session, event = null) {
+  async _selectPlaybackSession(session, event = null) {
     if (!session || session.active || !(session.clips || []).length) {
       this._status = "No playable recording for that detection";
       return;
@@ -718,6 +720,13 @@ export class CctvView extends LitElement {
     );
     // Only the user's currently visible mosaic cameras — same order/slots as live.
     const tracks = playbackTracksFromSession(this.hass, session, visibleIds);
+    const playable = tracks.some((t) =>
+      (t.items || []).some((item) => item.kind === "video" || item.kind === "snapshot")
+    );
+    if (!playable) {
+      this._status = "No clips for the currently selected mosaic cameras";
+      return;
+    }
     const window = playbackWindow(session, event);
     this._detailId = null;
     this._playbackIndex = new Map();
@@ -736,6 +745,7 @@ export class CctvView extends LitElement {
       tracks,
       windowStart: window.start,
       windowEnd: window.end,
+      eventDetail: event,
     };
     this._status = `Selected ${labels.join(", ")} — Play replaces live mosaic for ${visibleIds.length} cam${visibleIds.length === 1 ? "" : "s"}`;
     this._schedulePack();
@@ -751,12 +761,21 @@ export class CctvView extends LitElement {
     this._selectPlaybackSession(session, detail);
   }
 
-  _startPlayback() {
+  async _startPlayback() {
     if (!this._playback?.tracks?.length) return;
+    this._status = "Signing recording URLs…";
+    try {
+      await signPlaybackTracks(this.hass, this._playback.tracks);
+    } catch (err) {
+      console.warn("CCTV: could not sign playback URLs", err);
+    }
     // Unload live streams by swapping mosaic media to recordings (same tiles).
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
-    this.updateComplete.then(() => this._kickPlaybackVideos());
+    await this.updateComplete;
+    // Wait a frame so <video> nodes exist after the live→playback swap.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    await this._kickPlaybackVideos();
   }
 
   _stopPlayback() {
@@ -791,34 +810,99 @@ export class CctvView extends LitElement {
     });
   }
 
-  _kickPlaybackVideos() {
+  async _kickPlaybackVideos() {
     const root = this.renderRoot;
     if (!root || !this._playback?.playing) return;
     const videos = [...root.querySelectorAll("video.playback-media")];
-    // Start every visible camera together (not one-at-a-time).
-    for (const video of videos) {
-      const cameraId = video.getAttribute("data-camera") || "";
-      const seek = this._playbackSeek.get(cameraId) || 0;
-      try {
-        const start = () => {
-          try {
-            if (seek > 0 && Number.isFinite(video.duration) && seek < video.duration) {
-              video.currentTime = seek;
-            } else if (seek > 0) {
-              video.currentTime = seek;
-            }
-          } catch {
-            /* seek may fail until metadata loads */
-          }
-          video.play?.().catch(() => undefined);
-        };
-        if (video.readyState >= 1) start();
-        else video.addEventListener("loadedmetadata", start, { once: true });
-        video.play?.().catch(() => undefined);
-      } catch {
-        /* ignore */
-      }
+    if (!videos.length) {
+      this._status = "Playback ready but no video elements found";
+      return;
     }
+    // Start every visible camera together (not one-at-a-time).
+    const results = await Promise.all(
+      videos.map((video) => this._startOnePlaybackVideo(video))
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length && failed.length === results.length) {
+      this._status = `Playback failed to start (${failed[0].reason || "media error"})`;
+    } else if (failed.length) {
+      this._status = `Playing ${results.length - failed.length}/${results.length} cameras`;
+    }
+  }
+
+  /**
+   * Ensure muted/playsInline, wait for media data, seek, then play.
+   * @param {HTMLVideoElement} video
+   */
+  _startOnePlaybackVideo(video) {
+    const cameraId = video.getAttribute("data-camera") || "";
+    const seek = this._playbackSeek.get(cameraId) || 0;
+
+    // Autoplay policies require muted + playsInline; set properties not just attrs.
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.preload = "auto";
+
+    const playNow = async () => {
+      try {
+        if (seek > 0) {
+          try {
+            video.currentTime = seek;
+          } catch {
+            /* seek may fail on some containers */
+          }
+        }
+        await video.play();
+        return { ok: true, cameraId };
+      } catch (err) {
+        const reason = err?.name || err?.message || "play() rejected";
+        console.warn("CCTV playback play() failed", cameraId, err);
+        try {
+          video.muted = true;
+          await video.play();
+          return { ok: true, cameraId };
+        } catch (err2) {
+          console.warn("CCTV playback retry failed", cameraId, err2);
+          return { ok: false, cameraId, reason };
+        }
+      }
+    };
+
+    return new Promise((resolve) => {
+      const onError = () => {
+        const code = video.error?.code;
+        const reason =
+          code === 4
+            ? "unsupported/unauthorized media (check signed URL)"
+            : code === 2
+              ? "network error loading clip"
+              : `media error ${code || ""}`.trim();
+        console.warn("CCTV playback media error", cameraId, video.error, video.currentSrc);
+        resolve({ ok: false, cameraId, reason });
+      };
+
+      if (video.readyState >= 2) {
+        playNow().then(resolve);
+        return;
+      }
+      video.addEventListener(
+        "loadeddata",
+        () => {
+          playNow().then(resolve);
+        },
+        { once: true }
+      );
+      video.addEventListener("error", onError, { once: true });
+      try {
+        video.load();
+      } catch {
+        playNow().then(resolve);
+      }
+    });
   }
 
   _playbackVideoEl(cameraId) {
@@ -850,24 +934,34 @@ export class CctvView extends LitElement {
       this._playbackIndex.set(cameraId, next);
       this._playbackSeek.set(cameraId, 0);
       // Advance only this camera's element — do not re-render/remount siblings.
-      const video = this._playbackVideoEl(cameraId);
-      if (video && item.kind !== "snapshot") {
-        try {
-          video.src = item.url;
-          video.load?.();
-          video.play?.().catch(() => undefined);
-        } catch {
-          this._markPlaybackCameraDone(cameraId);
-        }
-        return;
-      }
       if (item.kind === "snapshot") {
         this.requestUpdate();
         return;
       }
+      this._advancePlaybackVideo(cameraId, item);
+      return;
     }
 
     this._markPlaybackCameraDone(cameraId);
+  }
+
+  async _advancePlaybackVideo(cameraId, item) {
+    const video = this._playbackVideoEl(cameraId);
+    if (!video) {
+      this._markPlaybackCameraDone(cameraId);
+      return;
+    }
+    try {
+      item.url = await signRecordingUrl(this.hass, item.path || item.url);
+      video.muted = true;
+      video.playsInline = true;
+      video.src = item.url;
+      video.load?.();
+      await this._startOnePlaybackVideo(video);
+    } catch (err) {
+      console.warn("CCTV chunk advance failed", cameraId, err);
+      this._markPlaybackCameraDone(cameraId);
+    }
   }
 
   _markPlaybackCameraDone(cameraId) {
@@ -1242,8 +1336,12 @@ export class CctvView extends LitElement {
                       data-camera=${cam.entityId}
                       src=${item.url}
                       autoplay
-                      playsinline
                       muted
+                      playsinline
+                      webkit-playsinline
+                      preload="auto"
+                      .muted=${true}
+                      .playsInline=${true}
                       controls
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
                     ></video>
