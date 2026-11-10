@@ -66,6 +66,8 @@ export class CctvView extends LitElement {
     hass: { attribute: false },
     config: { attribute: false },
     panelMode: { type: Boolean, attribute: "panel-mode" },
+    /** HA panel url_path (default cctv) — used to detect sidebar leave. */
+    panelUrlPath: { type: String, attribute: "panel-url-path" },
     _detailId: { state: true },
     _status: { state: true },
     _qualityTick: { state: true },
@@ -106,6 +108,7 @@ export class CctvView extends LitElement {
     super();
     this.config = {};
     this.panelMode = false;
+    this.panelUrlPath = "cctv";
     this._detailId = null;
     this._status = "";
     this._qualityTick = 0;
@@ -145,6 +148,7 @@ export class CctvView extends LitElement {
     this._cameraNamesKey = "";
     this._lastHassSig = "";
     this._onDocVisibility = null;
+    this._onLocationChange = null;
     this._loadToken = 0;
   }
 
@@ -210,8 +214,15 @@ export class CctvView extends LitElement {
       else this._mq.addListener(this._onMq);
     }
     this._bindPanelVisibility();
-    // Re-entering the panel (HA may remount after suspendWhenHidden).
-    this._setPanelActive(true);
+    // Re-entering / first mount: only go live when this panel is the current route.
+    if (
+      this._isCctvLocation() &&
+      !(typeof document !== "undefined" && document.hidden)
+    ) {
+      this._setPanelActive(true);
+    } else {
+      this._setPanelActive(false);
+    }
   }
 
   disconnectedCallback() {
@@ -229,10 +240,13 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * Leave-page unload without in-panel IntersectionObserver bounce.
-   * PR20's host IO flipped `_panelActive` on layout blips and remounted every
-   * stream while watching. Prefer solid stability: unload on tab hide and on
-   * real disconnect (panel unmount / HA remount after suspendWhenHidden).
+   * Leave-page unload without IntersectionObserver (PR20 remount flicker).
+   *
+   * Signals (safe while watching):
+   * - HA `location-changed` / `popstate` when pathname leaves this panel
+   *   (closes the brief gap before non-cached custom panels are removeChild'd)
+   * - `document.hidden` for browser tab hide (suspendWhenHidden path)
+   * - `disconnectedCallback` when HA actually unmounts the panel
    */
   _bindPanelVisibility() {
     if (!this.panelMode) return;
@@ -241,12 +255,34 @@ export class CctvView extends LitElement {
     this._onDocVisibility = () => {
       if (typeof document !== "undefined" && document.hidden) {
         this._setPanelActive(false);
-      } else if (this.isConnected) {
+        return;
+      }
+      if (this.isConnected && this._isCctvLocation()) {
         this._setPanelActive(true);
       }
     };
+
+    this._onLocationChange = () => {
+      if (!this.isConnected) return;
+      if (typeof document !== "undefined" && document.hidden) {
+        this._setPanelActive(false);
+        return;
+      }
+      // Path still this panel → stay live (never remount while watching).
+      if (this._isCctvLocation()) {
+        if (!this._panelActive) this._setPanelActive(true);
+        return;
+      }
+      // Sidebar / in-app navigate away — unload immediately.
+      this._setPanelActive(false);
+    };
+
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this._onDocVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("location-changed", this._onLocationChange);
+      window.addEventListener("popstate", this._onLocationChange);
     }
   }
 
@@ -255,6 +291,27 @@ export class CctvView extends LitElement {
       document.removeEventListener("visibilitychange", this._onDocVisibility);
       this._onDocVisibility = null;
     }
+    if (this._onLocationChange && typeof window !== "undefined") {
+      window.removeEventListener("location-changed", this._onLocationChange);
+      window.removeEventListener("popstate", this._onLocationChange);
+      this._onLocationChange = null;
+    }
+  }
+
+  /**
+   * True while the browser URL is still this HA custom panel.
+   * Prefer location.pathname — outgoing panels do not get updated hass.panelUrl
+   * while partial-panel-resolver is replacing them.
+   */
+  _isCctvLocation() {
+    if (typeof location === "undefined") return true;
+    const path = location.pathname || "";
+    const slug =
+      String(this.panelUrlPath || "cctv")
+        .trim()
+        .replace(/^\/+|\/+$/g, "") || "cctv";
+    const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|/)${escaped}(?:/|$)`).test(path);
   }
 
   /**

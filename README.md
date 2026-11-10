@@ -43,7 +43,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - **Horizontal detection timeline** (grouped by type) — click events for details; **Play** loads the matching saved recording
 - **Saved detections** — time/date, what was detected, and file size; click then **Play** to replace live mosaic feeds with that event’s recordings for the **same visible cameras**, synced and simultaneous in the same mosaic layout
 - **Persisted for all users** — timeline events + saved detections live in the integration store/media (survive HA reboot); purged only after **retention days** (default 1)
-- **Leaves cleanly** — hiding the browser tab or unmounting the panel unloads live streams (WebRTC/HLS/MJPEG), playback, timers, and history polling without using IntersectionObserver (which restarted streams while watching)
+- **Leaves cleanly** — leaving the CCTV sidebar (HA `location-changed` / path leave), hiding the browser tab, or unmounting the panel unloads live streams (WebRTC/HLS/MJPEG), playback, timers, and history polling — without IntersectionObserver (which restarted streams while watching)
 - **Detection recordings** — when any linked sensor triggers, the integration records **all available cameras** until sensors clear (HA `camera.record` chunks; snapshot fallback)
 - **Retention** configurable in panel **Settings** as days (default **1 day / 24 hours**)
 - Auto-discover `camera.*` (optional include/exclude on cards)
