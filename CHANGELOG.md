@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Play** on each Saved detections row starts the same synced mosaic playback as the desktop playback bar (easier on mobile; row click + bar Play unchanged)
+
 ## 0.12.0 — 2026-11-10
 
 ### Fixed

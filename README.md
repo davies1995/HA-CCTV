@@ -41,7 +41,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - **Force aspect ratio** per camera (e.g. **9:16** doorbell) — site-wide for all HA users when auto detect fails; set on the camera detail screen
 - **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually; associations are **site-wide for all HA users**
 - **Horizontal detection timeline** (grouped by type) — click events for details; **Play** loads the matching saved recording
-- **Saved detections** — time/date, what was detected, and file size; click then **Play** to replace live mosaic feeds with that event’s recordings for the **same visible cameras**, synced and simultaneous in the same mosaic layout (signed `/api/…/media` URLs for `<video>`)
+- **Saved detections** — time/date, what was detected, and file size; each row has **Play** (and you can still click the row then use the desktop playback bar) to replace live mosaic feeds with that event’s recordings for the **same visible cameras**, synced and simultaneous in the same mosaic layout (signed `/api/…/media` URLs for `<video>`)
 - **Admin delete** — Home Assistant admins can delete a saved detection’s recording file set from the UI (removed for all users)
 - **Persisted for all users** — timeline events + saved detections live in the integration store/media (survive HA reboot); purged only after **retention days** (default 1)
 - **Leaves cleanly** — leaving the CCTV sidebar (HA `location-changed` / path leave), hiding the browser tab, or unmounting the panel unloads live streams (WebRTC/HLS/MJPEG), playback, timers, and history polling — without IntersectionObserver (which restarted streams while watching)

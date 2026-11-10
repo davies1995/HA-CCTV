@@ -976,12 +976,12 @@ export class CctvView extends LitElement {
   async _selectPlaybackSession(session, event = null) {
     if (!session || session.active || !(session.clips || []).length) {
       this._status = "No playable recording for that detection";
-      return;
+      return false;
     }
     const visibleIds = this._visibleIds.slice(0, this._maxStreams());
     if (!visibleIds.length) {
       this._status = "Select cameras in the mosaic before playing a detection";
-      return;
+      return false;
     }
     const labels = detectionLabelsFromTriggers(
       this.hass,
@@ -994,7 +994,7 @@ export class CctvView extends LitElement {
     );
     if (!playable) {
       this._status = "No clips for the currently selected mosaic cameras";
-      return;
+      return false;
     }
     const window = playbackWindow(session, event);
     this._detailId = null;
@@ -1018,6 +1018,28 @@ export class CctvView extends LitElement {
     };
     this._status = `Selected ${labels.join(", ")} — Play replaces live mosaic for ${visibleIds.length} cam${visibleIds.length === 1 ? "" : "s"}`;
     this._schedulePack();
+    return true;
+  }
+
+  /**
+   * Select a saved detection and start the same synced mosaic playback as the
+   * desktop playback-bar Play control (handy on mobile).
+   * @param {any} session
+   * @param {Event | null} [domEvent]
+   */
+  async _playSavedDetection(session, domEvent = null) {
+    domEvent?.stopPropagation?.();
+    domEvent?.preventDefault?.();
+    const ok = await this._selectPlaybackSession(session);
+    if (!ok) return;
+    if (
+      !this._playback ||
+      this._playback.session?.session_id !== session.session_id ||
+      this._playback.playing
+    ) {
+      return;
+    }
+    await this._startPlayback();
   }
 
   _onPlayDetection(event) {
@@ -1477,8 +1499,10 @@ export class CctvView extends LitElement {
           <div>
             <strong>Saved detections</strong>
             <span class="hint">
-              Time, what was detected, and file size. Click to load Play.
-              Shared for all users; survives reboot; kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
+              Time, what was detected, and file size. Play starts mosaic
+              playback for the visible cameras; click the row to load it first
+              (desktop bar still works). Shared for all users; survives reboot;
+              kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
               ${admin
                 ? " Admins can delete a detection’s file set for everyone."
                 : ""}
@@ -1527,18 +1551,29 @@ export class CctvView extends LitElement {
           </div>
           <span class="recording-size">${size}</span>
         </button>
-        ${admin && !session.active
-          ? html`
-              <button
-                type="button"
-                class="btn recording-delete"
-                title="Delete recordings for all users"
-                @click=${(e) => this._deleteSession(session.session_id, e)}
-              >
-                Delete
-              </button>
-            `
-          : nothing}
+        <div class="recording-actions">
+          <button
+            type="button"
+            class="btn primary recording-play"
+            title="Play this detection on the mosaic"
+            ?disabled=${!canPlay}
+            @click=${(e) => this._playSavedDetection(session, e)}
+          >
+            Play
+          </button>
+          ${admin && !session.active
+            ? html`
+                <button
+                  type="button"
+                  class="btn recording-delete"
+                  title="Delete recordings for all users"
+                  @click=${(e) => this._deleteSession(session.session_id, e)}
+                >
+                  Delete
+                </button>
+              `
+            : nothing}
+        </div>
       </div>
     `;
   }

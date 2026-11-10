@@ -891,7 +891,7 @@ export const sharedStyles = css`
 
   .recording-item {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.35rem 0.55rem;
     align-items: center;
     width: 100%;
@@ -940,6 +940,18 @@ export const sharedStyles = css`
   .recording-select:focus-visible {
     outline: 2px solid var(--cctv-accent);
     outline-offset: 1px;
+  }
+
+  .recording-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .recording-play {
+    flex: 0 0 auto;
   }
 
   .recording-delete {
