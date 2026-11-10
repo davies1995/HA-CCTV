@@ -333,9 +333,10 @@ export function segmentsFromHistory(points, rangeStartMs, rangeEndMs, isActive) 
 /**
  * Merge overlapping / contiguous segments into single instances.
  * Used to collapse concurrent same-type detections (e.g. 2 car sensors → 1 car flag).
- * @param {Array<{ start: number, end: number }>} segments
+ * Extra fields (cameras, sensors, …) are unioned onto the merged event.
+ * @param {Array<{ start: number, end: number, cameras?: string[], sensors?: Array<{entityId:string,name:string}> }>} segments
  * @param {number} [padMs] treat gaps <= pad as the same instance
- * @returns {Array<{ start: number, end: number }>}
+ * @returns {Array<{ start: number, end: number, cameras: string[], sensors: Array<{entityId:string,name:string}> }>}
  */
 export function mergeOverlappingSegments(segments, padMs = 0) {
   if (!Array.isArray(segments) || !segments.length) return [];
@@ -343,23 +344,49 @@ export function mergeOverlappingSegments(segments, padMs = 0) {
     .map((s) => ({
       start: Number(s.start),
       end: Number(s.end),
+      cameras: Array.isArray(s.cameras) ? [...s.cameras] : [],
+      sensors: Array.isArray(s.sensors) ? [...s.sensors] : [],
     }))
     .filter((s) => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 
   if (!sorted.length) return [];
 
-  const out = [{ start: sorted[0].start, end: sorted[0].end }];
+  const out = [cloneMerged(sorted[0])];
   for (let i = 1; i < sorted.length; i += 1) {
     const cur = sorted[i];
     const last = out[out.length - 1];
     if (cur.start <= last.end + padMs) {
       last.end = Math.max(last.end, cur.end);
+      unionMeta(last, cur);
     } else {
-      out.push({ start: cur.start, end: cur.end });
+      out.push(cloneMerged(cur));
     }
   }
   return out;
+}
+
+function cloneMerged(seg) {
+  return {
+    start: seg.start,
+    end: seg.end,
+    cameras: [...(seg.cameras || [])],
+    sensors: [...(seg.sensors || [])],
+  };
+}
+
+function unionMeta(target, source) {
+  const camSet = new Set(target.cameras);
+  for (const id of source.cameras || []) camSet.add(id);
+  target.cameras = [...camSet];
+
+  const sensorMap = new Map(
+    (target.sensors || []).map((s) => [s.entityId, s])
+  );
+  for (const s of source.sensors || []) {
+    if (s?.entityId) sensorMap.set(s.entityId, s);
+  }
+  target.sensors = [...sensorMap.values()];
 }
 
 /**
