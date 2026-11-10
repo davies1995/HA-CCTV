@@ -39,10 +39,29 @@ export const QUALITY_OPTIONS = [
 
 const LOW_SUFFIXES = ["_sub", "_lq", "_low", "_fluent", "_sd", "_substream"];
 const STORAGE_PREFIX = "cctv-dashboard:quality:";
+const QUALITY_VALUES = new Set(QUALITY_OPTIONS.map((opt) => opt.value));
 
 export function normalizeQuality(value) {
   const v = String(value || "auto").toLowerCase();
-  return QUALITY_OPTIONS.some((opt) => opt.value === v) ? v : "auto";
+  return QUALITY_VALUES.has(v) ? v : "auto";
+}
+
+/**
+ * Site-wide per-camera quality map (auto omitted — same shape as backend store).
+ * @param {Record<string, string> | null | undefined} raw
+ * @returns {Record<string, string>}
+ */
+export function normalizeCameraQualityMap(raw) {
+  if (!raw || typeof raw !== "object") return {};
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [cameraId, quality] of Object.entries(raw)) {
+    if (!String(cameraId).startsWith("camera.")) continue;
+    const value = normalizeQuality(quality);
+    if (value === "auto") continue;
+    out[cameraId] = value;
+  }
+  return out;
 }
 
 export function getCameraSettings(config, entityId) {
@@ -78,11 +97,21 @@ export function writeStoredQuality(entityId, quality) {
 
 /**
  * Resolve effective quality for a camera.
- * Precedence: stored UI choice → camera_settings.quality → config.quality → auto
+ * Precedence when `sharedMap` is provided (panel): shared/draft map →
+ * camera_settings.quality → config.quality → auto (skips browser localStorage).
+ * Without sharedMap (Lovelace cards): localStorage → camera_settings → config → auto.
+ * @param {any} config
+ * @param {string} entityId
+ * @param {Record<string, string> | null} [sharedMap]
  */
-export function resolveQuality(config, entityId) {
-  const stored = readStoredQuality(entityId);
-  if (stored) return stored;
+export function resolveQuality(config, entityId, sharedMap = null) {
+  if (sharedMap) {
+    const fromShared = sharedMap[entityId];
+    if (fromShared) return normalizeQuality(fromShared);
+  } else {
+    const stored = readStoredQuality(entityId);
+    if (stored) return stored;
+  }
   const perCam = getCameraSettings(config, entityId);
   if (perCam.quality) return normalizeQuality(perCam.quality);
   if (config?.quality) return normalizeQuality(config.quality);

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Panel stream quality and force-aspect no longer vanish on reload — draft locally, then **Save quality & aspect** writes shared settings for all users
+
+### Added
+
+- Shared `camera_quality` map in the integration store (`cctv_dashboard/set_camera_prefs`)
+- Force-aspect preset **1920×2560** doorbell (3:4) plus freeform custom `W:H` / `WxH` entry
+
 ## 0.11.0 — 2026-11-10
 
 ### Fixed
