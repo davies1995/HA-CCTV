@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.0 — 2026-11-10
+
+### Added
+
+- CCTV panel camera picker (select up to 4 `camera.*` entities)
+- Adaptive layouts: 1 large / 2 columns / 3 with wide bottom / 4 as 2×2
+- Selection persisted in Home Assistant user data (survives reload; no YAML)
+
 ## 0.2.0 — 2026-11-10
 
 ### Breaking — HACS Integration (zero file edits)
