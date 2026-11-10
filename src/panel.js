@@ -18,6 +18,14 @@ class CctvDashboardPanel extends LitElement {
     panel: { attribute: false },
   };
 
+  constructor() {
+    super();
+    /** @type {Record<string, unknown> | null} */
+    this._stableConfig = null;
+    /** @type {Record<string, unknown> | null} */
+    this._stablePanelConfigRef = null;
+  }
+
   createRenderRoot() {
     // Light DOM so HA theme CSS variables apply predictably in the panel shell.
     return this;
@@ -25,14 +33,21 @@ class CctvDashboardPanel extends LitElement {
 
   get _config() {
     const fromPanel = this.panel?.config || {};
+    // Reuse the same object while HA keeps the same panel.config reference so
+    // cctv-view / stream-player do not see a fresh `.config` every hass tick.
+    if (fromPanel === this._stablePanelConfigRef && this._stableConfig) {
+      return this._stableConfig;
+    }
+    this._stablePanelConfigRef = fromPanel;
     // Strip HA-injected bookkeeping key.
     const { _panel_custom, ...rest } = fromPanel;
-    return {
+    this._stableConfig = {
       title: "CCTV",
       max_streams: 4,
       quality: "auto",
       ...rest,
     };
+    return this._stableConfig;
   }
 
   connectedCallback() {
