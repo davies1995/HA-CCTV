@@ -190,6 +190,9 @@ export class CctvStreamPlayer extends LitElement {
       const video = this.renderRoot?.querySelector("video");
       if (video) video.muted = this.muted;
     }
+    if (changed.has("_mode") || changed.has("camera")) {
+      this.updateComplete.then(() => this._probeMediaSize());
+    }
   }
 
   get _effectiveQuality() {
@@ -526,6 +529,49 @@ export class CctvStreamPlayer extends LitElement {
     );
   }
 
+  _emitMediaAspect(width, height) {
+    const entityId = this.camera?.entityId;
+    const w = Number(width);
+    const h = Number(height);
+    if (!entityId || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      return;
+    }
+    const aspect = w / h;
+    if (this._lastEmittedAspect && Math.abs(this._lastEmittedAspect - aspect) < 0.01) {
+      return;
+    }
+    this._lastEmittedAspect = aspect;
+    this.dispatchEvent(
+      new CustomEvent("cctv-media-aspect", {
+        detail: { entityId, width: w, height: h, aspect },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _probeMediaSize() {
+    const root = this.renderRoot;
+    if (!root) return;
+    const video = root.querySelector("video");
+    if (video) {
+      if (video.videoWidth && video.videoHeight) {
+        this._emitMediaAspect(video.videoWidth, video.videoHeight);
+      }
+      return;
+    }
+    const img = root.querySelector("img.media");
+    if (img && img.naturalWidth && img.naturalHeight) {
+      this._emitMediaAspect(img.naturalWidth, img.naturalHeight);
+      return;
+    }
+    const haStream = root.querySelector("ha-camera-stream");
+    const nested = haStream?.shadowRoot?.querySelector?.("video");
+    if (nested?.videoWidth && nested?.videoHeight) {
+      this._emitMediaAspect(nested.videoWidth, nested.videoHeight);
+    }
+  }
+
   render() {
     if (this._mode === "loading") {
       return html`<div class="placeholder">Connecting…</div>`;
@@ -554,6 +600,7 @@ export class CctvStreamPlayer extends LitElement {
           .stateObj=${streamCamera.stateObj}
           .muted=${this.muted}
           .controls=${this.controls}
+          @loadeddata=${() => this._probeMediaSize()}
         ></ha-camera-stream>
       `;
     }
@@ -566,6 +613,8 @@ export class CctvStreamPlayer extends LitElement {
           playsinline
           .muted=${this.muted}
           ?controls=${this.controls}
+          @loadedmetadata=${(e) =>
+            this._emitMediaAspect(e.target.videoWidth, e.target.videoHeight)}
         ></video>
       `;
     }
@@ -578,14 +627,32 @@ export class CctvStreamPlayer extends LitElement {
           playsinline
           .muted=${this.muted}
           ?controls=${this.controls}
+          @loadedmetadata=${(e) =>
+            this._emitMediaAspect(e.target.videoWidth, e.target.videoHeight)}
         ></video>
       `;
     }
     if (this._mode === "mjpeg") {
-      return html`<img class="media" alt="" src=${this._mjpegUrl} />`;
+      return html`
+        <img
+          class="media"
+          alt=""
+          src=${this._mjpegUrl}
+          @load=${(e) =>
+            this._emitMediaAspect(e.target.naturalWidth, e.target.naturalHeight)}
+        />
+      `;
     }
     if (this._mode === "still") {
-      return html`<img class="media" alt="" src=${this._stillUrl} />`;
+      return html`
+        <img
+          class="media"
+          alt=""
+          src=${this._stillUrl}
+          @load=${(e) =>
+            this._emitMediaAspect(e.target.naturalWidth, e.target.naturalHeight)}
+        />
+      `;
     }
     return nothing;
   }

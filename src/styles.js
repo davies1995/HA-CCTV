@@ -397,23 +397,55 @@ export const sharedStyles = css`
     min-height: min(65vh, 640px);
   }
 
-  /* Desktop: scale every selected tile into the shared mosaic height (no cam-to-cam scroll). */
+  /* Desktop: aspect-aware packed mosaic fills remaining viewport (no cam-to-cam scroll). */
   @media (min-width: 801px) {
     .panel-wrap .layout {
       min-height: 0;
     }
 
-    .panel-wrap .layout-tile .tile-body {
-      padding: 0.45rem 0.65rem 0.55rem;
+    .panel-wrap .layout-pack {
+      position: relative;
+      display: block;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
-    .panel-wrap .layout-tile cctv-stream-player,
-    .panel-wrap .layout-1 .layout-tile cctv-stream-player {
+    .panel-wrap .layout-pack .pack-tile {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .panel-wrap .layout-pack .tile-media {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .panel-wrap .layout-pack .pack-caption {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      padding: 0.45rem 0.65rem 0.5rem;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+    }
+
+    .panel-wrap .layout-pack .pack-caption .tile-meta {
+      color: rgba(232, 238, 245, 0.82);
+    }
+
+    .panel-wrap .layout-pack cctv-stream-player {
       min-height: 0;
       height: 100%;
     }
   }
 
+  /* Mobile: keep the previous stacked mosaic (unchanged from pre-fit behavior). */
   @media (max-width: 800px) {
     .layout-2,
     .layout-3,
