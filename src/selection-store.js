@@ -1,6 +1,7 @@
 /** Persist panel settings in Home Assistant user data (no YAML). */
 
 import { normalizeSensorLinks } from "./detection-sensors.js";
+import { syncPanelToIntegration } from "./recordings-api.js";
 
 export const PANEL_SELECTION_KEY = "cctv_dashboard";
 
@@ -70,18 +71,23 @@ export async function savePanelData(hass, patch, current) {
     patch.sensorLinks !== undefined ? patch.sensorLinks : base.sensorLinks
   );
 
+  const saved = { selectedCameras, sensorLinks };
+
   try {
     await hass.callWS({
       type: "frontend/set_user_data",
       key: PANEL_SELECTION_KEY,
-      value: { selectedCameras, sensorLinks },
+      value: saved,
     });
   } catch (err) {
     console.warn("CCTV: failed to save panel data", err);
     throw err;
   }
 
-  return { selectedCameras, sensorLinks };
+  // Backend detection recorder needs the same links (works with panel closed).
+  await syncPanelToIntegration(hass, saved);
+
+  return saved;
 }
 
 /**

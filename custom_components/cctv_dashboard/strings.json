@@ -3,12 +3,14 @@
     "step": {
       "user": {
         "title": "CCTV Dashboard",
-        "description": "Adds a CCTV item to the sidebar and enables the Lovelace cards. No configuration.yaml edits are required.",
+        "description": "Adds a CCTV item to the sidebar and enables the Lovelace cards. No configuration.yaml edits are required. Detection recordings use camera.record (snapshot fallback) into the HA media folder.",
         "data": {
           "sidebar_title": "Sidebar title",
           "title": "Dashboard title",
           "max_streams": "Max concurrent live streams",
-          "quality": "Default stream quality"
+          "quality": "Default stream quality",
+          "retention_days": "Detection recording retention (days)",
+          "record_on_detection": "Record all cameras when a linked sensor triggers"
         }
       }
     },
@@ -24,7 +26,9 @@
           "sidebar_title": "Sidebar title",
           "title": "Dashboard title",
           "max_streams": "Max concurrent live streams",
-          "quality": "Default stream quality"
+          "quality": "Default stream quality",
+          "retention_days": "Detection recording retention (days)",
+          "record_on_detection": "Record all cameras when a linked sensor triggers"
         }
       }
     }

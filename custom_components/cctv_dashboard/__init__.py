@@ -15,18 +15,26 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_MAX_STREAMS,
     CONF_QUALITY,
+    CONF_RECORD_ON_DETECTION,
+    CONF_RETENTION_DAYS,
     CONF_SIDEBAR_TITLE,
     CONF_TITLE,
     DEFAULT_MAX_STREAMS,
     DEFAULT_QUALITY,
+    DEFAULT_RECORD_ON_DETECTION,
+    DEFAULT_RETENTION_DAYS,
     DEFAULT_SIDEBAR_TITLE,
     DEFAULT_TITLE,
     DOMAIN,
     JS_URL,
     PANEL_URL_PATH,
+    RECORDINGS_URL_BASE,
     URL_BASE,
     VERSION,
 )
+from .recordings import RecordingManager
+from .storage import PanelStore
+from .websocket_api import async_register_websocket
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,13 +50,45 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up CCTV Dashboard from a config entry — panel + JS, no file edits."""
-    await _async_register_frontend(hass, entry)
+    data = hass.data.setdefault(DOMAIN, {})
+
+    store = PanelStore(hass)
+    await store.async_load()
+    # Seed from config entry options when store still has defaults.
+    options = {**entry.data, **entry.options}
+    if CONF_RETENTION_DAYS in options:
+        await store.async_save(
+            {
+                CONF_RETENTION_DAYS: options.get(
+                    CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
+                ),
+                CONF_RECORD_ON_DETECTION: options.get(
+                    CONF_RECORD_ON_DETECTION, DEFAULT_RECORD_ON_DETECTION
+                ),
+            }
+        )
+    data["store"] = store
+
+    manager = RecordingManager(hass, store)
+    await manager.async_setup()
+    data["recording_manager"] = manager
+
+    if not data.get("ws_registered"):
+        async_register_websocket(hass)
+        data["ws_registered"] = True
+
+    await _async_register_frontend(hass, entry, manager)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Remove the sidebar panel and extra module URL."""
+    data = hass.data.get(DOMAIN, {})
+    manager = data.pop("recording_manager", None)
+    if manager:
+        await manager.async_unload()
+    data.pop("store", None)
     await _async_unregister_frontend(hass)
     return True
 
@@ -58,7 +98,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def _async_register_frontend(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_register_frontend(
+    hass: HomeAssistant, entry: ConfigEntry, manager: RecordingManager
+) -> None:
     data = hass.data.setdefault(DOMAIN, {})
     www = Path(__file__).parent / "www"
 
@@ -67,6 +109,12 @@ async def _async_register_frontend(hass: HomeAssistant, entry: ConfigEntry) -> N
             [StaticPathConfig(URL_BASE, str(www), False)]
         )
         data["static_registered"] = True
+
+    if not data.get("recordings_static"):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(RECORDINGS_URL_BASE, str(manager.record_dir), False)]
+        )
+        data["recordings_static"] = True
 
     # Loads the module for all users so Lovelace cards work without Resources YAML.
     if not data.get("js_registered"):
@@ -81,6 +129,22 @@ async def _async_register_frontend(hass: HomeAssistant, entry: ConfigEntry) -> N
         "title": options.get(CONF_TITLE, DEFAULT_TITLE),
         "max_streams": int(options.get(CONF_MAX_STREAMS, DEFAULT_MAX_STREAMS)),
         "quality": options.get(CONF_QUALITY, DEFAULT_QUALITY),
+        "retention_days": int(
+            options.get(
+                CONF_RETENTION_DAYS,
+                hass.data[DOMAIN]["store"].data.get(
+                    CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
+                ),
+            )
+        ),
+        "record_on_detection": bool(
+            options.get(
+                CONF_RECORD_ON_DETECTION,
+                hass.data[DOMAIN]["store"].data.get(
+                    CONF_RECORD_ON_DETECTION, DEFAULT_RECORD_ON_DETECTION
+                ),
+            )
+        ),
     }
 
     await panel_custom.async_register_panel(

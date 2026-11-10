@@ -576,10 +576,114 @@ export const sharedStyles = css`
     margin: 0.5rem 0 0;
   }
 
+  .settings-panel,
+  .recordings {
+    margin: 1.25rem 0 0;
+    padding: 0.85rem 1rem 1rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 10px;
+    background: var(--cctv-surface);
+  }
+
+  .settings-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem 1.25rem;
+    align-items: flex-end;
+    margin: 0.75rem 0;
+  }
+
+  .settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--cctv-muted);
+  }
+
+  .settings-field input[type="number"] {
+    width: 6rem;
+    font: inherit;
+    color: inherit;
+    background: var(--primary-background-color, #0f1419);
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+  }
+
+  .settings-toggle {
+    min-width: 220px;
+  }
+
+  .settings-panel code {
+    font-size: 0.8em;
+  }
+
+  .recording-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .recording-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 0.85rem;
+    padding: 0.65rem 0.7rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+  }
+
+  .recording-item.active {
+    border-color: var(--cctv-accent);
+  }
+
+  .recording-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    grid-column: 1 / -1;
+  }
+
+  .recording-clips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    grid-column: 1;
+  }
+
+  .recording-clip {
+    font-size: 0.75rem;
+    color: var(--cctv-accent);
+    text-decoration: none;
+    border: 1px solid var(--cctv-border);
+    border-radius: 6px;
+    padding: 0.2rem 0.45rem;
+  }
+
+  .recording-clip:hover {
+    border-color: var(--cctv-accent);
+  }
+
+  .recording-item > .btn {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+  }
+
   @media (max-width: 800px) {
     .timeline-row {
       grid-template-columns: 1fr;
       gap: 0.35rem;
+    }
+
+    .recording-item {
+      grid-template-columns: 1fr;
+    }
+
+    .recording-item > .btn {
+      grid-column: 1;
+      grid-row: auto;
     }
   }
 
