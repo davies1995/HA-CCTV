@@ -39,10 +39,40 @@ def _normalize_links(raw: Any) -> dict[str, list[str]]:
     return out
 
 
+# Site-wide mosaic packing / fit overrides when auto probe fails (doorbells, etc.).
+FORCE_ASPECT_LABELS = {
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "1:1",
+    "3:2",
+    "2:3",
+}
+
+
+def _normalize_force_aspect(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for camera_id, label in raw.items():
+        cam = str(camera_id)
+        if not cam.startswith("camera."):
+            continue
+        value = str(label or "").strip().lower().replace(" ", "")
+        if value in {"", "auto", "default", "none"}:
+            continue
+        if value not in FORCE_ASPECT_LABELS:
+            continue
+        out[cam] = value
+    return out
+
+
 def default_data() -> dict[str, Any]:
     # Site-wide only. Per-user camera mosaic selection stays in frontend user data.
     return {
         "sensor_links": {},
+        "force_aspect": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
         "record_on_detection": DEFAULT_RECORD_ON_DETECTION,
     }
@@ -60,6 +90,7 @@ class PanelStore:
         data = default_data()
         if isinstance(loaded, dict):
             data["sensor_links"] = _normalize_links(loaded.get("sensor_links"))
+            data["force_aspect"] = _normalize_force_aspect(loaded.get("force_aspect"))
             try:
                 days = int(loaded.get("retention_days", DEFAULT_RETENTION_DAYS))
             except (TypeError, ValueError):
@@ -76,6 +107,8 @@ class PanelStore:
         if patch:
             if "sensor_links" in patch:
                 data["sensor_links"] = _normalize_links(patch["sensor_links"])
+            if "force_aspect" in patch:
+                data["force_aspect"] = _normalize_force_aspect(patch["force_aspect"])
             if "retention_days" in patch:
                 try:
                     days = int(patch["retention_days"])

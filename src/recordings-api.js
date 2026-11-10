@@ -1,9 +1,10 @@
 /** Frontend helpers for shared integration config + recordings. */
 
 import { normalizeSensorLinks } from "./detection-sensors.js";
+import { normalizeForceAspectMap } from "./mosaic-pack.js";
 
 /**
- * Load site-wide settings (sensor links, retention, recording toggle).
+ * Load site-wide settings (sensor links, force aspect, retention, recording).
  * @param {any} hass
  */
 export async function loadSharedConfig(hass) {
@@ -14,6 +15,7 @@ export async function loadSharedConfig(hass) {
     return {
       ...result,
       sensorLinks: normalizeSensorLinks(result.sensor_links || {}),
+      forceAspect: normalizeForceAspectMap(result.force_aspect || {}),
     };
   } catch (err) {
     console.warn("CCTV: failed to load shared config", err);
@@ -32,6 +34,20 @@ export async function saveSensorLinks(hass, sensorLinks) {
   return hass.callWS({
     type: "cctv_dashboard/set_sensor_links",
     sensor_links: cleaned,
+  });
+}
+
+/**
+ * Persist per-camera mosaic aspect overrides for every HA user.
+ * @param {any} hass
+ * @param {Record<string, string>} forceAspect
+ */
+export async function saveForceAspect(hass, forceAspect) {
+  if (!hass?.callWS) return null;
+  const cleaned = normalizeForceAspectMap(forceAspect);
+  return hass.callWS({
+    type: "cctv_dashboard/set_force_aspect",
+    force_aspect: cleaned,
   });
 }
 

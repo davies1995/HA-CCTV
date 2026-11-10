@@ -32,13 +32,18 @@ import {
 import {
   cellsToPercentStyles,
   DEFAULT_ASPECT,
+  FORCE_ASPECT_OPTIONS,
+  forceAspectRatio,
   normalizeAspect,
+  normalizeForceAspectLabel,
+  normalizeForceAspectMap,
   packAspectMosaic,
 } from "./mosaic-pack.js";
 import {
   deleteRecording,
   listRecordings,
   loadSharedConfig,
+  saveForceAspect,
   saveRecordingSettings,
   saveSensorLinks,
   signPlaybackTracks,
@@ -68,6 +73,8 @@ export class CctvView extends LitElement {
     _visibleIds: { state: true },
     /** @type {Record<string, string[]>} */
     _sensorLinks: { state: true },
+    /** @type {Record<string, string>} site-wide forced aspect labels */
+    _forceAspect: { state: true },
     _pickerOpen: { state: true },
     _settingsOpen: { state: true },
     _selectionReady: { state: true },
@@ -104,6 +111,7 @@ export class CctvView extends LitElement {
     this._qualityTick = 0;
     this._visibleIds = [];
     this._sensorLinks = {};
+    this._forceAspect = {};
     this._pickerOpen = true;
     this._settingsOpen = false;
     this._selectionReady = false;
@@ -136,11 +144,8 @@ export class CctvView extends LitElement {
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
     this._lastHassSig = "";
-    this._visibilityIo = null;
     this._onDocVisibility = null;
-    this._inactiveTimer = 0;
     this._loadToken = 0;
-    this._everVisible = false;
   }
 
   /**
@@ -211,11 +216,6 @@ export class CctvView extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._inactiveTimer) {
-      clearTimeout(this._inactiveTimer);
-      this._inactiveTimer = 0;
-    }
-    // Force-suspend immediately on disconnect (skip debounce).
     if (this._panelActive) {
       this._panelActive = false;
       this._suspendResources();
@@ -229,8 +229,10 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * HA's partial-panel-resolver can keep this panel mounted for ~5 minutes
-   * after sidebar navigate-away. IntersectionObserver catches that immediately.
+   * Leave-page unload without in-panel IntersectionObserver bounce.
+   * PR20's host IO flipped `_panelActive` on layout blips and remounted every
+   * stream while watching. Prefer solid stability: unload on tab hide and on
+   * real disconnect (panel unmount / HA remount after suspendWhenHidden).
    */
   _bindPanelVisibility() {
     if (!this.panelMode) return;
@@ -238,100 +240,36 @@ export class CctvView extends LitElement {
 
     this._onDocVisibility = () => {
       if (typeof document !== "undefined" && document.hidden) {
-        this._setPanelActive(false, { immediate: true });
+        this._setPanelActive(false);
       } else if (this.isConnected) {
-        this._setPanelActive(this._isPanelOnScreen());
+        this._setPanelActive(true);
       }
     };
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this._onDocVisibility);
     }
-
-    if (typeof IntersectionObserver === "undefined") return;
-    this._visibilityIo = new IntersectionObserver(
-      (entries) => {
-        const onScreen = entries.some(
-          (entry) => entry.isIntersecting && entry.intersectionRatio > 0
-        );
-        if (typeof document !== "undefined" && document.hidden) {
-          this._setPanelActive(false);
-          return;
-        }
-        if (onScreen) {
-          this._everVisible = true;
-          this._setPanelActive(true);
-          return;
-        }
-        // Ignore the initial 0-intersection before first layout paint.
-        if (this._everVisible) this._setPanelActive(false);
-      },
-      { threshold: [0, 0.01] }
-    );
-    this._visibilityIo.observe(this);
   }
 
   _unbindPanelVisibility() {
-    if (this._visibilityIo) {
-      this._visibilityIo.disconnect();
-      this._visibilityIo = null;
-    }
     if (this._onDocVisibility && typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this._onDocVisibility);
       this._onDocVisibility = null;
     }
   }
 
-  _isPanelOnScreen() {
-    if (!this.isConnected) return false;
-    if (typeof document !== "undefined" && document.hidden) return false;
-    const rect = this.getBoundingClientRect?.();
-    if (!rect) return true;
-    return rect.width > 0 && rect.height > 0;
-  }
-
   /**
    * @param {boolean} active
-   * @param {{ immediate?: boolean }} [opts]
    */
-  _setPanelActive(active, opts = {}) {
+  _setPanelActive(active) {
     const next = Boolean(active);
+    if (this._panelActive === next) return;
+    this._panelActive = next;
     if (next) {
-      if (this._inactiveTimer) {
-        clearTimeout(this._inactiveTimer);
-        this._inactiveTimer = 0;
-      }
-      if (this._panelActive === true) return;
-      this._panelActive = true;
       this._status = this._status === "Suspended — streams unloaded" ? "" : this._status;
       this._schedulePack();
-      return;
-    }
-    // Already inactive: pure no-op (do not re-suspend / bump load tokens).
-    if (this._panelActive === false) {
-      if (this._inactiveTimer) {
-        clearTimeout(this._inactiveTimer);
-        this._inactiveTimer = 0;
-      }
-      return;
-    }
-    const goInactive = () => {
-      this._inactiveTimer = 0;
-      if (this._panelActive === false) return;
-      if (!opts.immediate && this._isPanelOnScreen()) return;
-      this._panelActive = false;
+    } else {
       this._suspendResources();
-    };
-    if (opts.immediate) {
-      if (this._inactiveTimer) {
-        clearTimeout(this._inactiveTimer);
-        this._inactiveTimer = 0;
-      }
-      goInactive();
-      return;
     }
-    // Debounce off-screen so brief layout/IO blips do not tear down streams.
-    if (this._inactiveTimer) return;
-    this._inactiveTimer = window.setTimeout(goInactive, 280);
   }
 
   /** Unload streams/playback/timers/observers while panel is away. */
@@ -394,6 +332,7 @@ export class CctvView extends LitElement {
         changed.has("_pickerOpen") ||
         changed.has("_settingsOpen") ||
         changed.has("_aspectById") ||
+        changed.has("_forceAspect") ||
         changed.has("_playback") ||
         changed.has("_panelActive"))
     ) {
@@ -452,13 +391,30 @@ export class CctvView extends LitElement {
     const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
     const items = cameras.map((cam) => ({
       id: cam.entityId,
-      aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
+      aspect: this._effectiveAspect(cam.entityId),
     }));
     const cells = packAspectMosaic(items, boxW, boxH, 10);
     const nextStyles = cellsToPercentStyles(cells, boxW, boxH);
     if (!this._packStylesEqual(this._packStyles, nextStyles)) {
       this._packStyles = nextStyles;
     }
+  }
+
+  /**
+   * Forced shared aspect wins over probed / default (doorbell override).
+   * @param {string} entityId
+   */
+  _effectiveAspect(entityId) {
+    const forced = forceAspectRatio(this._forceAspect?.[entityId]);
+    if (forced) return normalizeAspect(forced);
+    return normalizeAspect(this._aspectById[entityId] || DEFAULT_ASPECT);
+  }
+
+  /**
+   * @param {string} entityId
+   */
+  _forceAspectLabel(entityId) {
+    return normalizeForceAspectLabel(this._forceAspect?.[entityId]);
   }
 
   /**
@@ -479,6 +435,8 @@ export class CctvView extends LitElement {
     const entityId = event?.detail?.entityId;
     const aspect = normalizeAspect(event?.detail?.aspect);
     if (!entityId) return;
+    // Manual site-wide override owns packing for this camera.
+    if (forceAspectRatio(this._forceAspect?.[entityId])) return;
     if (Math.abs((this._aspectById[entityId] || 0) - aspect) < 0.01) return;
     this._aspectById = { ...this._aspectById, [entityId]: aspect };
   }
@@ -554,6 +512,9 @@ export class CctvView extends LitElement {
       this._retentionDays = Number(shared.retention_days) || 1;
       this._recordOnDetection = shared.record_on_detection !== false;
       this._recordDir = shared.record_dir || "";
+      this._forceAspect = normalizeForceAspectMap(
+        shared.forceAspect || shared.force_aspect || {}
+      );
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
@@ -582,6 +543,11 @@ export class CctvView extends LitElement {
       this._recordOnDetection = settings.record_on_detection !== false;
       this._recordDir = settings.record_dir || "";
       if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
+      if (settings.forceAspect || settings.force_aspect) {
+        this._forceAspect = normalizeForceAspectMap(
+          settings.forceAspect || settings.force_aspect || {}
+        );
+      }
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
@@ -659,6 +625,38 @@ export class CctvView extends LitElement {
     } finally {
       this._saving = false;
     }
+  }
+
+  /**
+   * @param {Record<string, string>} next
+   */
+  async _persistForceAspect(next) {
+    this._saving = true;
+    this._forceAspect = normalizeForceAspectMap(next);
+    try {
+      const saved = await saveForceAspect(this.hass, this._forceAspect);
+      if (saved?.force_aspect) {
+        this._forceAspect = normalizeForceAspectMap(saved.force_aspect);
+      }
+      this._status = "Camera aspect saved for all users";
+      this._schedulePack();
+    } catch (err) {
+      this._status = err?.message || "Could not save camera aspect";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  /**
+   * @param {string} cameraId
+   * @param {string} label
+   */
+  async _setForceAspect(cameraId, label) {
+    const normalized = normalizeForceAspectLabel(label);
+    const next = { ...this._forceAspect };
+    if (normalized === "auto") delete next[cameraId];
+    else next[cameraId] = normalized;
+    await this._persistForceAspect(next);
   }
 
   async _setSensorLinked(cameraId, sensorId, linked) {
@@ -1387,13 +1385,20 @@ export class CctvView extends LitElement {
     const playing = Boolean(this._playback?.playing);
     const track = playing ? this._trackForCamera(cam.entityId) : null;
     const item = track ? this._currentPlaybackItem(track) : null;
+    const forceLabel = this._forceAspectLabel(cam.entityId);
+    const forcedRatio = forceAspectRatio(forceLabel);
+    // Mobile / unpacked tiles: seed a definite box from the shared override.
+    const mediaStyle =
+      !positioned && forcedRatio
+        ? `aspect-ratio:${forcedRatio}; width:100%;`
+        : nothing;
     return html`
       <article
         class="tile layout-tile ${positioned ? "pack-tile" : ""}"
         role="listitem"
         style=${positioned ? packStyle : nothing}
       >
-        <div class="tile-media">
+        <div class="tile-media" style=${mediaStyle}>
           ${playing
             ? !item
               ? html`<div class="playback-empty">No recording for this camera</div>`
@@ -1550,6 +1555,29 @@ export class CctvView extends LitElement {
         </label>
         <span class="hint">${qualityHelp(quality)}</span>
       </div>
+      ${this.panelMode
+        ? html`
+            <div class="quality-row">
+              <label>
+                Force aspect ratio
+                <select
+                  .value=${this._forceAspectLabel(cam.entityId)}
+                  @change=${(e) =>
+                    this._setForceAspect(cam.entityId, e.target.value)}
+                >
+                  ${FORCE_ASPECT_OPTIONS.map(
+                    (opt) =>
+                      html`<option value=${opt.value}>${opt.label}</option>`
+                  )}
+                </select>
+              </label>
+              <span class="hint">
+                Shared for all users. Use 9:16 for portrait doorbells when auto
+                fit fails.
+              </span>
+            </div>
+          `
+        : nothing}
       <dl class="meta">
         <dt>Entity</dt>
         <dd>${cam.entityId}</dd>

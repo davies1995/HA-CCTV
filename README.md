@@ -38,11 +38,12 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 
 - Sidebar **CCTV** panel for all users (no admin gate)
 - **Choose cameras in the panel UI** (checkboxes) — selection is **per-user**; on **desktop**, tiles pack by each camera’s aspect (landscape + portrait) so all selected cams fit the viewport; each tile **contains** the full frame (letterbox, no crop) for live and playback; on **mobile**, keep the stacked mosaic
+- **Force aspect ratio** per camera (e.g. **9:16** doorbell) — site-wide for all HA users when auto detect fails; set on the camera detail screen
 - **Detection sensors** per camera (person / car / animal / package / …) — suggested by name/device heuristics, confirm or link manually; associations are **site-wide for all HA users**
 - **Horizontal detection timeline** (grouped by type) — click events for details; **Play** loads the matching saved recording
 - **Saved detections** — time/date, what was detected, and file size; click then **Play** to replace live mosaic feeds with that event’s recordings for the **same visible cameras**, synced and simultaneous in the same mosaic layout
 - **Persisted for all users** — timeline events + saved detections live in the integration store/media (survive HA reboot); purged only after **retention days** (default 1)
-- **Leaves cleanly** — navigating away or hiding the CCTV panel unloads live streams (WebRTC/HLS/MJPEG), playback, timers, and history polling so HA is not kept busy in the background
+- **Leaves cleanly** — hiding the browser tab or unmounting the panel unloads live streams (WebRTC/HLS/MJPEG), playback, timers, and history polling without using IntersectionObserver (which restarted streams while watching)
 - **Detection recordings** — when any linked sensor triggers, the integration records **all available cameras** until sensors clear (HA `camera.record` chunks; snapshot fallback)
 - **Retention** configurable in panel **Settings** as days (default **1 day / 24 hours**)
 - Auto-discover `camera.*` (optional include/exclude on cards)
@@ -58,7 +59,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - Uses Home Assistant `camera.record` (≈30s chunks + lookback) while the event is active; if record fails, falls back to `camera.snapshot`
 - Files land under the HA **media** folder (`…/cctv_dashboard/recordings`) when media dirs are configured; otherwise under `www`
 - Multi-camera continuous video is CPU/disk heavy — ensure a writable media mount and that cameras support streaming
-- Sensor links are stored in the integration (shared); saving them once makes them available to every user and to the backend with the UI closed
+- Sensor links and force-aspect overrides are stored in the integration (shared); saving them once makes them available to every user and to the backend with the UI closed
 - Not a full NVR: no guaranteed pre-roll beyond `lookback`, and overlapping long events create multiple chunk files
 
 ## Lovelace cards (optional)
