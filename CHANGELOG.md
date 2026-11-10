@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.1.1 — 2026-11-10
+
+Post-merge HACS release cut from `main`.
+
+### Changed
+
+- Republished release asset from merged `main` so HACS updates track the default branch
+- Clarified that the **CCTV sidebar requires `panel_custom` in `configuration.yaml`** — HACS alone does not add a sidebar entry
+
 ## 0.1.0 — 2026-11-10
 
 First HACS-ready frontend release.
