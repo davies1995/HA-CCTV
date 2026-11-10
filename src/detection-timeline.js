@@ -6,6 +6,7 @@ import {
   formatClock,
   formatDuration,
   isSensorActive,
+  mergeOverlappingSegments,
   segmentsFromHistory,
 } from "./detection-sensors.js";
 
@@ -17,7 +18,9 @@ const WINDOW_OPTIONS = [
 ];
 
 /**
- * Bottom timeline of detection sensor flags for the current camera selection.
+ * Bottom timeline of detection flags for the current camera selection.
+ * Rows are grouped by detection type (person/car/…); overlapping same-type
+ * sensor events collapse into one instance.
  */
 export class CctvDetectionTimeline extends LitElement {
   static properties = {
@@ -120,11 +123,17 @@ export class CctvDetectionTimeline extends LitElement {
     return [...new Set(ids)];
   }
 
+  /**
+   * Build one row per detection type; merge overlapping same-type segments.
+   */
   _buildRows(history, start, end) {
-    const rows = [];
+    /** @type {Map<string, { kind: { id: string, label: string }, raw: Array<{start:number,end:number}>, sensors: Set<string>, cameras: Set<string>, active: boolean }>} */
+    const byKind = new Map();
+
     for (const cam of this.cameras || []) {
       const linked = describeLinkedSensors(this.hass, this.sensorLinks?.[cam] || []);
       for (const sensor of linked) {
+        const kind = sensor.kind || { id: "other", label: "Other" };
         const points =
           history?.[sensor.entityId] || history?.[sensor.entityId.toLowerCase()] || [];
         let segments = segmentsFromHistory(
@@ -134,8 +143,6 @@ export class CctvDetectionTimeline extends LitElement {
           (state) => isSensorActive({ state })
         );
 
-        // Keep the trailing flag open when history says active through "now",
-        // or synthesize a short live flag when recorder history is empty.
         if (sensor.active && !sensor.missing) {
           const last = segments[segments.length - 1];
           if (last && last.end >= end - 5000) {
@@ -145,16 +152,45 @@ export class CctvDetectionTimeline extends LitElement {
           }
         }
 
-        rows.push({
-          cameraId: cam,
-          cameraName: this.cameraNames?.[cam] || cam,
-          sensor,
-          segments,
-          totalMs: segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0),
-        });
+        let bucket = byKind.get(kind.id);
+        if (!bucket) {
+          bucket = {
+            kind,
+            raw: [],
+            sensors: new Set(),
+            cameras: new Set(),
+            active: false,
+          };
+          byKind.set(kind.id, bucket);
+        }
+        bucket.raw.push(...segments);
+        bucket.sensors.add(sensor.entityId);
+        bucket.cameras.add(cam);
+        if (sensor.active && !sensor.missing) bucket.active = true;
       }
     }
-    return rows;
+
+    const kindOrder = new Map(DETECTION_KINDS.map((k, i) => [k.id, i]));
+    return [...byKind.values()]
+      .map((bucket) => {
+        const segments = mergeOverlappingSegments(bucket.raw, 1000);
+        const cameraNames = [...bucket.cameras].map(
+          (id) => this.cameraNames?.[id] || id
+        );
+        return {
+          kind: bucket.kind,
+          segments,
+          totalMs: segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0),
+          sensorCount: bucket.sensors.size,
+          cameraNames,
+          active: bucket.active,
+        };
+      })
+      .sort(
+        (a, b) =>
+          (kindOrder.get(a.kind.id) ?? 99) - (kindOrder.get(b.kind.id) ?? 99) ||
+          a.kind.label.localeCompare(b.kind.label)
+      );
   }
 
   _setWindow(ms) {
@@ -172,7 +208,7 @@ export class CctvDetectionTimeline extends LitElement {
             <strong>Detection timeline</strong>
             <span class="hint">
               ${linkedCount
-                ? `Flags for linked sensors on the selected cameras`
+                ? `Grouped by type — overlapping same-type sensors merge into one flag`
                 : `Link detection sensors in a camera’s settings to see flags here`}
             </span>
           </div>
@@ -216,21 +252,26 @@ export class CctvDetectionTimeline extends LitElement {
 
   _renderRow(row) {
     const kind =
-      DETECTION_KINDS.find((k) => k.id === row.sensor.kind.id) ||
+      DETECTION_KINDS.find((k) => k.id === row.kind.id) ||
       DETECTION_KINDS[DETECTION_KINDS.length - 1];
     const start = this._now - this._windowMs;
     const span = Math.max(1, this._windowMs);
+    const cams = (row.cameraNames || []).join(", ");
 
     return html`
       <div class="timeline-row">
         <div class="timeline-label">
           <span class="timeline-kind kind-${kind.id}">${kind.label}</span>
-          <span class="timeline-cam">${row.cameraName}</span>
-          <span class="timeline-sensor" title=${row.sensor.entityId}>${row.sensor.name}</span>
+          <span class="timeline-cam" title=${cams}>
+            ${cams || "Selected cameras"}
+          </span>
+          <span class="timeline-sensor">
+            ${row.sensorCount} sensor${row.sensorCount === 1 ? "" : "s"}
+          </span>
           <span class="timeline-total">
             ${row.segments.length
-              ? `${row.segments.length} flag${row.segments.length === 1 ? "" : "s"} · ${formatDuration(row.totalMs)}`
-              : row.sensor.active
+              ? `${row.segments.length} event${row.segments.length === 1 ? "" : "s"} · ${formatDuration(row.totalMs)}`
+              : row.active
                 ? "active now"
                 : "quiet"}
           </span>
@@ -239,7 +280,7 @@ export class CctvDetectionTimeline extends LitElement {
           ${row.segments.map((seg) => {
             const left = ((seg.start - start) / span) * 100;
             const width = Math.max(0.4, ((seg.end - seg.start) / span) * 100);
-            const title = `${formatClock(seg.start)}–${formatClock(seg.end)} (${formatDuration(seg.end - seg.start)})`;
+            const title = `${kind.label}: ${formatClock(seg.start)}–${formatClock(seg.end)} (${formatDuration(seg.end - seg.start)})`;
             return html`
               <span
                 class="timeline-flag kind-${kind.id}"

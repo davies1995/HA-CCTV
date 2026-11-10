@@ -331,6 +331,38 @@ export function segmentsFromHistory(points, rangeStartMs, rangeEndMs, isActive) 
 }
 
 /**
+ * Merge overlapping / contiguous segments into single instances.
+ * Used to collapse concurrent same-type detections (e.g. 2 car sensors → 1 car flag).
+ * @param {Array<{ start: number, end: number }>} segments
+ * @param {number} [padMs] treat gaps <= pad as the same instance
+ * @returns {Array<{ start: number, end: number }>}
+ */
+export function mergeOverlappingSegments(segments, padMs = 0) {
+  if (!Array.isArray(segments) || !segments.length) return [];
+  const sorted = segments
+    .map((s) => ({
+      start: Number(s.start),
+      end: Number(s.end),
+    }))
+    .filter((s) => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  if (!sorted.length) return [];
+
+  const out = [{ start: sorted[0].start, end: sorted[0].end }];
+  for (let i = 1; i < sorted.length; i += 1) {
+    const cur = sorted[i];
+    const last = out[out.length - 1];
+    if (cur.start <= last.end + padMs) {
+      last.end = Math.max(last.end, cur.end);
+    } else {
+      out.push({ start: cur.start, end: cur.end });
+    }
+  }
+  return out;
+}
+
+/**
  * Fetch history for linked sensors in a time window.
  * @param {any} hass
  * @param {string[]} entityIds

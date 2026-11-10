@@ -3,6 +3,7 @@ import {
   cameraBaseId,
   classifyDetectionSensor,
   formatDuration,
+  mergeOverlappingSegments,
   normalizeSensorLinks,
   scoreSensorForCamera,
   segmentsFromHistory,
@@ -51,5 +52,18 @@ const normalized = normalizeSensorLinks({
 });
 assert(normalized["camera.a"].length === 1, "normalize");
 assert(!normalized.nope, "normalize drops non-camera keys");
+
+const merged = mergeOverlappingSegments(
+  [
+    { start: 100, end: 200 },
+    { start: 150, end: 250 }, // overlap → one car-like instance
+    { start: 400, end: 500 },
+    { start: 501, end: 600 }, // near-contiguous with 1ms pad
+  ],
+  1
+);
+assert(merged.length === 2, "merge overlapping + near-contiguous");
+assert(merged[0].start === 100 && merged[0].end === 250, "merged bounds");
+assert(merged[1].start === 400 && merged[1].end === 600, "padded merge");
 
 console.log("detection-sensors checks ok");
