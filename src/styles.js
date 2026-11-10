@@ -743,8 +743,11 @@ export const sharedStyles = css`
     margin-bottom: 0.55rem;
   }
 
-  .timeline-detail-head .btn {
+  .timeline-detail-actions {
     margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
   }
 
   .timeline-live-badge {
@@ -838,53 +841,105 @@ export const sharedStyles = css`
   .recording-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.45rem;
   }
 
   .recording-item {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 0.5rem 0.85rem;
+    gap: 0.35rem 0.85rem;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
     padding: 0.65rem 0.7rem;
     border: 1px solid var(--cctv-border);
     border-radius: 8px;
+    background: transparent;
+  }
+
+  .recording-item:hover,
+  .recording-item:focus-visible {
+    border-color: var(--cctv-accent);
+    outline: none;
   }
 
   .recording-item.active {
     border-color: var(--cctv-accent);
   }
 
+  .recording-item.selected {
+    border-color: var(--cctv-accent);
+    background: rgba(61, 156, 240, 0.08);
+  }
+
   .recording-meta {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
-    grid-column: 1 / -1;
+    min-width: 0;
   }
 
-  .recording-clips {
+  .recording-when {
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .recording-detected {
+    font-size: 0.82rem;
+    color: var(--cctv-muted);
+  }
+
+  .recording-size {
+    font-size: 0.8rem;
+    color: var(--cctv-muted);
+    white-space: nowrap;
+  }
+
+  .playback-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.85rem;
+    align-items: center;
+    margin: 0 0 0.75rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--cctv-border);
+    border-radius: 10px;
+    background: var(--cctv-surface);
+  }
+
+  .playback-bar-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
+  .playback-bar-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
-    grid-column: 1;
   }
 
-  .recording-clip {
-    font-size: 0.75rem;
-    color: var(--cctv-accent);
-    text-decoration: none;
-    border: 1px solid var(--cctv-border);
-    border-radius: 6px;
-    padding: 0.2rem 0.45rem;
+  .playback-media {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #0a0e13;
+    display: block;
   }
 
-  .recording-clip:hover {
-    border-color: var(--cctv-accent);
-  }
-
-  .recording-item > .btn {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: start;
+  .playback-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 120px;
+    color: var(--cctv-muted);
+    font-size: 0.85rem;
   }
 
   @media (max-width: 800px) {
@@ -899,12 +954,7 @@ export const sharedStyles = css`
     }
 
     .recording-item {
-      grid-template-columns: 1fr;
-    }
-
-    .recording-item > .btn {
-      grid-column: 1;
-      grid-row: auto;
+      grid-template-columns: 1fr auto;
     }
   }
 

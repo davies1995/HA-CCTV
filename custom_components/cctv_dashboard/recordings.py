@@ -395,10 +395,26 @@ class RecordingManager:
             }
         items = []
         if active:
-            items.append(active)
+            items.append(self._enrich_session(active))
         for meta in self._sessions_meta:
-            items.append({**meta, "active": False})
+            items.append(self._enrich_session({**meta, "active": False}))
         return items[:limit]
+
+    def _enrich_session(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Attach on-disk file sizes for the Saved detections UI / playback."""
+        clips_out: list[dict[str, Any]] = []
+        total = 0
+        for clip in meta.get("clips") or []:
+            path = Path(clip.get("path") or "")
+            size = 0
+            if path.is_file():
+                try:
+                    size = int(path.stat().st_size)
+                except OSError:
+                    size = 0
+            total += size
+            clips_out.append({**clip, "size": size})
+        return {**meta, "clips": clips_out, "total_bytes": total}
 
     async def async_delete_session(self, session_id: str) -> bool:
         found = False

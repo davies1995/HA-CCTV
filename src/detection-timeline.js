@@ -230,6 +230,23 @@ export class CctvDetectionTimeline extends LitElement {
     this._selected = null;
   }
 
+  _requestPlay(event, ev) {
+    ev?.stopPropagation?.();
+    this.dispatchEvent(
+      new CustomEvent("cctv-play-detection", {
+        detail: {
+          start: event.start,
+          end: event.end,
+          kind: event.kind,
+          sensors: event.sensors || [],
+          cameras: event.cameras || [],
+        },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
   _tickMarks() {
     const start = this._now - this._windowMs;
     const count = this._windowMs <= 15 * 60 * 1000 ? 4 : this._windowMs <= 60 * 60 * 1000 ? 6 : 8;
@@ -375,9 +392,22 @@ export class CctvDetectionTimeline extends LitElement {
           ${event.active
             ? html`<span class="timeline-live-badge">Live</span>`
             : nothing}
-          <button class="btn" type="button" @click=${this._clearSelected}>
-            Close
-          </button>
+          <div class="timeline-detail-actions">
+            ${event.active
+              ? nothing
+              : html`
+                  <button
+                    class="btn primary"
+                    type="button"
+                    @click=${(ev) => this._requestPlay(event, ev)}
+                  >
+                    Play
+                  </button>
+                `}
+            <button class="btn" type="button" @click=${this._clearSelected}>
+              Close
+            </button>
+          </div>
         </div>
         <dl class="timeline-detail-grid">
           <dt>When</dt>

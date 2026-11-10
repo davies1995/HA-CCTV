@@ -21,6 +21,13 @@ import {
   writeStoredQuality,
 } from "./quality.js";
 import {
+  detectionLabelsFromTriggers,
+  findSessionForTimelineEvent,
+  formatBytes,
+  playbackTracksFromSession,
+  sessionTotalBytes,
+} from "./detection-playback.js";
+import {
   cellsToPercentStyles,
   DEFAULT_ASPECT,
   normalizeAspect,
@@ -30,7 +37,6 @@ import {
   deleteRecording,
   listRecordings,
   loadSharedConfig,
-  recordingMediaUrl,
   saveRecordingSettings,
   saveSensorLinks,
 } from "./recordings-api.js";
@@ -74,6 +80,8 @@ export class CctvView extends LitElement {
     _aspectById: { state: true },
     /** @type {Record<string, string>} */
     _packStyles: { state: true },
+    /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[] } | null} */
+    _playback: { state: true },
   };
 
   static styles = sharedStyles;
@@ -101,12 +109,15 @@ export class CctvView extends LitElement {
     this._isDesktop = false;
     this._aspectById = {};
     this._packStyles = {};
+    this._playback = null;
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
     this._packObserver = null;
     this._mq = null;
     this._onMq = null;
     this._packRaf = 0;
+    /** @type {Map<string, number>} */
+    this._playbackIndex = new Map();
   }
 
   connectedCallback() {
@@ -147,7 +158,8 @@ export class CctvView extends LitElement {
         changed.has("_detailId") ||
         changed.has("_pickerOpen") ||
         changed.has("_settingsOpen") ||
-        changed.has("_aspectById"))
+        changed.has("_aspectById") ||
+        changed.has("_playback"))
     ) {
       this._schedulePack();
     }
@@ -193,11 +205,19 @@ export class CctvView extends LitElement {
     const boxH = Math.max(0, rect.height);
     if (boxW < 8 || boxH < 8) return;
 
-    const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
-    const items = cameras.map((cam) => ({
-      id: cam.entityId,
-      aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
-    }));
+    let items;
+    if (this._playback?.playing) {
+      items = (this._playback.tracks || []).map((track) => ({
+        id: track.cameraId,
+        aspect: normalizeAspect(this._aspectById[track.cameraId] || DEFAULT_ASPECT),
+      }));
+    } else {
+      const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
+      items = cameras.map((cam) => ({
+        id: cam.entityId,
+        aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
+      }));
+    }
     const cells = packAspectMosaic(items, boxW, boxH, 10);
     this._packStyles = cellsToPercentStyles(cells, boxW, boxH);
   }
@@ -463,10 +483,118 @@ export class CctvView extends LitElement {
     try {
       await deleteRecording(this.hass, sessionId);
       this._sessions = await listRecordings(this.hass);
+      if (this._playback?.session?.session_id === sessionId) {
+        this._stopPlayback();
+      }
       this._status = "Recording deleted";
     } catch (err) {
       this._status = err?.message || "Could not delete recording";
     }
+  }
+
+  _selectPlaybackSession(session) {
+    if (!session || session.active || !(session.clips || []).length) {
+      this._status = "No playable recording for that detection";
+      return;
+    }
+    const labels = detectionLabelsFromTriggers(
+      this.hass,
+      session.trigger_sensors || []
+    );
+    const tracks = playbackTracksFromSession(this.hass, session);
+    if (!tracks.length) {
+      this._status = "Recording has no clips yet";
+      return;
+    }
+    this._detailId = null;
+    this._playbackIndex = new Map(tracks.map((t) => [t.cameraId, 0]));
+    this._playback = {
+      session,
+      labels,
+      playing: false,
+      tracks,
+    };
+    this._status = `Selected ${labels.join(", ")} recording — press Play`;
+    this._schedulePack();
+  }
+
+  _onPlayDetection(event) {
+    const detail = event?.detail;
+    const session = findSessionForTimelineEvent(this._sessions || [], detail);
+    if (!session) {
+      this._status = "No saved recording overlaps that timeline event";
+      return;
+    }
+    this._selectPlaybackSession(session);
+  }
+
+  _startPlayback() {
+    if (!this._playback?.tracks?.length) return;
+    this._playback = { ...this._playback, playing: true };
+    this._status = `Playing ${this._playback.labels.join(", ")}`;
+    this.updateComplete.then(() => this._kickPlaybackVideos());
+  }
+
+  _stopPlayback() {
+    this._playback = null;
+    this._playbackIndex = new Map();
+    this._status = "Live mosaic";
+    this._schedulePack();
+  }
+
+  _pausePlaybackToLive() {
+    if (!this._playback) return;
+    this._playback = { ...this._playback, playing: false };
+    this._status = "Stopped — back to live mosaic";
+    this._schedulePack();
+  }
+
+  _kickPlaybackVideos() {
+    const root = this.renderRoot;
+    if (!root) return;
+    root.querySelectorAll("video.playback-media").forEach((video) => {
+      try {
+        video.currentTime = 0;
+        video.play?.().catch(() => undefined);
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  _onPlaybackEnded(cameraId) {
+    if (!this._playback?.playing) return;
+    const track = this._playback.tracks.find((t) => t.cameraId === cameraId);
+    if (!track) return;
+    const idx = this._playbackIndex.get(cameraId) || 0;
+    if (idx + 1 < track.items.length) {
+      this._playbackIndex.set(cameraId, idx + 1);
+      this._playback = { ...this._playback };
+      this.updateComplete.then(() => {
+        const safeId = String(cameraId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const video = this.renderRoot?.querySelector?.(
+          `video.playback-media[data-camera="${safeId}"]`
+        );
+        video?.play?.().catch(() => undefined);
+      });
+      return;
+    }
+    // Finished this camera's playlist — if all video cams are done, return to live.
+    this._playbackIndex.set(cameraId, track.items.length);
+    const allDone = this._playback.tracks.every((t) => {
+      if (t.items.every((item) => item.kind === "snapshot")) return true;
+      const i = this._playbackIndex.get(t.cameraId) || 0;
+      return i >= t.items.length;
+    });
+    if (allDone) this._pausePlaybackToLive();
+  }
+
+  _currentPlaybackItem(track) {
+    const idx = Math.min(
+      this._playbackIndex.get(track.cameraId) || 0,
+      Math.max(0, track.items.length - 1)
+    );
+    return track.items[idx] || null;
   }
 
   render() {
@@ -546,11 +674,17 @@ export class CctvView extends LitElement {
           ? this._renderSettings()
           : nothing}
 
+        ${this.panelMode && this._playback
+          ? this._renderPlaybackBar()
+          : nothing}
+
         ${detail
           ? this._renderDetail(detail)
-          : this.panelMode
-            ? this._renderLayout(visible)
-            : this._renderCardGrid(cameras)}
+          : this.panelMode && this._playback?.playing
+            ? this._renderPlaybackLayout()
+            : this.panelMode
+              ? this._renderLayout(visible)
+              : this._renderCardGrid(cameras)}
 
         ${this.panelMode && !detail
           ? html`
@@ -559,11 +693,101 @@ export class CctvView extends LitElement {
                 .cameras=${visible.map((c) => c.entityId)}
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${cameraNames}
+                @cctv-play-detection=${this._onPlayDetection}
               ></cctv-detection-timeline>
               ${this._renderRecordings()}
             `
           : nothing}
       </div>
+    `;
+  }
+
+  _renderPlaybackBar() {
+    const pb = this._playback;
+    if (!pb) return nothing;
+    const when = pb.session?.started
+      ? new Date(pb.session.started).toLocaleString()
+      : "—";
+    return html`
+      <div class="playback-bar" role="region" aria-label="Detection playback">
+        <div class="playback-bar-meta">
+          <strong>${pb.labels.join(", ")}</strong>
+          <span class="hint">${when} · ${formatBytes(sessionTotalBytes(pb.session))}</span>
+        </div>
+        <div class="playback-bar-actions">
+          ${pb.playing
+            ? html`
+                <button class="btn primary" type="button" @click=${this._pausePlaybackToLive}>
+                  Stop
+                </button>
+              `
+            : html`
+                <button class="btn primary" type="button" @click=${this._startPlayback}>
+                  Play
+                </button>
+              `}
+          <button class="btn" type="button" @click=${this._stopPlayback}>
+            Back to live
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderPlaybackLayout() {
+    const tracks = this._playback?.tracks || [];
+    if (!tracks.length) {
+      return html`<p class="empty">No clips in this recording.</p>`;
+    }
+
+    if (!this._isDesktop) {
+      return html`
+        <div class="layout layout-${Math.min(tracks.length, 4)}" role="list">
+          ${tracks.slice(0, 4).map((track) => this._renderPlaybackTile(track, false))}
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="layout layout-pack" role="list">
+        ${tracks.map((track) => this._renderPlaybackTile(track, true))}
+      </div>
+    `;
+  }
+
+  _renderPlaybackTile(track, packed) {
+    const item = this._currentPlaybackItem(track);
+    const packStyle = packed ? this._packStyles?.[track.cameraId] : "";
+    const positioned = Boolean(packed && packStyle);
+    return html`
+      <article
+        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
+        role="listitem"
+        style=${positioned ? packStyle : nothing}
+      >
+        <div class="tile-media">
+          ${!item
+            ? html`<div class="playback-empty">No clip</div>`
+            : item.kind === "snapshot"
+              ? html`<img class="playback-media" alt="" src=${item.url} />`
+              : html`
+                  <video
+                    class="playback-media"
+                    data-camera=${track.cameraId}
+                    src=${item.url}
+                    autoplay
+                    playsinline
+                    muted
+                    controls
+                    @ended=${() => this._onPlaybackEnded(track.cameraId)}
+                  ></video>
+                `}
+        </div>
+        <div class="tile-body pack-caption">
+          <p class="tile-title">${track.name}</p>
+          <p class="tile-meta">Playback</p>
+        </div>
+      </article>
     `;
   }
 
@@ -613,12 +837,13 @@ export class CctvView extends LitElement {
   _renderRecordings() {
     const sessions = this._sessions || [];
     return html`
-      <section class="recordings" aria-label="Detection recordings">
+      <section class="recordings" aria-label="Saved detections">
         <div class="timeline-head">
           <div>
             <strong>Saved detections</strong>
             <span class="hint">
-              Kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}, then deleted.
+              Time, what was detected, and file size. Click to load Play.
+              Kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
             </span>
           </div>
           <button class="btn" type="button" @click=${() => this._refreshSessions()}>
@@ -637,47 +862,29 @@ export class CctvView extends LitElement {
   }
 
   _renderSession(session) {
-    const started = session.started
+    const when = session.started
       ? new Date(session.started).toLocaleString()
       : "—";
-    const ended = session.active
-      ? "recording…"
-      : session.ended
-        ? new Date(session.ended).toLocaleString()
-        : "—";
-    const clips = session.clips || [];
+    const labels = detectionLabelsFromTriggers(
+      this.hass,
+      session.trigger_sensors || []
+    );
+    const size = formatBytes(sessionTotalBytes(session));
+    const selected =
+      this._playback?.session?.session_id === session.session_id;
     return html`
-      <article class="recording-item ${session.active ? "active" : ""}">
+      <button
+        type="button"
+        class="recording-item ${session.active ? "active" : ""} ${selected ? "selected" : ""}"
+        ?disabled=${session.active || !(session.clips || []).length}
+        @click=${() => this._selectPlaybackSession(session)}
+      >
         <div class="recording-meta">
-          <strong>${session.active ? "Live session" : "Session"} ${session.session_id}</strong>
-          <span class="hint">${started} → ${ended} · ${session.mode || "record"} · ${clips.length} clip${clips.length === 1 ? "" : "s"}</span>
-          <span class="hint">Triggers: ${(session.trigger_sensors || []).join(", ") || "—"}</span>
+          <span class="recording-when">${when}${session.active ? " · recording…" : ""}</span>
+          <span class="recording-detected">${labels.join(", ")}</span>
         </div>
-        <div class="recording-clips">
-          ${clips.slice(0, 12).map((clip) => {
-            const href = recordingMediaUrl(this.hass, clip.url);
-            return html`
-              <a class="recording-clip" href=${href} target="_blank" rel="noopener">
-                ${clip.kind === "snapshot" ? "JPG" : "MP4"} · ${(clip.camera_id || "").replace("camera.", "")}
-              </a>
-            `;
-          })}
-          ${clips.length > 12
-            ? html`<span class="hint">+${clips.length - 12} more</span>`
-            : nothing}
-        </div>
-        ${session.active
-          ? nothing
-          : html`
-              <button
-                class="btn"
-                type="button"
-                @click=${() => this._deleteSession(session.session_id)}
-              >
-                Delete
-              </button>
-            `}
-      </article>
+        <span class="recording-size">${size}</span>
+      </button>
     `;
   }
 
