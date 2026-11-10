@@ -5,10 +5,10 @@ import "./cctv-view.js";
  * Custom panel element for panel_custom.
  * HA sets hass, narrow, route, and panel.
  *
- * Note: Home Assistant's partial-panel-resolver may keep this element mounted
- * for ~5 minutes after navigate-away (suspendWhenHidden). cctv-view unloads on
- * tab hide and disconnect (not IntersectionObserver — that caused in-panel
- * stream restarts while watching).
+ * Leave-page unload (in cctv-view): HA `location-changed` / `popstate` when the
+ * path leaves this panel, plus `document.hidden` (tab hide) and
+ * `disconnectedCallback` (HA removes non-cached custom panels on sidebar leave).
+ * No IntersectionObserver — that remounted streams while watching.
  */
 class CctvDashboardPanel extends LitElement {
   static properties = {
@@ -75,6 +75,7 @@ class CctvDashboardPanel extends LitElement {
       <cctv-view
         .hass=${this.hass}
         .config=${this._config}
+        .panelUrlPath=${this.panel?.url_path || "cctv"}
         panel-mode
       ></cctv-view>
     `;
