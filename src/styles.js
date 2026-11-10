@@ -385,12 +385,28 @@ export const sharedStyles = css`
   .layout-tile .tile-media {
     flex: 1 1 auto;
     min-height: 0;
+    background: #0a0e13;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    overflow: hidden;
   }
 
   .layout-tile cctv-stream-player {
     height: 100%;
     min-height: 180px;
     aspect-ratio: auto;
+  }
+
+  /* Live + playback: fit entire frame inside the tile (letterbox), never crop. */
+  .layout-tile .playback-media,
+  .layout-tile .tile-media > img.playback-media,
+  .layout-tile .tile-media > video.playback-media {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    background: #0a0e13;
   }
 
   .layout-1 .layout-tile cctv-stream-player {
@@ -423,6 +439,8 @@ export const sharedStyles = css`
       flex: 1 1 auto;
       min-height: 0;
       height: 100%;
+      /* Keep letterboxing visible when cam aspect ≠ packed cell. */
+      background: #0a0e13;
     }
 
     .panel-wrap .layout-pack .pack-caption {
@@ -927,7 +945,10 @@ export const sharedStyles = css`
   .playback-media {
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
+    object-position: center;
     background: #0a0e13;
     display: block;
   }
