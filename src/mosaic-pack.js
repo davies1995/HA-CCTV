@@ -14,11 +14,6 @@ export const FORCE_ASPECT_OPTIONS = [
   { value: "9:16", label: "9:16 portrait", ratio: 9 / 16 },
   { value: "4:3", label: "4:3 landscape", ratio: 4 / 3 },
   { value: "3:4", label: "3:4 portrait", ratio: 3 / 4 },
-  {
-    value: "1920:2560",
-    label: "1920×2560 doorbell (3:4)",
-    ratio: 1920 / 2560,
-  },
   { value: "1:1", label: "1:1 square", ratio: 1 },
   { value: "3:2", label: "3:2 landscape", ratio: 3 / 2 },
   { value: "2:3", label: "2:3 portrait", ratio: 2 / 3 },
