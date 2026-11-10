@@ -1,56 +1,97 @@
 # HA-CCTV
 
-Home Assistant **Supervisor add-on** that provides a dedicated CCTV dashboard: discover all `camera.*` entities, show a live grid, open per-camera detail, and run basic camera controls through the Home Assistant API.
+Home Assistant **CCTV dashboard** as a frontend custom panel + Lovelace card. It discovers existing `camera.*` entities and shows a live stills grid with per-camera detail and basic controls (turn on/off, snapshot, more-info).
 
-Works with Frigate, go2rtc, ONVIF, and other stacks **when they expose cameras as Home Assistant camera entities**.
+This is **not** a Supervisor add-on. Cameras must already exist in Home Assistant (Frigate, go2rtc, ONVIF, generic IP camera, etc.).
 
-## Install (Home Assistant OS / Supervised)
+## Features (MVP scaffold)
 
-1. **Settings → Add-ons → Add-on store → ⋮ → Repositories**
-2. Add: `https://github.com/davies1995/HA-CCTV`
-3. Install **CCTV Dashboard**
-4. Start the add-on, then open it from the sidebar (**CCTV**) or via **Open Web UI** (Ingress)
+- Auto-discover all `camera.*` entities (optional include/exclude lists)
+- Responsive mosaic + detail view
+- Basic `camera` service actions and Home Assistant more-info
+- Shared bundle registers:
+  - **Panel** element: `cctv-dashboard-panel`
+  - **Lovelace card**: `custom:cctv-cameras-card`
 
-The add-on needs the Home Assistant API (enabled in `config.yaml`). No separate camera credentials are stored in the add-on.
+## Install
 
-> Until a published container image is configured, Supervisor builds the add-on locally from this repository’s `Dockerfile` (first install can take a few minutes).
+### HACS (recommended for the card)
+
+1. HACS → Frontend → Custom repositories → add `https://github.com/davies1995/HA-CCTV` as **Lovelace**.
+2. Install **CCTV Dashboard**.
+3. Reload the browser.
+4. Add **CCTV Cameras** from the card picker, or use YAML:
+
+```yaml
+type: custom:cctv-cameras-card
+title: CCTV
+refresh_seconds: 5
+# cameras:
+#   - camera.front_door
+# exclude:
+#   - camera.ignored
+```
+
+HACS serves `dist/cctv-dashboard.js` from the latest GitHub release once releases are published. Until then, use manual install from a built `dist/` file.
+
+### Manual resource
+
+1. Build (see Development) or download `cctv-dashboard.js`.
+2. Copy to `config/www/cctv-dashboard.js`.
+3. **Settings → Dashboards → Resources → Add resource**  
+   URL: `/local/cctv-dashboard.js` · Type: JavaScript module.
+
+### Sidebar custom panel
+
+After the module is loaded (HACS resource or `/local/...`), add to `configuration.yaml` and restart:
+
+```yaml
+panel_custom:
+  - name: cctv-dashboard-panel
+    url_path: cctv
+    sidebar_title: CCTV
+    sidebar_icon: mdi:cctv
+    module_url: /hacsfiles/HA-CCTV/cctv-dashboard.js
+    # For manual www install use:
+    # module_url: /local/cctv-dashboard.js
+    config:
+      title: CCTV
+      refresh_seconds: 5
+```
+
+`module_url` for HACS may vary by HACS version; if the panel fails to load, copy the card resource URL from **Dashboards → Resources** and reuse it as `module_url`.
 
 ## Development
+
+Requires Node.js 18+.
+
+```bash
+npm install
+npm run build
+```
+
+Output: `dist/cctv-dashboard.js`.
+
+```bash
+npm run watch
+```
 
 ### Layout
 
 ```text
-repository.yaml          # Add-on repository metadata
-cctv_dashboard/          # Add-on (slug must match folder)
-  config.yaml
-  Dockerfile
-  rootfs/
-    run.sh
-    opt/cctv_dashboard/  # Python aiohttp app + static UI
+src/
+  cctv-dashboard.js   # entry
+  panel.js            # sidebar panel
+  card.js             # Lovelace card
+  cctv-view.js        # shared grid/detail UI
+  cameras.js          # discovery helpers
+  styles.js
+dist/cctv-dashboard.js
+hacs.json
 ```
 
-### Local UI / API smoke (without Supervisor)
+## Architecture
 
-```bash
-cd cctv_dashboard/rootfs/opt/cctv_dashboard
-python3 -m venv .venv
-source .venv/bin/activate
-pip install aiohttp
-export SUPERVISOR_TOKEN=dev-token   # optional; API calls fail without a real token
-export REFRESH_SECONDS=5
-python3 main.py
-# open http://127.0.0.1:8099/
-```
+See the project plan: `/cursor/stores/bc-01a1c4ea-5cda-7df5-9269-add18c27ad57/docs/cctv-dashboard-plan.md` (coordinator store).
 
-Camera listing and proxies require a real Supervisor/`SUPERVISOR_TOKEN` against Home Assistant Core. Local mode is mainly for static UI and `/health`.
-
-### On-device add-on build
-
-1. Copy or mount this repo as a local add-on repository, or push a branch and add the GitHub URL as a custom repository.
-2. Rebuild/restart the add-on after changes under `cctv_dashboard/`.
-
-## Architecture notes
-
-See the product plan in the project store (coordinator): `docs/cctv-dashboard-plan.md`.
-
-**Defaults:** Supervisor add-on + Ingress (not a Lovelace card); discovery via HA `camera.*` only; no direct RTSP/NVR access in v1.
+**Locked defaults:** frontend panel/card only; discover existing HA cameras; stills-first grid; no Supervisor add-on.
