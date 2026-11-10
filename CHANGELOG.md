@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — 2026-11-10
+
+### Fixed
+
+- Event **Play** starts multi-cam mosaic recordings (signed media URLs + reliable muted autoplay kick)
+- Mosaic tiles **contain**-fit mixed aspects (no crop) for live and playback
+- Opening CCTV no longer keeps HA busy after navigate-away (streams/history fully unload)
+
+### Added
+
+- Shared detection timeline + saved detections persist for all users across HA reboot; purge only by retention days
+- HACS/repo camera brand icon
+
 ## 0.7.0 — 2026-11-10
 
 ### Fixed
