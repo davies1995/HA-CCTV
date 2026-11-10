@@ -1,0 +1,14 @@
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.Python
+.DS_Store
+*.egg-info/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.idea/
+.vscode/
