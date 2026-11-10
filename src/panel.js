@@ -30,6 +30,13 @@ class CctvDashboardPanel extends LitElement {
     };
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // Let the panel fill HA's content pane so desktop mosaic can size to the viewport.
+    this.style.display = "block";
+    this.style.height = "100%";
+  }
+
   render() {
     return html`
       <cctv-view

@@ -29,6 +29,7 @@ export class CctvStreamPlayer extends LitElement {
     muted: { type: Boolean },
     controls: { type: Boolean },
     large: { type: Boolean, reflect: true },
+    mosaic: { type: Boolean, reflect: true },
     eager: { type: Boolean },
     posterOnly: { type: Boolean, attribute: "poster-only" },
     _mode: { state: true },
@@ -56,6 +57,25 @@ export class CctvStreamPlayer extends LitElement {
       min-height: 220px;
     }
 
+    /* Desktop mosaic tiles: fill the grid cell instead of enforcing a tall min-height. */
+    :host([large][mosaic]) {
+      min-height: 0;
+      height: 100%;
+    }
+
+    @media (min-width: 801px) {
+      :host([large][mosaic]) {
+        min-height: 0;
+      }
+
+      :host([large][mosaic]) .media,
+      :host([large][mosaic]) ha-camera-stream,
+      :host([large][mosaic]) video,
+      :host([large][mosaic]) img {
+        min-height: 0;
+      }
+    }
+
     .media,
     ha-camera-stream,
     video,
@@ -74,6 +94,13 @@ export class CctvStreamPlayer extends LitElement {
     :host([large]) img {
       object-fit: contain;
       min-height: 220px;
+    }
+
+    :host([large][mosaic]) .media,
+    :host([large][mosaic]) ha-camera-stream,
+    :host([large][mosaic]) video,
+    :host([large][mosaic]) img {
+      min-height: 0;
     }
 
     .badge {
@@ -112,6 +139,7 @@ export class CctvStreamPlayer extends LitElement {
     this.muted = true;
     this.controls = false;
     this.large = false;
+    this.mosaic = false;
     this.eager = false;
     this.posterOnly = false;
     this._mode = "loading";
