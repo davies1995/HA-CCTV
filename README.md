@@ -59,7 +59,7 @@ muted: true
 
 ### Sidebar custom panel (all users)
 
-After HACS has added the module resource, add to `configuration.yaml` and restart Home Assistant:
+**HACS alone never creates a sidebar item.** After HACS installs the module, you must register the panel in `configuration.yaml` and restart Home Assistant.
 
 ```yaml
 panel_custom:
@@ -79,9 +79,18 @@ panel_custom:
       #     low_entity: camera.driveway_sub
 ```
 
+#### Sidebar checklist
+
+1. HACS shows **CCTV Dashboard** downloaded (prefer latest release, e.g. `v0.1.1`).
+2. **Settings → Dashboards → Resources** lists a JavaScript module for this repo (copy that URL).
+3. `configuration.yaml` contains the `panel_custom` block above.
+4. `module_url` **exactly matches** the HACS resource path (often `/hacsfiles/HA-CCTV/cctv-dashboard.js` or `/local/community/HA-CCTV/cctv-dashboard.js` — use whatever Resources shows).
+5. Restart Home Assistant Core (YAML change), then hard-reload the browser.
+6. Look for **CCTV** in the sidebar (not only a Lovelace card).
+
 `require_admin` stays **false** so every user sees the sidebar entry.
 
-If the panel fails to load, open **Settings → Dashboards → Resources**, copy the CCTV module URL HACS registered, and use that as `module_url`.
+Without step 3–5 you can still use the Lovelace cards from the card picker; you will **not** get a sidebar panel.
 
 ## Manual install (without HACS)
 
@@ -136,7 +145,7 @@ Output: `dist/cctv-dashboard.js`.
 
 ### Releasing for HACS
 
-Version source of truth: `package.json` `version` (currently **0.1.0**) and matching git tag `v0.1.0`.
+Version source of truth: `package.json` `version` (currently **0.1.1**) and matching git tag `v0.1.1`.
 
 1. Merge release-ready changes to `main`.
 2. Bump `version` in `package.json` / `src/cctv-dashboard.js` `VERSION` and update `CHANGELOG.md` for later releases.

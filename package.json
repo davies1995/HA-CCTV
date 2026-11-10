@@ -1,6 +1,6 @@
 {
   "name": "ha-cctv-dashboard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Home Assistant CCTV dashboard panel and Lovelace card for camera.* entities",
   "main": "dist/cctv-dashboard.js",
   "module": "dist/cctv-dashboard.js",
