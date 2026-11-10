@@ -1,9 +1,18 @@
 # Changelog
 
-## 0.1.0
+All notable changes to this project are documented in this file.
 
-- Initial HACS frontend release: custom panel + grid/single Lovelace cards
-- Live stream tiles (HA native / WebRTC / HLS / MJPEG / still)
-- Visible-only mosaic streaming with a max of 4 concurrent live streams
-- Per-camera stream quality (auto / high / balanced / low) using substream entities when available
-- Safe camera service controls (on/off/toggle, snapshot, motion) when registered
+## 0.1.0 — 2026-11-10
+
+First HACS-ready frontend release.
+
+### Added
+
+- Custom sidebar panel `cctv-dashboard-panel` (`panel_custom`, `require_admin: false`)
+- Lovelace cards `custom:cctv-cameras-card` (grid) and `custom:cctv-camera-card` (single)
+- Live stream tiles via HA native / WebRTC / HLS / MJPEG, with still fallback
+- Visible-only mosaic streaming (`IntersectionObserver`)
+- Max **4** concurrent live streams (`max_streams`, queued stills when over cap)
+- Per-camera quality: Auto / High / Balanced / Low (substream entity + transport preference)
+- Safe camera controls when services exist (on/off/toggle, snapshot, motion) + more-info
+- HACS packaging: `hacs.json`, release workflow, committed `dist/cctv-dashboard.js`

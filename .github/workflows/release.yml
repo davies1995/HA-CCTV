@@ -12,8 +12,10 @@ jobs:
     name: Build and attach dashboard module
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
+      - name: Checkout release tag
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -32,5 +34,6 @@ jobs:
           files: dist/cctv-dashboard.js
           fail_on_unmatched_files: true
           overwrite_files: true
+          tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -136,9 +136,13 @@ Output: `dist/cctv-dashboard.js`.
 
 ### Releasing for HACS
 
-1. Bump `version` in `package.json` and update `CHANGELOG.md`.
-2. Publish a GitHub release / tag (for example `v0.1.0`).
-3. The **Release CCTV Dashboard** workflow builds and attaches `dist/cctv-dashboard.js`.
+Version source of truth: `package.json` `version` (currently **0.1.0**) and matching git tag `v0.1.0`.
+
+1. Merge release-ready changes to `main`.
+2. Bump `version` in `package.json` / `src/cctv-dashboard.js` `VERSION` and update `CHANGELOG.md` for later releases.
+3. Publish a GitHub release tagged `vX.Y.Z` (target `main`).
+4. Attach `dist/cctv-dashboard.js` as a release asset (the **Release CCTV Dashboard** workflow does this on `release: published` once the workflow file is on `main`), **or** upload the asset manually when creating the release.
+5. In HACS, users install/update **CCTV Dashboard**; the version shown is the GitHub release tag.
 
 ### Layout
 
