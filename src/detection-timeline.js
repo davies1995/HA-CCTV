@@ -59,44 +59,77 @@ export class CctvDetectionTimeline extends LitElement {
     this._selected = null;
     this._timer = null;
     this._fetchToken = 0;
+    this._quietRefreshTimer = 0;
+    this._lastEntityKey = "";
+    this._onVisibility = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    this._timer = window.setInterval(() => {
-      this._now = Date.now();
-      this._refresh();
-    }, 30_000);
+    this._timer = window.setInterval(() => this._scheduleQuietRefresh(), 45_000);
+    this._onVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        this._scheduleQuietRefresh();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this._onVisibility);
+    }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._timer) window.clearInterval(this._timer);
+    if (this._quietRefreshTimer) window.clearTimeout(this._quietRefreshTimer);
+    if (this._onVisibility && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this._onVisibility);
+    }
   }
 
   updated(changed) {
     if (
-      changed.has("hass") ||
       changed.has("cameras") ||
       changed.has("sensorLinks") ||
       changed.has("_windowMs")
     ) {
       this._selected = null;
-      this._refresh();
+      this._refresh({ showLoading: true });
+      return;
+    }
+    // Avoid refetching HA history on every hass state tick.
+    if (changed.has("hass")) {
+      this._scheduleQuietRefresh();
     }
   }
 
-  async _refresh() {
+  _scheduleQuietRefresh() {
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (this._quietRefreshTimer) return;
+    this._quietRefreshTimer = window.setTimeout(() => {
+      this._quietRefreshTimer = 0;
+      this._refresh({ showLoading: false });
+    }, 2500);
+  }
+
+  /**
+   * @param {{ showLoading?: boolean }} [opts]
+   */
+  async _refresh(opts = {}) {
+    const showLoading = Boolean(opts.showLoading);
     const entityIds = this._linkedEntityIds();
+    const entityKey = `${entityIds.join(",")}|${this._windowMs}`;
     if (!this.hass || !entityIds.length) {
       this._rows = [];
       this._error = "";
       this._selected = null;
+      this._lastEntityKey = entityKey;
       return;
     }
 
     const token = ++this._fetchToken;
-    this._loading = true;
+    if (showLoading || entityKey !== this._lastEntityKey) {
+      this._loading = true;
+    }
     this._error = "";
     const end = Date.now();
     const start = end - this._windowMs;
@@ -109,6 +142,7 @@ export class CctvDetectionTimeline extends LitElement {
         new Date(end)
       );
       if (token !== this._fetchToken) return;
+      this._lastEntityKey = entityKey;
       this._rows = this._buildRows(history, start, end);
       this._now = end;
       this._syncSelected();

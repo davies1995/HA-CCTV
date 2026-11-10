@@ -171,12 +171,28 @@ export class CctvStreamPlayer extends LitElement {
     this._stopLive();
   }
 
+  /**
+   * @param {Map<string, unknown>} changed
+   */
+  shouldUpdate(changed) {
+    if (!changed.has("hass")) return true;
+    if (changed.size > 1) return true;
+    return this._cameraHassChanged(changed.get("hass"), this.hass);
+  }
+
   updated(changed) {
     if (changed.has("eager") || changed.has("posterOnly")) {
       this._bindObserver();
     }
+
+    let hassRelevant = changed.has("hass");
+    if (hassRelevant && changed.size === 1) {
+      const prev = changed.get("hass");
+      hassRelevant = this._cameraHassChanged(prev, this.hass);
+    }
+
     if (
-      changed.has("hass") ||
+      hassRelevant ||
       changed.has("camera") ||
       changed.has("config") ||
       changed.has("quality") ||
@@ -193,6 +209,25 @@ export class CctvStreamPlayer extends LitElement {
     if (changed.has("_mode") || changed.has("camera")) {
       this.updateComplete.then(() => this._probeMediaSize());
     }
+  }
+
+  /**
+   * Ignore unrelated HA state churn so live streams are not restarted.
+   * @param {any} prev
+   * @param {any} next
+   */
+  _cameraHassChanged(prev, next) {
+    const entityId = this.camera?.entityId;
+    if (!entityId) return true;
+    const a = prev?.states?.[entityId];
+    const b = next?.states?.[entityId];
+    if (a === b) return false;
+    if (!a || !b) return true;
+    return (
+      a.state !== b.state ||
+      a.last_changed !== b.last_changed ||
+      a.attributes?.access_token !== b.attributes?.access_token
+    );
   }
 
   get _effectiveQuality() {
