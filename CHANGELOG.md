@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.5.0 — 2026-11-10
+
+### Changed
+
+- Detection sensor links are **site-wide** (shared for all HA users); mosaic camera selection stays per-user
+- Detection timeline grouped by **type** (person / car / animal / package / …); overlapping same-type sensors merge into one event
+
 ## 0.4.0 — 2026-11-10
 
 ### Added
