@@ -21,6 +21,12 @@ import {
   writeStoredQuality,
 } from "./quality.js";
 import {
+  cellsToPercentStyles,
+  DEFAULT_ASPECT,
+  normalizeAspect,
+  packAspectMosaic,
+} from "./mosaic-pack.js";
+import {
   deleteRecording,
   listRecordings,
   loadSharedConfig,
@@ -63,6 +69,11 @@ export class CctvView extends LitElement {
     /** @type {Array<any>} */
     _sessions: { state: true },
     _recordDir: { state: true },
+    _isDesktop: { state: true },
+    /** @type {Record<string, number>} */
+    _aspectById: { state: true },
+    /** @type {Record<string, string>} */
+    _packStyles: { state: true },
   };
 
   static styles = sharedStyles;
@@ -87,14 +98,116 @@ export class CctvView extends LitElement {
     this._sessions = [];
     this._recordDir = "";
     this._loadedForUser = null;
+    this._isDesktop = false;
+    this._aspectById = {};
+    this._packStyles = {};
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
+    this._packObserver = null;
+    this._mq = null;
+    this._onMq = null;
+    this._packRaf = 0;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    if (typeof window !== "undefined" && window.matchMedia) {
+      this._mq = window.matchMedia("(min-width: 801px)");
+      this._onMq = () => {
+        this._isDesktop = this._mq.matches;
+        this._schedulePack();
+      };
+      this._isDesktop = this._mq.matches;
+      if (this._mq.addEventListener) this._mq.addEventListener("change", this._onMq);
+      else this._mq.addListener(this._onMq);
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._mq && this._onMq) {
+      if (this._mq.removeEventListener) this._mq.removeEventListener("change", this._onMq);
+      else this._mq.removeListener(this._onMq);
+    }
+    if (this._packObserver) {
+      this._packObserver.disconnect();
+      this._packObserver = null;
+    }
+    if (this._packRaf) cancelAnimationFrame(this._packRaf);
   }
 
   updated(changed) {
     if (this.panelMode && (changed.has("hass") || changed.has("panelMode"))) {
       this._ensureSelectionLoaded();
     }
+    if (
+      this.panelMode &&
+      (changed.has("_visibleIds") ||
+        changed.has("_isDesktop") ||
+        changed.has("_detailId") ||
+        changed.has("_pickerOpen") ||
+        changed.has("_settingsOpen") ||
+        changed.has("_aspectById"))
+    ) {
+      this._schedulePack();
+    }
+    this.updateComplete.then(() => this._bindPackObserver());
+  }
+
+  _bindPackObserver() {
+    const el = this.renderRoot?.querySelector?.(".layout-pack");
+    if (!el) {
+      if (this._packObserver) {
+        this._packObserver.disconnect();
+        this._packObserver = null;
+      }
+      return;
+    }
+    if (this._packObserver) this._packObserver.disconnect();
+    if (typeof ResizeObserver === "undefined") {
+      this._recomputePack();
+      return;
+    }
+    this._packObserver = new ResizeObserver(() => this._schedulePack());
+    this._packObserver.observe(el);
+    this._recomputePack();
+  }
+
+  _schedulePack() {
+    if (this._packRaf) cancelAnimationFrame(this._packRaf);
+    this._packRaf = requestAnimationFrame(() => {
+      this._packRaf = 0;
+      this._recomputePack();
+    });
+  }
+
+  _recomputePack() {
+    if (!this._isDesktop || !this.panelMode || this._detailId) {
+      if (Object.keys(this._packStyles).length) this._packStyles = {};
+      return;
+    }
+    const el = this.renderRoot?.querySelector?.(".layout-pack");
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const boxW = Math.max(0, rect.width);
+    const boxH = Math.max(0, rect.height);
+    if (boxW < 8 || boxH < 8) return;
+
+    const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
+    const items = cameras.map((cam) => ({
+      id: cam.entityId,
+      aspect: normalizeAspect(this._aspectById[cam.entityId] || DEFAULT_ASPECT),
+    }));
+    const cells = packAspectMosaic(items, boxW, boxH, 10);
+    this._packStyles = cellsToPercentStyles(cells, boxW, boxH);
+  }
+
+  _onMediaAspect(event) {
+    const entityId = event?.detail?.entityId;
+    const aspect = normalizeAspect(event?.detail?.aspect);
+    if (!entityId) return;
+    if (Math.abs((this._aspectById[entityId] || 0) - aspect) < 0.01) return;
+    this._aspectById = { ...this._aspectById, [entityId]: aspect };
   }
 
   async _ensureSelectionLoaded() {
@@ -614,44 +727,64 @@ export class CctvView extends LitElement {
       `;
     }
 
-    const count = Math.min(cameras.length, 4);
+    const list = cameras.slice(0, 4);
+    // Mobile: previous stacked layout-N. Desktop: aspect-aware absolute pack.
+    if (!this._isDesktop) {
+      const count = list.length;
+      return html`
+        <div class="layout layout-${count}" role="list">
+          ${list.map((cam) => this._renderLayoutTile(cam, false))}
+        </div>
+      `;
+    }
+
     return html`
-      <div class="layout layout-${count}" role="list">
-        ${cameras.slice(0, 4).map((cam) => {
-          const quality = resolveQuality(this.config, cam.entityId);
-          const linked = this._linksFor(cam.entityId).length;
-          return html`
-            <article class="tile layout-tile" role="listitem">
-              <div class="tile-media">
-                <cctv-stream-player
-                  large
-                  mosaic
-                  eager
-                  .hass=${this.hass}
-                  .camera=${cam}
-                  .config=${this.config}
-                  .quality=${quality}
-                  context="mosaic"
-                  muted
-                ></cctv-stream-player>
-              </div>
-              <button
-                type="button"
-                class="tile-body tile-open"
-                @click=${() => this._openDetail(cam.entityId)}
-              >
-                <p class="tile-title">${cam.name}</p>
-                <p class="tile-meta">
-                  <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
-                  ${linked
-                    ? html` · ${linked} detection`
-                    : nothing}
-                </p>
-              </button>
-            </article>
-          `;
-        })}
+      <div
+        class="layout layout-pack"
+        role="list"
+        @cctv-media-aspect=${this._onMediaAspect}
+      >
+        ${list.map((cam) => this._renderLayoutTile(cam, true))}
       </div>
+    `;
+  }
+
+  _renderLayoutTile(cam, packed) {
+    const quality = resolveQuality(this.config, cam.entityId);
+    const linked = this._linksFor(cam.entityId).length;
+    const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
+    const positioned = Boolean(packed && packStyle);
+    return html`
+      <article
+        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
+        role="listitem"
+        style=${positioned ? packStyle : nothing}
+      >
+        <div class="tile-media">
+          <cctv-stream-player
+            large
+            ?mosaic=${packed}
+            eager
+            .hass=${this.hass}
+            .camera=${cam}
+            .config=${this.config}
+            .quality=${quality}
+            context="mosaic"
+            muted
+          ></cctv-stream-player>
+        </div>
+        <button
+          type="button"
+          class="tile-body tile-open ${packed ? "pack-caption" : ""}"
+          @click=${() => this._openDetail(cam.entityId)}
+        >
+          <p class="tile-title">${cam.name}</p>
+          <p class="tile-meta">
+            <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
+            ${linked ? html` · ${linked} detection` : nothing}
+          </p>
+        </button>
+      </article>
     `;
   }
 
