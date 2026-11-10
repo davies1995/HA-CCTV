@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 — 2026-11-10
 
 ### Added
 
@@ -8,6 +8,7 @@
 
 ### Changed
 
+- Force-aspect hint shortened to exactly “Shared for all users.”
 - Removed the **1920×2560 doorbell (3:4)** force-aspect preset; use **3:4** or **Custom W:H** (e.g. `1920:2560`) instead
 
 ## 0.12.0 — 2026-11-10
