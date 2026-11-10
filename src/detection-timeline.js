@@ -17,6 +17,11 @@ const WINDOW_OPTIONS = [
   { value: 24 * 60 * 60 * 1000, label: "24h" },
 ];
 
+/** History poll while the CCTV panel is visible (no work when suspended/away). */
+const HISTORY_POLL_MS = 90_000;
+/** Cap linked sensors per history WS call to keep HA history light. */
+const MAX_HISTORY_ENTITIES = 24;
+
 /**
  * Horizontal detection timeline.
  * Lanes stay grouped by type (person/car/…); overlapping same-type sensors
@@ -31,6 +36,8 @@ export class CctvDetectionTimeline extends LitElement {
     sensorLinks: { attribute: false },
     /** camera id → friendly name */
     cameraNames: { attribute: false },
+    /** When false, stop timers and cancel in-flight history work. */
+    active: { type: Boolean },
     _windowMs: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -51,6 +58,7 @@ export class CctvDetectionTimeline extends LitElement {
     this.cameras = [];
     this.sensorLinks = {};
     this.cameraNames = {};
+    this.active = true;
     this._windowMs = 60 * 60 * 1000;
     this._loading = false;
     this._error = "";
@@ -66,27 +74,34 @@ export class CctvDetectionTimeline extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._timer = window.setInterval(() => this._scheduleQuietRefresh(), 45_000);
     this._onVisibility = () => {
-      if (typeof document !== "undefined" && !document.hidden) {
-        this._scheduleQuietRefresh();
+      if (typeof document !== "undefined" && document.hidden) {
+        this._pausePolling();
+        return;
       }
+      if (this.active) this._scheduleQuietRefresh();
     };
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this._onVisibility);
     }
+    if (this.active) this._startPolling();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._timer) window.clearInterval(this._timer);
-    if (this._quietRefreshTimer) window.clearTimeout(this._quietRefreshTimer);
+    this._stopPolling();
     if (this._onVisibility && typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this._onVisibility);
     }
   }
 
   updated(changed) {
+    if (changed.has("active")) {
+      if (this.active) this._startPolling();
+      else this._stopPolling();
+    }
+    if (!this.active) return;
+
     if (
       changed.has("cameras") ||
       changed.has("sensorLinks") ||
@@ -102,7 +117,37 @@ export class CctvDetectionTimeline extends LitElement {
     }
   }
 
+  _startPolling() {
+    this._pausePolling();
+    if (!this.active) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    this._timer = window.setInterval(
+      () => this._scheduleQuietRefresh(),
+      HISTORY_POLL_MS
+    );
+    this._refresh({ showLoading: !this._rows.length });
+  }
+
+  _pausePolling() {
+    if (this._timer) {
+      window.clearInterval(this._timer);
+      this._timer = null;
+    }
+    if (this._quietRefreshTimer) {
+      window.clearTimeout(this._quietRefreshTimer);
+      this._quietRefreshTimer = 0;
+    }
+  }
+
+  _stopPolling() {
+    this._pausePolling();
+    // Invalidate in-flight history responses so they cannot apply after leave.
+    this._fetchToken += 1;
+    this._loading = false;
+  }
+
   _scheduleQuietRefresh() {
+    if (!this.active) return;
     if (typeof document !== "undefined" && document.hidden) return;
     if (this._quietRefreshTimer) return;
     this._quietRefreshTimer = window.setTimeout(() => {
@@ -115,8 +160,11 @@ export class CctvDetectionTimeline extends LitElement {
    * @param {{ showLoading?: boolean }} [opts]
    */
   async _refresh(opts = {}) {
+    if (!this.active) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+
     const showLoading = Boolean(opts.showLoading);
-    const entityIds = this._linkedEntityIds();
+    const entityIds = this._linkedEntityIds().slice(0, MAX_HISTORY_ENTITIES);
     const entityKey = `${entityIds.join(",")}|${this._windowMs}`;
     if (!this.hass || !entityIds.length) {
       this._rows = [];
@@ -141,13 +189,13 @@ export class CctvDetectionTimeline extends LitElement {
         new Date(start),
         new Date(end)
       );
-      if (token !== this._fetchToken) return;
+      if (token !== this._fetchToken || !this.active) return;
       this._lastEntityKey = entityKey;
       this._rows = this._buildRows(history, start, end);
       this._now = end;
       this._syncSelected();
     } catch (err) {
-      if (token !== this._fetchToken) return;
+      if (token !== this._fetchToken || !this.active) return;
       this._error = err?.message || "Could not load detection history";
       this._rows = this._buildRows({}, start, end);
       this._syncSelected();

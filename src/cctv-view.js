@@ -84,6 +84,11 @@ export class CctvView extends LitElement {
     _packStyles: { state: true },
     /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[], windowStart: number, windowEnd: number } | null} */
     _playback: { state: true },
+    /**
+     * Panel/resources active. HA may keep the panel mounted for minutes after
+     * navigate-away (suspendWhenHidden); we flip this false immediately.
+     */
+    _panelActive: { state: true },
   };
 
   static styles = sharedStyles;
@@ -112,6 +117,7 @@ export class CctvView extends LitElement {
     this._aspectById = {};
     this._packStyles = {};
     this._playback = null;
+    this._panelActive = true;
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
     this._packObserver = null;
@@ -128,6 +134,10 @@ export class CctvView extends LitElement {
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
     this._lastHassSig = "";
+    this._visibilityIo = null;
+    this._onDocVisibility = null;
+    this._loadToken = 0;
+    this._everVisible = false;
   }
 
   /**
@@ -135,6 +145,10 @@ export class CctvView extends LitElement {
    * @param {Map<string, unknown>} changed
    */
   shouldUpdate(changed) {
+    if (this.panelMode && !this._panelActive && !changed.has("_panelActive")) {
+      // While suspended after navigate-away, ignore hass spam entirely.
+      if (changed.has("hass") && changed.size === 1) return false;
+    }
     if (!changed.has("hass")) return true;
     if (changed.size > 1) return true;
     const prev = changed.get("hass");
@@ -179,6 +193,7 @@ export class CctvView extends LitElement {
     if (typeof window !== "undefined" && window.matchMedia) {
       this._mq = window.matchMedia("(min-width: 801px)");
       this._onMq = () => {
+        if (!this._panelActive) return;
         this._isDesktop = this._mq.matches;
         this._schedulePack();
       };
@@ -186,34 +201,163 @@ export class CctvView extends LitElement {
       if (this._mq.addEventListener) this._mq.addEventListener("change", this._onMq);
       else this._mq.addListener(this._onMq);
     }
+    this._bindPanelVisibility();
+    // Re-entering the panel (HA may remount after suspendWhenHidden).
+    this._setPanelActive(true);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._setPanelActive(false);
+    this._unbindPanelVisibility();
     if (this._mq && this._onMq) {
       if (this._mq.removeEventListener) this._mq.removeEventListener("change", this._onMq);
       else this._mq.removeListener(this._onMq);
     }
+    this._tearDownObservers();
+  }
+
+  /**
+   * HA's partial-panel-resolver can keep this panel mounted for ~5 minutes
+   * after sidebar navigate-away. IntersectionObserver catches that immediately.
+   */
+  _bindPanelVisibility() {
+    if (!this.panelMode) return;
+    this._unbindPanelVisibility();
+
+    this._onDocVisibility = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        this._setPanelActive(false);
+      } else if (this.isConnected) {
+        this._setPanelActive(this._isPanelOnScreen());
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this._onDocVisibility);
+    }
+
+    if (typeof IntersectionObserver === "undefined") return;
+    this._visibilityIo = new IntersectionObserver(
+      (entries) => {
+        const onScreen = entries.some(
+          (entry) => entry.isIntersecting && entry.intersectionRatio > 0
+        );
+        if (typeof document !== "undefined" && document.hidden) {
+          this._setPanelActive(false);
+          return;
+        }
+        if (onScreen) {
+          this._everVisible = true;
+          this._setPanelActive(true);
+          return;
+        }
+        // Ignore the initial 0-intersection before first layout paint.
+        if (this._everVisible) this._setPanelActive(false);
+      },
+      { threshold: [0, 0.01] }
+    );
+    this._visibilityIo.observe(this);
+  }
+
+  _unbindPanelVisibility() {
+    if (this._visibilityIo) {
+      this._visibilityIo.disconnect();
+      this._visibilityIo = null;
+    }
+    if (this._onDocVisibility && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this._onDocVisibility);
+      this._onDocVisibility = null;
+    }
+  }
+
+  _isPanelOnScreen() {
+    if (!this.isConnected) return false;
+    if (typeof document !== "undefined" && document.hidden) return false;
+    const rect = this.getBoundingClientRect?.();
+    if (!rect) return true;
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  /**
+   * @param {boolean} active
+   */
+  _setPanelActive(active) {
+    const next = Boolean(active);
+    if (this._panelActive === next) {
+      if (!next) this._suspendResources();
+      return;
+    }
+    this._panelActive = next;
+    if (next) {
+      this._status = this._status === "Suspended — streams unloaded" ? "" : this._status;
+      this._schedulePack();
+    } else {
+      this._suspendResources();
+    }
+  }
+
+  /** Unload streams/playback/timers/observers while panel is away. */
+  _suspendResources() {
+    this._loadToken += 1;
+    this._teardownPlaybackMedia();
+    this._playback = null;
+    this._playbackIndex = new Map();
+    this._playbackSeek = new Map();
+    this._playbackDone = new Map();
+    this._tearDownObservers();
+    // Stop media before Lit removes the nodes (HA may keep this panel mounted).
+    this._unloadStreamPlayers();
+    if (this.panelMode) {
+      this._status = "Suspended — streams unloaded";
+    }
+  }
+
+  _tearDownObservers() {
     if (this._packObserver) {
       this._packObserver.disconnect();
       this._packObserver = null;
+      this._packObservedEl = null;
     }
-    if (this._packRaf) cancelAnimationFrame(this._packRaf);
+    if (this._packRaf) {
+      cancelAnimationFrame(this._packRaf);
+      this._packRaf = 0;
+    }
+  }
+
+  _unloadStreamPlayers() {
+    const root = this.renderRoot || this;
+    root.querySelectorAll?.("cctv-stream-player").forEach((el) => {
+      try {
+        el.active = false;
+        el._unloadCompletely?.();
+      } catch {
+        /* ignore */
+      }
+    });
   }
 
   updated(changed) {
-    if (this.panelMode && (changed.has("hass") || changed.has("panelMode"))) {
+    if (!this._panelActive && this.panelMode) {
+      if (changed.has("_panelActive") && this._panelActive) {
+        /* resumed below */
+      } else {
+        return;
+      }
+    }
+    if (this.panelMode && this._panelActive && (changed.has("hass") || changed.has("panelMode") || changed.has("_panelActive"))) {
       this._ensureSelectionLoaded();
     }
     if (
       this.panelMode &&
+      this._panelActive &&
       (changed.has("_visibleIds") ||
         changed.has("_isDesktop") ||
         changed.has("_detailId") ||
         changed.has("_pickerOpen") ||
         changed.has("_settingsOpen") ||
         changed.has("_aspectById") ||
-        changed.has("_playback"))
+        changed.has("_playback") ||
+        changed.has("_panelActive"))
     ) {
       this._schedulePack();
       this.updateComplete.then(() => this._bindPackObserver());
@@ -246,6 +390,7 @@ export class CctvView extends LitElement {
   }
 
   _schedulePack() {
+    if (!this._panelActive) return;
     if (this._packRaf) cancelAnimationFrame(this._packRaf);
     this._packRaf = requestAnimationFrame(() => {
       this._packRaf = 0;
@@ -284,15 +429,18 @@ export class CctvView extends LitElement {
   }
 
   async _ensureSelectionLoaded() {
+    if (!this._panelActive) return;
     const userId = this.hass?.user?.id || "default";
     if (!this.hass || this._loadedForUser === userId) return;
     this._loadedForUser = userId;
     this._selectionReady = false;
+    const token = ++this._loadToken;
 
     const [userData, shared] = await Promise.all([
       loadPanelData(this.hass),
       loadSharedConfig(this.hass),
     ]);
+    if (token !== this._loadToken || !this._panelActive) return;
 
     const all = this._cameras().map((c) => c.entityId);
     if (userData?.selectedCameras?.length) {
@@ -316,6 +464,7 @@ export class CctvView extends LitElement {
     ) {
       try {
         const saved = await saveSensorLinks(this.hass, legacy);
+        if (token !== this._loadToken || !this._panelActive) return;
         links = saved?.sensor_links
           ? Object.fromEntries(
               Object.entries(saved.sensor_links).map(([k, v]) => [k, v])
@@ -341,7 +490,11 @@ export class CctvView extends LitElement {
 
     this._selectionReady = true;
     this._loadDeviceMap();
-    this._sessions = await listRecordings(this.hass);
+    // Defer recordings index until Saved detections is needed / refreshed.
+    if (!this._sessions?.length) {
+      this._sessions = await listRecordings(this.hass);
+      if (token !== this._loadToken || !this._panelActive) return;
+    }
   }
 
   async _loadDeviceMap() {
@@ -772,6 +925,16 @@ export class CctvView extends LitElement {
       `;
     }
 
+    // Navigated away but HA still holds the panel in DOM — keep UI minimal
+    // so no live streams / history polling / playback stay active.
+    if (this.panelMode && !this._panelActive) {
+      return html`
+        <div class="panel-wrap wrap">
+          <p class="placeholder">CCTV paused — streams unloaded while you are away.</p>
+        </div>
+      `;
+    }
+
     const detail = cameras.find((c) => c.entityId === this._detailId) || null;
     const visible = this.panelMode
       ? this._visibleCameras(cameras)
@@ -779,6 +942,7 @@ export class CctvView extends LitElement {
 
     const cameraNames = this._stableCameraNames(cameras);
     const playing = Boolean(this._playback?.playing);
+    const streamsActive = this._panelActive;
 
     return html`
       <div class=${this.panelMode ? "panel-wrap wrap" : "wrap"}>
@@ -832,9 +996,9 @@ export class CctvView extends LitElement {
           : nothing}
 
         ${detail
-          ? this._renderDetail(detail)
+          ? this._renderDetail(detail, streamsActive)
           : this.panelMode
-            ? this._renderLayout(visible)
+            ? this._renderLayout(visible, streamsActive)
             : this._renderCardGrid(cameras)}
 
         ${this.panelMode && !detail
@@ -844,6 +1008,7 @@ export class CctvView extends LitElement {
                 .cameras=${visible.map((c) => c.entityId)}
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${cameraNames}
+                .active=${streamsActive}
                 @cctv-play-detection=${this._onPlayDetection}
               ></cctv-detection-timeline>
               ${this._renderRecordings()}
@@ -1018,7 +1183,7 @@ export class CctvView extends LitElement {
     `;
   }
 
-  _renderLayout(cameras) {
+  _renderLayout(cameras, streamsActive = true) {
     if (!cameras.length) {
       return html`
         <p class="empty">
@@ -1034,7 +1199,7 @@ export class CctvView extends LitElement {
       const count = list.length;
       return html`
         <div class="layout layout-${count}" role="list">
-          ${list.map((cam) => this._renderLayoutTile(cam, false))}
+          ${list.map((cam) => this._renderLayoutTile(cam, false, streamsActive))}
         </div>
       `;
     }
@@ -1045,12 +1210,12 @@ export class CctvView extends LitElement {
         role="list"
         @cctv-media-aspect=${this._onMediaAspect}
       >
-        ${list.map((cam) => this._renderLayoutTile(cam, true))}
+        ${list.map((cam) => this._renderLayoutTile(cam, true, streamsActive))}
       </div>
     `;
   }
 
-  _renderLayoutTile(cam, packed) {
+  _renderLayoutTile(cam, packed, streamsActive = true) {
     const quality = resolveQuality(this.config, cam.entityId);
     const linked = this._linksFor(cam.entityId).length;
     const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
@@ -1087,6 +1252,7 @@ export class CctvView extends LitElement {
                   large
                   ?mosaic=${packed}
                   eager
+                  .active=${streamsActive}
                   .hass=${this.hass}
                   .camera=${cam}
                   .config=${this.config}
@@ -1157,7 +1323,7 @@ export class CctvView extends LitElement {
     `;
   }
 
-  _renderDetail(cam) {
+  _renderDetail(cam, streamsActive = true) {
     const actions = availableCameraActions(this.hass, cam);
     const quality = resolveQuality(this.config, cam.entityId);
     const streamCam = resolveStreamCamera(
@@ -1176,6 +1342,7 @@ export class CctvView extends LitElement {
         <cctv-stream-player
           large
           eager
+          .active=${streamsActive}
           .hass=${this.hass}
           .camera=${cam}
           .config=${this.config}
