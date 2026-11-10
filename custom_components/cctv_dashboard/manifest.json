@@ -1,0 +1,11 @@
+{
+  "domain": "cctv_dashboard",
+  "name": "CCTV Dashboard",
+  "codeowners": ["@davies1995"],
+  "config_flow": true,
+  "documentation": "https://github.com/davies1995/HA-CCTV",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/davies1995/HA-CCTV/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CCTV Dashboard",
+        "description": "Adds a CCTV item to the sidebar and enables the Lovelace cards. No configuration.yaml edits are required.",
+        "data": {
+          "sidebar_title": "Sidebar title",
+          "title": "Dashboard title",
+          "max_streams": "Max concurrent live streams",
+          "quality": "Default stream quality"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "CCTV Dashboard is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "CCTV Dashboard options",
+        "data": {
+          "sidebar_title": "Sidebar title",
+          "title": "Dashboard title",
+          "max_streams": "Max concurrent live streams",
+          "quality": "Default stream quality"
+        }
+      }
+    }
+  }
+}
