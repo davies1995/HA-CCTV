@@ -1,12 +1,18 @@
-/** Persist panel camera selection in Home Assistant user data (no YAML). */
+/** Persist panel settings in Home Assistant user data (no YAML). */
+
+import { normalizeSensorLinks } from "./detection-sensors.js";
 
 export const PANEL_SELECTION_KEY = "cctv_dashboard";
 
 /**
- * @param {import("home-assistant-js-websocket").HomeAssistant | any} hass
- * @returns {Promise<string[] | null>}
+ * @typedef {{ selectedCameras: string[], sensorLinks: Record<string, string[]> }} PanelData
  */
-export async function loadPanelSelection(hass) {
+
+/**
+ * @param {any} hass
+ * @returns {Promise<PanelData | null>}
+ */
+export async function loadPanelData(hass) {
   if (!hass?.callWS) return null;
   try {
     const result = await hass.callWS({
@@ -14,13 +20,68 @@ export async function loadPanelSelection(hass) {
       key: PANEL_SELECTION_KEY,
     });
     const value = result?.value ?? result;
-    const selected = value?.selectedCameras;
-    if (!Array.isArray(selected)) return null;
-    return selected.map(String).filter((id) => id.startsWith("camera."));
+    if (!value || typeof value !== "object") return null;
+
+    const selected = Array.isArray(value.selectedCameras)
+      ? value.selectedCameras.map(String).filter((id) => id.startsWith("camera."))
+      : [];
+
+    return {
+      selectedCameras: selected,
+      sensorLinks: normalizeSensorLinks(value.sensorLinks),
+    };
   } catch (err) {
-    console.warn("CCTV: failed to load panel selection", err);
+    console.warn("CCTV: failed to load panel data", err);
     return null;
   }
+}
+
+/**
+ * @param {import("home-assistant-js-websocket").HomeAssistant | any} hass
+ * @returns {Promise<string[] | null>}
+ */
+export async function loadPanelSelection(hass) {
+  const data = await loadPanelData(hass);
+  return data ? data.selectedCameras : null;
+}
+
+/**
+ * @param {any} hass
+ * @param {Partial<PanelData>} patch
+ * @param {PanelData} [current]
+ */
+export async function savePanelData(hass, patch, current) {
+  if (!hass?.callWS) return;
+
+  const base = current || (await loadPanelData(hass)) || {
+    selectedCameras: [],
+    sensorLinks: {},
+  };
+
+  const selectedCameras = [
+    ...new Set(
+      (patch.selectedCameras ?? base.selectedCameras)
+        .map(String)
+        .filter((id) => id.startsWith("camera."))
+    ),
+  ].slice(0, 4);
+
+  const sensorLinks = normalizeSensorLinks(
+    patch.sensorLinks !== undefined ? patch.sensorLinks : base.sensorLinks
+  );
+
+  try {
+    await hass.callWS({
+      type: "frontend/set_user_data",
+      key: PANEL_SELECTION_KEY,
+      value: { selectedCameras, sensorLinks },
+    });
+  } catch (err) {
+    console.warn("CCTV: failed to save panel data", err);
+    throw err;
+  }
+
+  return { selectedCameras, sensorLinks };
 }
 
 /**
@@ -28,18 +89,5 @@ export async function loadPanelSelection(hass) {
  * @param {string[]} selectedCameras
  */
 export async function savePanelSelection(hass, selectedCameras) {
-  if (!hass?.callWS) return;
-  const cleaned = [...new Set(selectedCameras.map(String))]
-    .filter((id) => id.startsWith("camera."))
-    .slice(0, 4);
-  try {
-    await hass.callWS({
-      type: "frontend/set_user_data",
-      key: PANEL_SELECTION_KEY,
-      value: { selectedCameras: cleaned },
-    });
-  } catch (err) {
-    console.warn("CCTV: failed to save panel selection", err);
-    throw err;
-  }
+  return savePanelData(hass, { selectedCameras });
 }
