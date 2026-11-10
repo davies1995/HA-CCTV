@@ -49,7 +49,6 @@ FORCE_ASPECT_LABELS = {
     "1:1",
     "3:2",
     "2:3",
-    "1920:2560",  # common doorbell portrait (same ratio as 3:4)
 }
 
 QUALITY_VALUES = {"auto", "high", "balanced", "low"}

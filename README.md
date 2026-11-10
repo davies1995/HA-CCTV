@@ -60,7 +60,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - Uses Home Assistant `camera.record` (≈30s chunks + lookback) while the event is active; if record fails, falls back to `camera.snapshot`
 - Files land under the HA **media** folder (`…/cctv_dashboard/recordings`) when media dirs are configured; otherwise under `www`
 - Multi-camera continuous video is CPU/disk heavy — ensure a writable media mount and that cameras support streaming
-- Sensor links, quality, and force-aspect overrides are stored in the integration (shared). In the panel, quality / force-aspect are drafts until you press **Save quality & aspect** (presets include **1920×2560** doorbell / 3:4, plus custom `W:H`)
+- Sensor links, quality, and force-aspect overrides are stored in the integration (shared). In the panel, quality / force-aspect are drafts until you press **Save quality & aspect** (ratio presets plus custom `W:H`)
 - Not a full NVR: no guaranteed pre-roll beyond `lookback`, and overlapping long events create multiple chunk files
 
 ## Lovelace cards (optional)

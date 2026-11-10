@@ -61,17 +61,18 @@ const twoPortrait = packAspectMosaic(
 const area = twoPortrait.reduce((s, c) => s + c.width * c.height, 0);
 assert(area > boxW * boxH * 0.35, "two portraits use meaningful area");
 
-assert(normalizeForceAspectLabel("1920:2560") === "1920:2560", "doorbell label");
-assert(normalizeForceAspectLabel("1920×2560") === "1920:2560", "doorbell ×");
+assert(normalizeForceAspectLabel("1920:2560") === "1920:2560", "custom pixels");
+assert(normalizeForceAspectLabel("1920×2560") === "1920:2560", "custom ×");
 assert(normalizeForceAspectLabel("3:4") === "3:4", "3:4 preset");
 assert(normalizeForceAspectLabel("1080x1920") === "1080:1920", "custom WxH");
 assert(normalizeForceAspectLabel("custom") === "auto", "custom sentinel");
 assert(
   Math.abs(forceAspectRatio("1920:2560") - 1920 / 2560) < 1e-9,
-  "doorbell ratio"
+  "custom ratio"
 );
-assert(forceAspectSelectValue("1920:2560") === "1920:2560", "preset select");
+assert(forceAspectSelectValue("1920:2560") === "custom", "pixels use custom");
 assert(forceAspectSelectValue("1080:1920") === "custom", "custom select");
+assert(forceAspectSelectValue("3:4") === "3:4", "preset select");
 assert(
   normalizeForceAspectMap({ "camera.front": "1920x2560" })["camera.front"] ===
     "1920:2560",
