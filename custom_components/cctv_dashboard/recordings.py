@@ -19,6 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    MEDIA_API_URL_BASE,
     RECORD_CHUNK_SECONDS,
     RECORD_LOOKBACK_SECONDS,
     RECORDINGS_URL_BASE,
@@ -30,6 +31,12 @@ _LOGGER = logging.getLogger(__name__)
 
 ON_STATES = {STATE_ON, "true", "detected", "active", "home", "1"}
 SAFE_NAME = re.compile(r"[^a-zA-Z0-9._-]+")
+
+
+def clip_media_url(filename: str) -> str:
+    """Public authenticated media URL for a clip filename."""
+    name = Path(str(filename)).name
+    return f"{MEDIA_API_URL_BASE}/{name}"
 
 # Keep in sync with frontend detection-sensors.js kind tokens.
 _KIND_TOKENS: list[tuple[str, str, tuple[str, ...]]] = [
@@ -386,7 +393,7 @@ class RecordingManager:
             return {
                 "camera_id": camera_id,
                 "path": str(filename),
-                "url": f"{RECORDINGS_URL_BASE}/{filename.name}",
+                "url": clip_media_url(filename.name),
                 "kind": "video",
                 "seq": seq,
                 "started": stamp,
@@ -410,7 +417,7 @@ class RecordingManager:
                 return {
                     "camera_id": camera_id,
                     "path": str(snap),
-                    "url": f"{RECORDINGS_URL_BASE}/{snap.name}",
+                    "url": clip_media_url(snap.name),
                     "kind": "snapshot",
                     "seq": seq,
                     "started": stamp,
@@ -614,17 +621,33 @@ class RecordingManager:
         return size
 
     def _enrich_session(self, meta: dict[str, Any]) -> dict[str, Any]:
-        """Attach on-disk file sizes for the Saved detections UI / playback."""
+        """Attach on-disk file sizes + rewrite clip URLs for authenticated API media."""
         clips_out: list[dict[str, Any]] = []
         total = 0
         for clip in meta.get("clips") or []:
             path = Path(clip.get("path") or "")
+            name = path.name
+            if not name:
+                legacy = str(clip.get("url") or "")
+                name = Path(legacy.split("?", 1)[0]).name
             size = self._cached_file_size(path) if path.name else 0
             total += size
-            clips_out.append({**clip, "size": size})
+            url = clip_media_url(name) if name else str(clip.get("url") or "")
+            # Keep a legacy static URL hint for older frontends; prefer API path.
+            clips_out.append(
+                {
+                    **clip,
+                    "size": size,
+                    "url": url,
+                    "legacy_url": (
+                        f"{RECORDINGS_URL_BASE}/{name}" if name else clip.get("url")
+                    ),
+                }
+            )
         return {**meta, "clips": clips_out, "total_bytes": total}
 
     async def async_delete_session(self, session_id: str) -> bool:
+        """Delete a saved detection's file set + index entry (site-wide)."""
         found = False
         remaining = []
         for meta in self._sessions_meta:
@@ -634,6 +657,17 @@ class RecordingManager:
                     path = Path(clip.get("path") or "")
                     if path.is_file():
                         path.unlink(missing_ok=True)
+                    # Also remove orphans named with this session id.
+                prefix = f"{session_id}_"
+                try:
+                    for orphan in self.record_dir.glob(f"{prefix}*"):
+                        if orphan.is_file() and orphan.name not in {
+                            "index.json",
+                            "detections.json",
+                        }:
+                            orphan.unlink(missing_ok=True)
+                except OSError:
+                    _LOGGER.debug("Could not purge orphan files for %s", session_id)
             else:
                 remaining.append(meta)
         self._sessions_meta = remaining

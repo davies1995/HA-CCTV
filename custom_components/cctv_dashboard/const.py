@@ -7,7 +7,10 @@ URL_BASE = "/cctv_dashboard"
 JS_FILENAME = "cctv-dashboard.js"
 JS_URL = f"{URL_BASE}/{JS_FILENAME}"
 # Sibling path (not nested under URL_BASE) so it does not collide with the JS static root.
+# Legacy static mount (kept for older saved clip URLs); new clips use MEDIA_API_URL_BASE.
 RECORDINGS_URL_BASE = "/cctv_dashboard_recordings"
+# Authenticated API media path for <video>/<img> playback (Bearer or auth/sign_path).
+MEDIA_API_URL_BASE = "/api/cctv_dashboard/media"
 
 CONF_SIDEBAR_TITLE = "sidebar_title"
 CONF_TITLE = "title"

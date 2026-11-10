@@ -32,6 +32,7 @@ from .const import (
     URL_BASE,
     VERSION,
 )
+from .media_view import CctvRecordingMediaView
 from .recordings import RecordingManager
 from .storage import PanelStore
 from .websocket_api import async_register_websocket
@@ -111,10 +112,15 @@ async def _async_register_frontend(
         data["static_registered"] = True
 
     if not data.get("recordings_static"):
+        # Legacy static URLs for older clip index entries.
         await hass.http.async_register_static_paths(
             [StaticPathConfig(RECORDINGS_URL_BASE, str(manager.record_dir), False)]
         )
         data["recordings_static"] = True
+
+    if not data.get("media_view_registered"):
+        hass.http.register_view(CctvRecordingMediaView(manager.record_dir))
+        data["media_view_registered"] = True
 
     # Loads the module for all users so Lovelace cards work without Resources YAML.
     if not data.get("js_registered"):

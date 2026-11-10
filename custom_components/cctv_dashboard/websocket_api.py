@@ -236,12 +236,14 @@ async def ws_list_detections(
         vol.Required("session_id"): str,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_delete_recording(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    """Admin-only: delete a saved detection's recording file set for all users."""
     manager = _manager(hass)
     if not manager:
         connection.send_error(msg["id"], "not_ready", "Recording manager not ready")
