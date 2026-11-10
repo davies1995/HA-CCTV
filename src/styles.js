@@ -213,6 +213,36 @@ export const sharedStyles = css`
     gap: 0.5rem;
   }
 
+  .quality-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin: 0.85rem 0 0.25rem;
+    max-width: 960px;
+  }
+
+  .quality-row label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .quality-row select {
+    font: inherit;
+    color: inherit;
+    background: var(--cctv-surface);
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+    padding: 0.35rem 0.55rem;
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    color: var(--cctv-muted);
+  }
+
   ha-card {
     overflow: hidden;
   }

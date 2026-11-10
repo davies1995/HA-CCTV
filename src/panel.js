@@ -24,6 +24,8 @@ class CctvDashboardPanel extends LitElement {
     const { _panel_custom, ...rest } = fromPanel;
     return {
       title: "CCTV",
+      max_streams: 4,
+      quality: "auto",
       ...rest,
     };
   }

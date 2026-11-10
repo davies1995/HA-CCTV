@@ -6,6 +6,13 @@ import {
   cameraFromState,
   openMoreInfo,
 } from "./cameras.js";
+import {
+  QUALITY_OPTIONS,
+  qualityHelp,
+  resolveQuality,
+  resolveStreamCamera,
+  writeStoredQuality,
+} from "./quality.js";
 import "./stream-player.js";
 
 /**
@@ -16,6 +23,7 @@ class CctvCameraCard extends LitElement {
     hass: { attribute: false },
     _config: { attribute: false },
     _status: { state: true },
+    _qualityTick: { state: true },
   };
 
   static styles = sharedStyles;
@@ -28,12 +36,14 @@ class CctvCameraCard extends LitElement {
       entity,
       title: "",
       muted: true,
+      quality: "auto",
     };
   }
 
   constructor() {
     super();
     this._status = "";
+    this._qualityTick = 0;
   }
 
   setConfig(config) {
@@ -45,6 +55,8 @@ class CctvCameraCard extends LitElement {
     }
     this._config = {
       muted: true,
+      quality: "auto",
+      max_streams: 4,
       ...config,
       entity: String(config.entity),
     };
@@ -52,6 +64,11 @@ class CctvCameraCard extends LitElement {
 
   getCardSize() {
     return 4;
+  }
+
+  _setQuality(quality) {
+    writeStoredQuality(this._config.entity, quality);
+    this._qualityTick += 1;
   }
 
   async _run(service) {
@@ -66,10 +83,19 @@ class CctvCameraCard extends LitElement {
 
   render() {
     if (!this._config || !this.hass) return html``;
+    void this._qualityTick;
     const stateObj = this.hass.states?.[this._config.entity];
     const camera = cameraFromState(this._config.entity, stateObj);
     const title = this._config.title || camera.name;
     const actions = availableCameraActions(this.hass, camera);
+    const quality = resolveQuality(this._config, this._config.entity);
+    const streamCam = resolveStreamCamera(
+      this.hass,
+      camera,
+      this._config,
+      quality,
+      "detail"
+    );
 
     return html`
       <ha-card>
@@ -86,9 +112,26 @@ class CctvCameraCard extends LitElement {
               eager
               .hass=${this.hass}
               .camera=${camera}
+              .config=${this._config}
+              .quality=${quality}
+              context="detail"
               .muted=${this._config.muted !== false}
               controls
             ></cctv-stream-player>
+          </div>
+          <div class="quality-row">
+            <label>
+              Stream quality
+              <select
+                .value=${quality}
+                @change=${(e) => this._setQuality(e.target.value)}
+              >
+                ${QUALITY_OPTIONS.map(
+                  (opt) => html`<option value=${opt.value}>${opt.label}</option>`
+                )}
+              </select>
+            </label>
+            <span class="hint">${qualityHelp(quality)} · using ${streamCam.entityId}</span>
           </div>
           <div class="actions" style="margin-top: 0.75rem">
             ${actions.map(

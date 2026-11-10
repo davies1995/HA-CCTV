@@ -6,6 +6,14 @@ import {
   listCameras,
   openMoreInfo,
 } from "./cameras.js";
+import {
+  QUALITY_OPTIONS,
+  qualityHelp,
+  resolveQuality,
+  resolveStreamCamera,
+  writeStoredQuality,
+} from "./quality.js";
+import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import "./stream-player.js";
 
 /**
@@ -18,6 +26,7 @@ export class CctvView extends LitElement {
     panelMode: { type: Boolean, attribute: "panel-mode" },
     _selected: { state: true },
     _status: { state: true },
+    _qualityTick: { state: true },
   };
 
   static styles = sharedStyles;
@@ -28,10 +37,16 @@ export class CctvView extends LitElement {
     this.panelMode = false;
     this._selected = null;
     this._status = "";
+    this._qualityTick = 0;
   }
 
   _cameras() {
     return listCameras(this.hass, this.config);
+  }
+
+  _maxStreams() {
+    const value = Number(this.config?.max_streams);
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_STREAMS;
   }
 
   _select(entityId) {
@@ -40,6 +55,11 @@ export class CctvView extends LitElement {
 
   _back() {
     this._selected = null;
+  }
+
+  _setQuality(entityId, quality) {
+    writeStoredQuality(entityId, quality);
+    this._qualityTick += 1;
   }
 
   async _run(service, entityId) {
@@ -57,9 +77,14 @@ export class CctvView extends LitElement {
       return html`<div class="wrap placeholder">Waiting for Home Assistant…</div>`;
     }
 
+    // Touch quality tick so Lit re-renders after localStorage changes.
+    void this._qualityTick;
+
     const cameras = this._cameras();
     const selected = cameras.find((c) => c.entityId === this._selected) || null;
     const title = this.config?.title || "CCTV";
+    const maxStreams = this._maxStreams();
+    streamSlots.setMax(maxStreams);
 
     return html`
       <div class=${this.panelMode ? "panel-wrap wrap" : "wrap"}>
@@ -71,7 +96,7 @@ export class CctvView extends LitElement {
           <div class="top-actions">
             <span class="status">
               ${this._status ||
-              `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · live`}
+              `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · ${streamSlots.activeCount()}/${maxStreams} live`}
             </span>
           </div>
         </div>
@@ -87,13 +112,17 @@ export class CctvView extends LitElement {
     }
     return html`
       <div class="grid" role="list">
-        ${cameras.map(
-          (cam) => html`
+        ${cameras.map((cam) => {
+          const quality = resolveQuality(this.config, cam.entityId);
+          return html`
             <article class="tile" role="listitem">
               <div class="tile-media">
                 <cctv-stream-player
                   .hass=${this.hass}
                   .camera=${cam}
+                  .config=${this.config}
+                  .quality=${quality}
+                  context="mosaic"
                   muted
                 ></cctv-stream-player>
               </div>
@@ -104,18 +133,26 @@ export class CctvView extends LitElement {
               >
                 <p class="tile-title">${cam.name}</p>
                 <p class="tile-meta">
-                  <span class="dot ${cam.state}"></span>${cam.state} · ${cam.entityId}
+                  <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
                 </p>
               </button>
             </article>
-          `
-        )}
+          `;
+        })}
       </div>
     `;
   }
 
   _renderDetail(cam) {
     const actions = availableCameraActions(this.hass, cam);
+    const quality = resolveQuality(this.config, cam.entityId);
+    const streamCam = resolveStreamCamera(
+      this.hass,
+      cam,
+      this.config,
+      quality,
+      "detail"
+    );
     return html`
       <button class="btn linkish" type="button" @click=${this._back}>← All cameras</button>
       <h2>${cam.name}</h2>
@@ -125,13 +162,32 @@ export class CctvView extends LitElement {
           eager
           .hass=${this.hass}
           .camera=${cam}
+          .config=${this.config}
+          .quality=${quality}
+          context="detail"
           .muted=${false}
           controls
         ></cctv-stream-player>
       </div>
+      <div class="quality-row">
+        <label>
+          Stream quality
+          <select
+            .value=${quality}
+            @change=${(e) => this._setQuality(cam.entityId, e.target.value)}
+          >
+            ${QUALITY_OPTIONS.map(
+              (opt) => html`<option value=${opt.value}>${opt.label}</option>`
+            )}
+          </select>
+        </label>
+        <span class="hint">${qualityHelp(quality)}</span>
+      </div>
       <dl class="meta">
         <dt>Entity</dt>
         <dd>${cam.entityId}</dd>
+        <dt>Streaming</dt>
+        <dd>${streamCam.entityId}</dd>
         <dt>State</dt>
         <dd>${cam.state}</dd>
         <dt>Brand</dt>

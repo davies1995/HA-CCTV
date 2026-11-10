@@ -20,6 +20,8 @@ class CctvCamerasCard extends LitElement {
       .slice(0, 4);
     return {
       title: "CCTV",
+      max_streams: 4,
+      quality: "auto",
       ...(cameras.length ? { cameras } : {}),
     };
   }
@@ -30,6 +32,8 @@ class CctvCamerasCard extends LitElement {
     }
     this._config = {
       title: "CCTV",
+      max_streams: 4,
+      quality: "auto",
       ...config,
     };
   }

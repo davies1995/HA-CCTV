@@ -9,22 +9,26 @@ import {
   subscribeWebRtcOffer,
   supportsStream,
 } from "./cameras.js";
+import {
+  preferredTransports,
+  resolveQuality,
+  resolveStreamCamera,
+} from "./quality.js";
+import { STREAM_PRIORITY, streamSlots } from "./stream-slots.js";
 
 /**
- * Live camera tile: prefer HA native stream element, then WebRTC / HLS / MJPEG / still.
- *
- * Mosaic tiles should leave `eager` unset/false so IntersectionObserver only
- * opens live streams while the tile is (near) visible. Detail / single-camera
- * views set `eager` to keep the stream active while mounted.
+ * Live camera tile with visibility gating + global max concurrent streams.
  */
 export class CctvStreamPlayer extends LitElement {
   static properties = {
     hass: { attribute: false },
     camera: { attribute: false },
+    config: { attribute: false },
+    quality: { type: String },
+    context: { type: String },
     muted: { type: Boolean },
     controls: { type: Boolean },
     large: { type: Boolean, reflect: true },
-    /** When true, stream immediately while connected (detail / single card). */
     eager: { type: Boolean },
     posterOnly: { type: Boolean, attribute: "poster-only" },
     _mode: { state: true },
@@ -33,6 +37,8 @@ export class CctvStreamPlayer extends LitElement {
     _mjpegUrl: { state: true },
     _stillUrl: { state: true },
     _visible: { state: true },
+    _slotHeld: { state: true },
+    _queued: { state: true },
   };
 
   static styles = css`
@@ -100,6 +106,9 @@ export class CctvStreamPlayer extends LitElement {
 
   constructor() {
     super();
+    this.config = {};
+    this.quality = "";
+    this.context = "mosaic";
     this.muted = true;
     this.controls = false;
     this.large = false;
@@ -111,12 +120,15 @@ export class CctvStreamPlayer extends LitElement {
     this._mjpegUrl = "";
     this._stillUrl = "";
     this._visible = false;
+    this._slotHeld = false;
+    this._queued = false;
     this._pc = null;
     this._unsubWebRtc = null;
     this._sessionId = null;
     this._startToken = 0;
     this._observer = null;
-    this._live = false;
+    this._slotId = "";
+    this._streamCamera = null;
   }
 
   connectedCallback() {
@@ -127,17 +139,21 @@ export class CctvStreamPlayer extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._unbindObserver();
+    this._releaseSlot();
     this._stopLive();
   }
 
   updated(changed) {
-    if (changed.has("eager")) {
+    if (changed.has("eager") || changed.has("posterOnly")) {
       this._bindObserver();
-      this._reconcilePlayback();
     }
     if (
       changed.has("hass") ||
       changed.has("camera") ||
+      changed.has("config") ||
+      changed.has("quality") ||
+      changed.has("context") ||
+      changed.has("eager") ||
       changed.has("posterOnly")
     ) {
       this._reconcilePlayback();
@@ -146,6 +162,15 @@ export class CctvStreamPlayer extends LitElement {
       const video = this.renderRoot?.querySelector("video");
       if (video) video.muted = this.muted;
     }
+  }
+
+  get _effectiveQuality() {
+    if (this.quality) return this.quality;
+    return resolveQuality(this.config, this.camera?.entityId);
+  }
+
+  get _priority() {
+    return this.eager ? STREAM_PRIORITY.EAGER : STREAM_PRIORITY.VISIBLE;
   }
 
   _bindObserver() {
@@ -165,12 +190,7 @@ export class CctvStreamPlayer extends LitElement {
         this._visible = visible;
         this._reconcilePlayback();
       },
-      {
-        root: null,
-        // Start a bit before the tile enters the viewport.
-        rootMargin: "120px 0px",
-        threshold: 0.15,
-      }
+      { root: null, rootMargin: "120px 0px", threshold: 0.15 }
     );
     this._observer.observe(this);
   }
@@ -182,24 +202,24 @@ export class CctvStreamPlayer extends LitElement {
     }
   }
 
-  _shouldStream() {
+  _wantsLive() {
     if (this.posterOnly) return false;
     if (this.eager) return true;
     return this._visible;
   }
 
-  _refreshPosterUrls() {
-    if (!this.hass || !this.camera?.stateObj) {
+  _refreshPosterUrls(streamCamera) {
+    const cam = streamCamera || this.camera;
+    if (!this.hass || !cam?.stateObj) {
       this._stillUrl = "";
       this._mjpegUrl = "";
       return;
     }
-    this._stillUrl = cameraPreviewUrl(this.hass, this.camera, true);
-    this._mjpegUrl = cameraMjpegStreamUrl(this.hass, this.camera);
+    this._stillUrl = cameraPreviewUrl(this.hass, cam, true);
+    this._mjpegUrl = cameraMjpegStreamUrl(this.hass, cam);
   }
 
   _stopLive() {
-    this._live = false;
     this._startToken += 1;
     if (this._unsubWebRtc) {
       try {
@@ -221,87 +241,178 @@ export class CctvStreamPlayer extends LitElement {
     this._hlsUrl = "";
   }
 
-  _showIdlePoster() {
+  _releaseSlot() {
+    if (this._slotId) {
+      streamSlots.release(this._slotId);
+    }
+    this._slotHeld = false;
+    this._queued = false;
+  }
+
+  _showIdle(reason = "idle") {
     this._stopLive();
-    this._refreshPosterUrls();
+    this._refreshPosterUrls(this._streamCamera || this.camera);
     if (!this.hass || !this.camera?.stateObj) {
       this._mode = "empty";
       return;
     }
     this._mode = this._stillUrl ? "still" : "empty";
-    if (!this._stillUrl) this._error = "No preview";
+    this._error = this._stillUrl ? "" : "No preview";
+    this._idleReason = reason;
   }
 
   _reconcilePlayback() {
+    const max = Number(this.config?.max_streams);
+    if (Number.isFinite(max) && max > 0) {
+      streamSlots.setMax(max);
+    }
+
     if (!this.hass || !this.camera?.stateObj) {
+      this._releaseSlot();
       this._stopLive();
       this._mode = "empty";
+      this._playKey = "";
       return;
     }
-    if (!this._shouldStream()) {
-      this._showIdlePoster();
+
+    this._streamCamera = resolveStreamCamera(
+      this.hass,
+      this.camera,
+      this.config,
+      this._effectiveQuality,
+      this.context
+    );
+    this._slotId = this._streamCamera.entityId || this.camera.entityId;
+    this._refreshPosterUrls(this._streamCamera);
+
+    const want = this._wantsLive();
+    const playKey = [
+      want ? "live" : "idle",
+      this._slotId,
+      this._effectiveQuality,
+      this.context,
+      this.eager ? "eager" : "lazy",
+    ].join("|");
+
+    if (!want) {
+      this._releaseSlot();
+      this._showIdle("idle");
+      this._playKey = playKey;
       return;
     }
-    this._startLive();
+
+    // Avoid tearing down a healthy live session on routine hass state churn.
+    if (
+      this._slotHeld &&
+      this._playKey === playKey &&
+      this._mode !== "loading" &&
+      this._mode !== "empty" &&
+      !(this._mode === "still" && this._queued)
+    ) {
+      return;
+    }
+
+    const onGrant = () => {
+      this._slotHeld = true;
+      this._queued = false;
+      this._playKey = playKey;
+      this._startLive();
+    };
+    const onRevoke = () => {
+      this._slotHeld = false;
+      this._queued = this._wantsLive();
+      this._playKey = "";
+      this._showIdle("queued");
+      if (this._wantsLive()) {
+        const requeued = streamSlots.request(this._slotId, this._priority, {
+          onGrant,
+          onRevoke,
+        });
+        if (requeued) onGrant();
+      }
+    };
+
+    const granted = streamSlots.request(this._slotId, this._priority, {
+      onGrant,
+      onRevoke,
+    });
+
+    if (granted) {
+      onGrant();
+    } else {
+      this._slotHeld = false;
+      this._queued = true;
+      this._playKey = playKey;
+      this._showIdle("queued");
+    }
   }
 
   async _startLive() {
     this._stopLive();
     const token = this._startToken;
-    this._live = true;
     this._error = "";
     this._mode = "loading";
-    this._refreshPosterUrls();
+    this._idleReason = "";
 
-    // 1) Prefer HA's own stream element when already loaded by the frontend.
-    if (customElements.get("ha-camera-stream")) {
-      if (token !== this._startToken) return;
-      this._mode = "ha";
-      return;
-    }
+    const streamCamera = this._streamCamera || this.camera;
+    this._refreshPosterUrls(streamCamera);
+    const transports = preferredTransports(
+      this._effectiveQuality,
+      this.context
+    );
 
-    const caps = await fetchCameraCapabilities(this.hass, this.camera.entityId);
-    if (token !== this._startToken) return;
-    const types = caps?.frontend_stream_types || [];
-    const legacy = this.camera.frontendStreamType;
-    const wantsWebRtc = types.includes("web_rtc") || legacy === "web_rtc";
-    const wantsHls =
-      types.includes("hls") || legacy === "hls" || supportsStream(this.camera);
+    for (const transport of transports) {
+      if (token !== this._startToken || !this._slotHeld) return;
 
-    // 2) WebRTC via Core websocket API
-    if (wantsWebRtc && typeof RTCPeerConnection !== "undefined") {
-      try {
-        await this._startWebRtc(token);
-        if (token !== this._startToken) return;
-        this._mode = "webrtc";
+      if (transport === "ha" && customElements.get("ha-camera-stream")) {
+        this._mode = "ha";
         return;
-      } catch (err) {
-        console.warn("CCTV WebRTC failed, falling back", err);
       }
-    }
 
-    // 3) HLS (native Safari / some browsers); else fall through
-    if (wantsHls) {
-      try {
-        const url = await fetchHlsStreamUrl(this.hass, this.camera.entityId);
-        if (token !== this._startToken) return;
-        if (url && this._canPlayHlsNatively()) {
-          this._hlsUrl = url;
-          this._mode = "hls";
-          return;
+      if (transport === "webrtc" && typeof RTCPeerConnection !== "undefined") {
+        const caps = await fetchCameraCapabilities(
+          this.hass,
+          streamCamera.entityId
+        );
+        if (token !== this._startToken || !this._slotHeld) return;
+        const types = caps?.frontend_stream_types || [];
+        const legacy = streamCamera.frontendStreamType;
+        const wants =
+          types.includes("web_rtc") ||
+          legacy === "web_rtc" ||
+          supportsStream(streamCamera);
+        if (wants || !types.length) {
+          try {
+            await this._startWebRtc(token, streamCamera);
+            if (token !== this._startToken || !this._slotHeld) return;
+            this._mode = "webrtc";
+            return;
+          } catch (err) {
+            console.warn("CCTV WebRTC failed, falling back", err);
+          }
         }
-      } catch (err) {
-        console.warn("CCTV HLS failed, falling back", err);
+      }
+
+      if (transport === "hls") {
+        try {
+          const url = await fetchHlsStreamUrl(this.hass, streamCamera.entityId);
+          if (token !== this._startToken || !this._slotHeld) return;
+          if (url && this._canPlayHlsNatively()) {
+            this._hlsUrl = url;
+            this._mode = "hls";
+            return;
+          }
+        } catch (err) {
+          console.warn("CCTV HLS failed, falling back", err);
+        }
+      }
+
+      if (transport === "mjpeg" && this._mjpegUrl) {
+        this._mode = "mjpeg";
+        return;
       }
     }
 
-    // 4) MJPEG continuous stream
-    if (this._mjpegUrl) {
-      this._mode = "mjpeg";
-      return;
-    }
-
-    // 5) Still fallback
     this._mode = this._stillUrl ? "still" : "empty";
     if (!this._stillUrl) this._error = "No stream or preview available";
   }
@@ -314,9 +425,9 @@ export class CctvStreamPlayer extends LitElement {
     );
   }
 
-  async _startWebRtc(token) {
+  async _startWebRtc(token, streamCamera) {
     const clientConfig =
-      (await fetchWebRtcClientConfiguration(this.hass, this.camera.entityId)) ||
+      (await fetchWebRtcClientConfiguration(this.hass, streamCamera.entityId)) ||
       {};
     if (token !== this._startToken) return;
 
@@ -326,7 +437,7 @@ export class CctvStreamPlayer extends LitElement {
     try {
       pc.addTransceiver("audio", { direction: "recvonly" });
     } catch {
-      /* some cameras are video-only */
+      /* video-only */
     }
 
     pc.ontrack = (event) => {
@@ -342,7 +453,7 @@ export class CctvStreamPlayer extends LitElement {
       if (!event.candidate || !this._sessionId) return;
       addWebRtcCandidate(
         this.hass,
-        this.camera.entityId,
+        streamCamera.entityId,
         this._sessionId,
         event.candidate.toJSON()
       ).catch(() => undefined);
@@ -356,7 +467,7 @@ export class CctvStreamPlayer extends LitElement {
 
     this._unsubWebRtc = await subscribeWebRtcOffer(
       this.hass,
-      this.camera.entityId,
+      streamCamera.entityId,
       offer.sdp,
       async (event) => {
         if (token !== this._startToken || !this._pc) return;
@@ -375,7 +486,7 @@ export class CctvStreamPlayer extends LitElement {
           try {
             await this._pc.addIceCandidate(event.candidate);
           } catch {
-            /* ignore late candidates */
+            /* ignore */
           }
           return;
         }
@@ -395,12 +506,9 @@ export class CctvStreamPlayer extends LitElement {
       return html`<div class="error">${this._error || "No preview"}</div>`;
     }
 
-    const badge =
-      this._live && this._mode !== "still"
-        ? this._mode
-        : this._shouldStream()
-          ? this._mode
-          : "idle";
+    let badge = this._mode;
+    if (this._queued) badge = "queued";
+    else if (!this._slotHeld && this._mode === "still") badge = this._idleReason || "idle";
 
     return html`
       ${this._renderMedia()}
@@ -409,12 +517,13 @@ export class CctvStreamPlayer extends LitElement {
   }
 
   _renderMedia() {
+    const streamCamera = this._streamCamera || this.camera;
     if (this._mode === "ha") {
       return html`
         <ha-camera-stream
           class="media"
           .hass=${this.hass}
-          .stateObj=${this.camera.stateObj}
+          .stateObj=${streamCamera.stateObj}
           .muted=${this.muted}
           .controls=${this.controls}
         ></ha-camera-stream>

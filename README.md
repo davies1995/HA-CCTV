@@ -1,60 +1,65 @@
 # HA-CCTV
 
-Home Assistant **CCTV dashboard** as a frontend custom panel + Lovelace cards. It discovers existing `camera.*` entities and shows **live stream tiles** (WebRTC / HLS / MJPEG, with still fallback) plus per-camera detail and basic controls.
+Home Assistant **CCTV dashboard** as a frontend custom panel + Lovelace cards. It discovers existing `camera.*` entities and shows **live stream tiles** (WebRTC / HLS / MJPEG, with still fallback), with a **max of 4 concurrent live streams**, per-camera quality options, and basic controls.
 
 This is **not** a Supervisor add-on. Cameras must already exist in Home Assistant (Frigate, go2rtc, ONVIF, generic IP camera, etc.).
 
 ## Features
 
 - Auto-discover all `camera.*` entities (optional include/exclude lists)
-- **Live stream tiles** early in v1 (not stills-only)
-- **Lazy mosaic streaming** — off-screen tiles stay on stills until visible
-- Per-camera controls from registered safe `camera` services (on/off/toggle, snapshot, motion) + more-info
-- Shared bundle registers:
+- **Live stream tiles** (not stills-only)
+- **Lazy + capped streaming** — off-screen tiles stay on stills; at most **4** live streams at once (configurable via `max_streams`)
+- **Per-camera quality** — Auto / High / Balanced / Low (substream entity when available)
+- Controls from registered safe `camera` services + more-info
+- Shared HACS bundle registers:
   - **Panel:** `cctv-dashboard-panel` (sidebar; all users)
   - **Grid card:** `custom:cctv-cameras-card`
   - **Single card:** `custom:cctv-camera-card`
 
-## Install
+## Install with HACS (recommended)
 
-### HACS (recommended for the cards)
+1. Make sure [HACS](https://hacs.xyz/) is installed.
+2. HACS → **Frontend** (Dashboard) → ⋮ → **Custom repositories**.
+3. Repository: `https://github.com/davies1995/HA-CCTV`  
+   Category: **Lovelace** (Dashboard).
+4. Find **CCTV Dashboard** → **Download**.
+5. Reload the browser (or clear frontend cache).
 
-1. HACS → Frontend → Custom repositories → add `https://github.com/davies1995/HA-CCTV` as **Lovelace**.
-2. Install **CCTV Dashboard**.
-3. Reload the browser.
+HACS installs `cctv-dashboard.js` and adds it as a dashboard resource. Prefer installing from a **GitHub release** (versioned). Publishing a release runs the workflow that builds and attaches `dist/cctv-dashboard.js`.
 
-#### Grid card
+Minimum Home Assistant: **2024.11.0** (WebRTC camera APIs). Declared in `hacs.json`.
+
+### Add the grid card
 
 ```yaml
 type: custom:cctv-cameras-card
 title: CCTV
+max_streams: 4
+quality: auto
 # cameras:
 #   - camera.front_door
 # exclude:
 #   - camera.ignored
+# camera_settings:
+#   camera.front_door:
+#     quality: high
+#     low_entity: camera.front_door_sub
 ```
 
-#### Single camera card
+### Add the single camera card
 
 ```yaml
 type: custom:cctv-camera-card
 entity: camera.front_door
 title: Front door
+quality: auto
 muted: true
+# low_entity can also be set under camera_settings in a shared config shape
 ```
-
-HACS serves `dist/cctv-dashboard.js` from the latest GitHub release once releases are published. Until then, use manual install from a built `dist/` file.
-
-### Manual resource
-
-1. Build (see Development) or download `cctv-dashboard.js`.
-2. Copy to `config/www/cctv-dashboard.js`.
-3. **Settings → Dashboards → Resources → Add resource**  
-   URL: `/local/cctv-dashboard.js` · Type: JavaScript module.
 
 ### Sidebar custom panel (all users)
 
-After the module is loaded (HACS resource or `/local/...`), add to `configuration.yaml` and restart:
+After HACS has added the module resource, add to `configuration.yaml` and restart Home Assistant:
 
 ```yaml
 panel_custom:
@@ -64,29 +69,59 @@ panel_custom:
     sidebar_icon: mdi:cctv
     require_admin: false
     module_url: /hacsfiles/HA-CCTV/cctv-dashboard.js
-    # For manual www install use:
-    # module_url: /local/cctv-dashboard.js
     config:
       title: CCTV
+      max_streams: 4
+      quality: auto
+      # camera_settings:
+      #   camera.driveway:
+      #     quality: low
+      #     low_entity: camera.driveway_sub
 ```
 
 `require_admin` stays **false** so every user sees the sidebar entry.
 
-`module_url` for HACS may vary by HACS version; if the panel fails to load, copy the card resource URL from **Dashboards → Resources** and reuse it as `module_url`.
+If the panel fails to load, open **Settings → Dashboards → Resources**, copy the CCTV module URL HACS registered, and use that as `module_url`.
+
+## Manual install (without HACS)
+
+1. Download `cctv-dashboard.js` from the latest [GitHub release](https://github.com/davies1995/HA-CCTV/releases), or build locally.
+2. Copy to `config/www/cctv-dashboard.js`.
+3. **Settings → Dashboards → Resources → Add resource**  
+   URL: `/local/cctv-dashboard.js` · Type: **JavaScript module**.
+4. Reload the browser. For the sidebar panel, set `module_url: /local/cctv-dashboard.js`.
 
 ## Streaming behaviour
 
-Each tile tries, in order:
+### Concurrency
 
-1. Native `ha-camera-stream` (when already registered by the HA frontend)
-2. WebRTC via Home Assistant Core (`camera/webrtc/offer`)
-3. HLS via `camera/stream` when the browser can play HLS natively
+- Mosaic tiles only request a live slot while (near) visible.
+- Global cap: **4** live streams by default (`max_streams`).
+- Extra visible cameras stay on stills with a `queued` badge until a slot frees.
+- Detail / single-card views use higher priority and can preempt a mosaic tile.
+
+### Transport order
+
+Each live tile tries transports by quality preference, typically:
+
+1. Native `ha-camera-stream` (when registered)
+2. WebRTC (`camera/webrtc/offer`)
+3. HLS (`camera/stream`) when the browser can play HLS natively
 4. MJPEG `/api/camera_proxy_stream/...`
 5. Still image fallback
 
-Grid tiles only open a live session while (near) visible; scrolled-away tiles drop back to a still. Detail view and the single-camera card stream eagerly while open.
+### Per-camera quality (HA API limits)
 
-Chrome HLS without HLS.js falls through to MJPEG/WebRTC — that is intentional for a thin v1 bundle.
+Home Assistant Core does **not** expose a bitrate/resolution knob on `camera/stream` or WebRTC offer APIs. Quality in this dashboard therefore means:
+
+| Setting | Behaviour |
+| --- | --- |
+| **Auto** | Mosaic prefers a detected substream + lighter transport; detail prefers main + WebRTC/HLS |
+| **High** | Main entity; prefer WebRTC/HLS |
+| **Balanced** | Main entity; prefer HA native / WebRTC, then HLS/MJPEG |
+| **Low** | Substream entity when available (`*_sub`, `*_lq`, `*_low`, `*_fluent`, `*_sd`), else MJPEG on main |
+
+Set defaults in YAML (`quality`, `camera_settings`) or change **Stream quality** in the detail / single-card UI (stored in `localStorage` per entity).
 
 ## Development
 
@@ -99,9 +134,11 @@ npm run build
 
 Output: `dist/cctv-dashboard.js`.
 
-```bash
-npm run watch
-```
+### Releasing for HACS
+
+1. Bump `version` in `package.json` and update `CHANGELOG.md`.
+2. Publish a GitHub release / tag (for example `v0.1.0`).
+3. The **Release CCTV Dashboard** workflow builds and attaches `dist/cctv-dashboard.js`.
 
 ### Layout
 
@@ -112,15 +149,16 @@ src/
   card.js             # grid Lovelace card
   camera-card.js      # single Lovelace card
   stream-player.js    # live tile
+  stream-slots.js     # max concurrent streams
+  quality.js          # quality / substream resolution
   cctv-view.js        # shared grid/detail UI
   cameras.js          # discovery + stream helpers
   styles.js
 dist/cctv-dashboard.js
 hacs.json
+CHANGELOG.md
 ```
 
 ## Architecture
 
 See the project plan: `/cursor/stores/bc-01a1c4ea-5cda-7df5-9269-add18c27ad57/docs/cctv-dashboard-plan.md` (coordinator store).
-
-**Locked defaults:** frontend panel + cards; existing HA cameras; stream tiles in v1; sidebar for all users (`require_admin: false`).
