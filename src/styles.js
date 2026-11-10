@@ -279,13 +279,23 @@ export const sharedStyles = css`
     font-size: 0.9rem;
   }
 
-  .quality-row select {
+  .quality-row select,
+  .quality-row .aspect-input {
     font: inherit;
     color: inherit;
     background: var(--cctv-surface);
     border: 1px solid var(--cctv-border);
     border-radius: 8px;
     padding: 0.35rem 0.55rem;
+  }
+
+  .quality-row .aspect-input {
+    min-width: 8.5rem;
+    max-width: 12rem;
+  }
+
+  .prefs-save-row {
+    margin-top: 0.35rem;
   }
 
   .hint {

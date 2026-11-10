@@ -2,9 +2,10 @@
 
 import { normalizeSensorLinks } from "./detection-sensors.js";
 import { normalizeForceAspectMap } from "./mosaic-pack.js";
+import { normalizeCameraQualityMap } from "./quality.js";
 
 /**
- * Load site-wide settings (sensor links, force aspect, retention, recording).
+ * Load site-wide settings (sensor links, force aspect, quality, retention).
  * @param {any} hass
  */
 export async function loadSharedConfig(hass) {
@@ -16,6 +17,7 @@ export async function loadSharedConfig(hass) {
       ...result,
       sensorLinks: normalizeSensorLinks(result.sensor_links || {}),
       forceAspect: normalizeForceAspectMap(result.force_aspect || {}),
+      cameraQuality: normalizeCameraQualityMap(result.camera_quality || {}),
     };
   } catch (err) {
     console.warn("CCTV: failed to load shared config", err);
@@ -49,6 +51,24 @@ export async function saveForceAspect(hass, forceAspect) {
     type: "cctv_dashboard/set_force_aspect",
     force_aspect: cleaned,
   });
+}
+
+/**
+ * Persist shared per-camera quality + force-aspect (all HA users).
+ * @param {any} hass
+ * @param {{ cameraQuality?: Record<string, string>, forceAspect?: Record<string, string> }} prefs
+ */
+export async function saveCameraPrefs(hass, prefs) {
+  if (!hass?.callWS) return null;
+  /** @type {Record<string, any>} */
+  const payload = { type: "cctv_dashboard/set_camera_prefs" };
+  if (prefs.cameraQuality !== undefined) {
+    payload.camera_quality = normalizeCameraQualityMap(prefs.cameraQuality);
+  }
+  if (prefs.forceAspect !== undefined) {
+    payload.force_aspect = normalizeForceAspectMap(prefs.forceAspect);
+  }
+  return hass.callWS(payload);
 }
 
 /**

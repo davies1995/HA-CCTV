@@ -50,7 +50,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - Auto-discover `camera.*` (optional include/exclude on cards)
 - Live stream tiles (HA / WebRTC / HLS / MJPEG / still)
 - Max **4** concurrent live streams by default (`max_streams`)
-- Per-camera quality: Auto / High / Balanced / Low
+- Per-camera quality: Auto / High / Balanced / Low (panel: draft + **Save quality & aspect**, shared for all users)
 - Lovelace cards (loaded automatically with the integration):
   - `custom:cctv-cameras-card` (grid)
   - `custom:cctv-camera-card` (single)
@@ -60,7 +60,7 @@ If you added this repo earlier as a **Lovelace / Frontend** custom repository:
 - Uses Home Assistant `camera.record` (≈30s chunks + lookback) while the event is active; if record fails, falls back to `camera.snapshot`
 - Files land under the HA **media** folder (`…/cctv_dashboard/recordings`) when media dirs are configured; otherwise under `www`
 - Multi-camera continuous video is CPU/disk heavy — ensure a writable media mount and that cameras support streaming
-- Sensor links and force-aspect overrides are stored in the integration (shared); saving them once makes them available to every user and to the backend with the UI closed
+- Sensor links, quality, and force-aspect overrides are stored in the integration (shared). In the panel, quality / force-aspect are drafts until you press **Save quality & aspect** (presets include **1920×2560** doorbell / 3:4, plus custom `W:H`)
 - Not a full NVR: no guaranteed pre-roll beyond `lookback`, and overlapping long events create multiple chunk files
 
 ## Lovelace cards (optional)

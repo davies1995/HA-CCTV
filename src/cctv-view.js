@@ -15,6 +15,7 @@ import {
 } from "./detection-sensors.js";
 import {
   QUALITY_OPTIONS,
+  normalizeCameraQualityMap,
   qualityHelp,
   resolveQuality,
   resolveStreamCamera,
@@ -34,6 +35,8 @@ import {
   DEFAULT_ASPECT,
   FORCE_ASPECT_OPTIONS,
   forceAspectRatio,
+  forceAspectSelectValue,
+  isPresetForceAspect,
   normalizeAspect,
   normalizeForceAspectLabel,
   normalizeForceAspectMap,
@@ -43,7 +46,7 @@ import {
   deleteRecording,
   listRecordings,
   loadSharedConfig,
-  saveForceAspect,
+  saveCameraPrefs,
   saveRecordingSettings,
   saveSensorLinks,
   signPlaybackTracks,
@@ -58,8 +61,8 @@ import "./detection-timeline.js";
  * Shared CCTV UI for the sidebar panel and Lovelace cards.
  *
  * Panel mode: pick up to 4 cameras; layout fills 1 / splits 2–4.
- * Visible-camera selection is per-user. Detection sensor links and recording
- * settings are site-wide in the integration store (all HA users share them).
+ * Visible-camera selection is per-user. Detection sensor links, quality,
+ * force-aspect, and recording settings are site-wide (all HA users share them).
  */
 export class CctvView extends LitElement {
   static properties = {
@@ -75,8 +78,17 @@ export class CctvView extends LitElement {
     _visibleIds: { state: true },
     /** @type {Record<string, string[]>} */
     _sensorLinks: { state: true },
-    /** @type {Record<string, string>} site-wide forced aspect labels */
+    /** @type {Record<string, string>} draft forced aspect labels */
     _forceAspect: { state: true },
+    /** @type {Record<string, string>} last saved forced aspect */
+    _savedForceAspect: { state: true },
+    /** @type {Record<string, string>} draft shared quality (auto omitted) */
+    _cameraQuality: { state: true },
+    /** @type {Record<string, string>} last saved shared quality */
+    _savedCameraQuality: { state: true },
+    /** Freeform custom aspect text while editing */
+    _customAspectDraft: { state: true },
+    _prefsDirty: { state: true },
     _pickerOpen: { state: true },
     _settingsOpen: { state: true },
     _selectionReady: { state: true },
@@ -115,6 +127,11 @@ export class CctvView extends LitElement {
     this._visibleIds = [];
     this._sensorLinks = {};
     this._forceAspect = {};
+    this._savedForceAspect = {};
+    this._cameraQuality = {};
+    this._savedCameraQuality = {};
+    this._customAspectDraft = "";
+    this._prefsDirty = false;
     this._pickerOpen = true;
     this._settingsOpen = false;
     this._selectionReady = false;
@@ -569,9 +586,7 @@ export class CctvView extends LitElement {
       this._retentionDays = Number(shared.retention_days) || 1;
       this._recordOnDetection = shared.record_on_detection !== false;
       this._recordDir = shared.record_dir || "";
-      this._forceAspect = normalizeForceAspectMap(
-        shared.forceAspect || shared.force_aspect || {}
-      );
+      this._applySharedCameraPrefs(shared);
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
@@ -600,16 +615,65 @@ export class CctvView extends LitElement {
       this._recordOnDetection = settings.record_on_detection !== false;
       this._recordDir = settings.record_dir || "";
       if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
-      if (settings.forceAspect || settings.force_aspect) {
-        this._forceAspect = normalizeForceAspectMap(
-          settings.forceAspect || settings.force_aspect || {}
-        );
-      }
+      // Don't clobber unsaved quality/aspect drafts while editing.
+      if (!this._prefsDirty) this._applySharedCameraPrefs(settings);
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
     }
     this._sessions = await listRecordings(this.hass);
+  }
+
+  /**
+   * Apply shared quality + force-aspect from the integration store.
+   * @param {any} shared
+   */
+  _applySharedCameraPrefs(shared) {
+    const force = normalizeForceAspectMap(
+      shared?.forceAspect || shared?.force_aspect || {}
+    );
+    const quality = normalizeCameraQualityMap(
+      shared?.cameraQuality || shared?.camera_quality || {}
+    );
+    this._forceAspect = { ...force };
+    this._savedForceAspect = { ...force };
+    this._cameraQuality = { ...quality };
+    this._savedCameraQuality = { ...quality };
+    this._prefsDirty = false;
+    this._customAspectDraft = "";
+    this._qualityTick += 1;
+  }
+
+  /**
+   * @param {Record<string, string>} a
+   * @param {Record<string, string>} b
+   */
+  _prefsMapsEqual(a, b) {
+    const left = a || {};
+    const right = b || {};
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    for (const key of keys) {
+      if ((left[key] || "") !== (right[key] || "")) return false;
+    }
+    return true;
+  }
+
+  _syncPrefsDirty() {
+    this._prefsDirty =
+      !this._prefsMapsEqual(this._forceAspect, this._savedForceAspect) ||
+      !this._prefsMapsEqual(this._cameraQuality, this._savedCameraQuality);
+  }
+
+  /**
+   * Quality for mosaic/detail. Panel uses shared/draft map; cards use localStorage.
+   * @param {string} entityId
+   */
+  _qualityFor(entityId) {
+    return resolveQuality(
+      this.config,
+      entityId,
+      this.panelMode ? this._cameraQuality : null
+    );
   }
 
   _cameras() {
@@ -685,35 +749,78 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * @param {Record<string, string>} next
-   */
-  async _persistForceAspect(next) {
-    this._saving = true;
-    this._forceAspect = normalizeForceAspectMap(next);
-    try {
-      const saved = await saveForceAspect(this.hass, this._forceAspect);
-      if (saved?.force_aspect) {
-        this._forceAspect = normalizeForceAspectMap(saved.force_aspect);
-      }
-      this._status = "Camera aspect saved for all users";
-      this._schedulePack();
-    } catch (err) {
-      this._status = err?.message || "Could not save camera aspect";
-    } finally {
-      this._saving = false;
-    }
-  }
-
-  /**
+   * Draft force-aspect change (not persisted until Save).
    * @param {string} cameraId
    * @param {string} label
    */
-  async _setForceAspect(cameraId, label) {
+  _setForceAspect(cameraId, label) {
+    if (label === "custom") {
+      const existing = this._forceAspect?.[cameraId] || "";
+      this._customAspectDraft =
+        existing && !isPresetForceAspect(existing) ? existing : "1920:2560";
+      const normalized = normalizeForceAspectLabel(this._customAspectDraft);
+      const next = { ...this._forceAspect };
+      if (normalized === "auto") delete next[cameraId];
+      else next[cameraId] = normalized;
+      this._forceAspect = next;
+      this._syncPrefsDirty();
+      this._schedulePack();
+      return;
+    }
     const normalized = normalizeForceAspectLabel(label);
     const next = { ...this._forceAspect };
     if (normalized === "auto") delete next[cameraId];
     else next[cameraId] = normalized;
-    await this._persistForceAspect(next);
+    this._forceAspect = next;
+    if (isPresetForceAspect(normalized) || normalized === "auto") {
+      this._customAspectDraft = "";
+    }
+    this._syncPrefsDirty();
+    this._schedulePack();
+  }
+
+  /**
+   * @param {string} cameraId
+   * @param {string} raw
+   */
+  _setCustomForceAspect(cameraId, raw) {
+    this._customAspectDraft = raw;
+    const normalized = normalizeForceAspectLabel(raw);
+    const next = { ...this._forceAspect };
+    if (normalized === "auto") delete next[cameraId];
+    else next[cameraId] = normalized;
+    this._forceAspect = next;
+    this._syncPrefsDirty();
+    this._schedulePack();
+  }
+
+  /**
+   * Persist draft quality + force-aspect for every HA user.
+   */
+  async _saveCameraPrefs() {
+    this._saving = true;
+    try {
+      const saved = await saveCameraPrefs(this.hass, {
+        cameraQuality: this._cameraQuality,
+        forceAspect: this._forceAspect,
+      });
+      if (saved) {
+        this._applySharedCameraPrefs({
+          force_aspect: saved.force_aspect,
+          camera_quality: saved.camera_quality,
+        });
+      } else {
+        this._savedForceAspect = { ...this._forceAspect };
+        this._savedCameraQuality = { ...this._cameraQuality };
+        this._prefsDirty = false;
+      }
+      this._status = "Quality & aspect saved for all users";
+      this._schedulePack();
+    } catch (err) {
+      this._status = err?.message || "Could not save camera preferences";
+    } finally {
+      this._saving = false;
+    }
   }
 
   async _setSensorLinked(cameraId, sensorId, linked) {
@@ -753,15 +860,35 @@ export class CctvView extends LitElement {
   _openDetail(entityId) {
     this._detailId = entityId;
     this._sensorFilter = "";
+    const current = this._forceAspect?.[entityId];
+    this._customAspectDraft =
+      current && !isPresetForceAspect(current) ? current : "";
   }
 
   _back() {
     this._detailId = null;
     this._sensorFilter = "";
+    this._customAspectDraft = "";
   }
 
+  /**
+   * Quality change: panel drafts into shared map (Save required); cards use
+   * browser localStorage.
+   * @param {string} entityId
+   * @param {string} quality
+   */
   _setQuality(entityId, quality) {
-    writeStoredQuality(entityId, quality);
+    if (!this.panelMode) {
+      writeStoredQuality(entityId, quality);
+      this._qualityTick += 1;
+      return;
+    }
+    const value = String(quality || "auto").toLowerCase();
+    const next = { ...this._cameraQuality };
+    if (!value || value === "auto") delete next[entityId];
+    else next[entityId] = value;
+    this._cameraQuality = normalizeCameraQualityMap(next);
+    this._syncPrefsDirty();
     this._qualityTick += 1;
   }
 
@@ -1485,7 +1612,7 @@ export class CctvView extends LitElement {
   }
 
   _renderLayoutTile(cam, packed, streamsActive = true) {
-    const quality = resolveQuality(this.config, cam.entityId);
+    const quality = this._qualityFor(cam.entityId);
     const linked = this._linksFor(cam.entityId).length;
     const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
     const positioned = Boolean(packed && packStyle);
@@ -1589,7 +1716,7 @@ export class CctvView extends LitElement {
     return html`
       <div class="grid" role="list">
         ${cameras.map((cam) => {
-          const quality = resolveQuality(this.config, cam.entityId);
+          const quality = this._qualityFor(cam.entityId);
           return html`
             <article class="tile" role="listitem">
               <div class="tile-media">
@@ -1621,7 +1748,7 @@ export class CctvView extends LitElement {
 
   _renderDetail(cam, streamsActive = true) {
     const actions = availableCameraActions(this.hass, cam);
-    const quality = resolveQuality(this.config, cam.entityId);
+    const quality = this._qualityFor(cam.entityId);
     const streamCam = resolveStreamCamera(
       this.hass,
       cam,
@@ -1629,6 +1756,15 @@ export class CctvView extends LitElement {
       quality,
       "detail"
     );
+    const forceSelect = forceAspectSelectValue(this._forceAspect?.[cam.entityId]);
+    const showCustomAspect =
+      this.panelMode &&
+      (forceSelect === "custom" || Boolean(this._customAspectDraft));
+    const customAspectValue =
+      this._customAspectDraft ||
+      (forceSelect === "custom"
+        ? this._forceAspectLabel(cam.entityId)
+        : "");
     return html`
       <button class="btn linkish" type="button" @click=${this._back}>
         ← ${this.panelMode ? "Back to layout" : "All cameras"}
@@ -1668,7 +1804,7 @@ export class CctvView extends LitElement {
               <label>
                 Force aspect ratio
                 <select
-                  .value=${this._forceAspectLabel(cam.entityId)}
+                  .value=${forceSelect}
                   @change=${(e) =>
                     this._setForceAspect(cam.entityId, e.target.value)}
                 >
@@ -1679,8 +1815,44 @@ export class CctvView extends LitElement {
                 </select>
               </label>
               <span class="hint">
-                Shared for all users. Use 9:16 for portrait doorbells when auto
-                fit fails.
+                Shared for all users after Save. Use 1920×2560 / 3:4 for
+                portrait doorbells when auto fit fails.
+              </span>
+            </div>
+            ${showCustomAspect
+              ? html`
+                  <div class="quality-row">
+                    <label>
+                      Custom W:H
+                      <input
+                        type="text"
+                        class="aspect-input"
+                        placeholder="1920:2560"
+                        .value=${customAspectValue}
+                        @input=${(e) =>
+                          this._setCustomForceAspect(
+                            cam.entityId,
+                            e.target.value
+                          )}
+                      />
+                    </label>
+                    <span class="hint">Examples: 1920:2560, 3:4, 1080x1920</span>
+                  </div>
+                `
+              : nothing}
+            <div class="quality-row prefs-save-row">
+              <button
+                class="btn primary"
+                type="button"
+                ?disabled=${this._saving || !this._prefsDirty}
+                @click=${() => this._saveCameraPrefs()}
+              >
+                ${this._saving ? "Saving…" : "Save quality & aspect"}
+              </button>
+              <span class="hint">
+                ${this._prefsDirty
+                  ? "Unsaved changes — writes shared settings for all users."
+                  : "No unsaved changes."}
               </span>
             </div>
           `

@@ -11,27 +11,65 @@ export const DEFAULT_ASPECT = 16 / 9;
 export const FORCE_ASPECT_OPTIONS = [
   { value: "auto", label: "Auto (detect)", ratio: null },
   { value: "16:9", label: "16:9 landscape", ratio: 16 / 9 },
-  { value: "9:16", label: "9:16 portrait (doorbell)", ratio: 9 / 16 },
+  { value: "9:16", label: "9:16 portrait", ratio: 9 / 16 },
   { value: "4:3", label: "4:3 landscape", ratio: 4 / 3 },
   { value: "3:4", label: "3:4 portrait", ratio: 3 / 4 },
+  {
+    value: "1920:2560",
+    label: "1920×2560 doorbell (3:4)",
+    ratio: 1920 / 2560,
+  },
   { value: "1:1", label: "1:1 square", ratio: 1 },
   { value: "3:2", label: "3:2 landscape", ratio: 3 / 2 },
   { value: "2:3", label: "2:3 portrait", ratio: 2 / 3 },
+  { value: "custom", label: "Custom W:H…", ratio: null },
 ];
 
+const CUSTOM_ASPECT_RE = /^(\d+(?:\.\d+)?)[:x×*](\d+(?:\.\d+)?)$/i;
+
 /**
+ * Parse a preset or custom W:H / WxH label into a normalized store value.
  * @param {string | null | undefined} label
  * @returns {string} normalized label or "auto"
  */
 export function normalizeForceAspectLabel(label) {
-  const value = String(label || "")
+  let value = String(label || "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "");
-  if (!value || value === "auto" || value === "default" || value === "none") {
+    .replace(/\s+/g, "")
+    .replace(/×/g, "x")
+    .replace(/\*/g, "x");
+  if (
+    !value ||
+    value === "auto" ||
+    value === "default" ||
+    value === "none" ||
+    value === "custom"
+  ) {
     return "auto";
   }
-  return FORCE_ASPECT_OPTIONS.some((opt) => opt.value === value) ? value : "auto";
+  if (FORCE_ASPECT_OPTIONS.some((opt) => opt.value === value && opt.value !== "custom")) {
+    return value;
+  }
+  const match = CUSTOM_ASPECT_RE.exec(value);
+  if (!match) return "auto";
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    width / height < 0.05 ||
+    width / height > 20
+  ) {
+    return "auto";
+  }
+  if (Number.isInteger(width) && Number.isInteger(height)) {
+    return `${width}:${height}`;
+  }
+  // Trim trailing zeros via Number → string (matches Python :g).
+  return `${Number(width.toPrecision(12))}:${Number(height.toPrecision(12))}`;
 }
 
 /**
@@ -40,8 +78,35 @@ export function normalizeForceAspectLabel(label) {
  */
 export function forceAspectRatio(label) {
   const normalized = normalizeForceAspectLabel(label);
+  if (normalized === "auto") return null;
   const opt = FORCE_ASPECT_OPTIONS.find((row) => row.value === normalized);
-  return opt?.ratio ?? null;
+  if (opt?.ratio) return opt.ratio;
+  const [w, h] = normalized.split(":").map(Number);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return w / h;
+}
+
+/**
+ * Whether a stored label is one of the built-in presets (not freeform custom).
+ * @param {string | null | undefined} label
+ */
+export function isPresetForceAspect(label) {
+  const normalized = normalizeForceAspectLabel(label);
+  if (normalized === "auto") return true;
+  return FORCE_ASPECT_OPTIONS.some(
+    (opt) => opt.value === normalized && opt.value !== "custom"
+  );
+}
+
+/**
+ * Select value for the force-aspect dropdown (preset or "custom").
+ * @param {string | null | undefined} label
+ */
+export function forceAspectSelectValue(label) {
+  const normalized = normalizeForceAspectLabel(label);
+  if (normalized === "auto") return "auto";
+  if (isPresetForceAspect(normalized)) return normalized;
+  return "custom";
 }
 
 /**

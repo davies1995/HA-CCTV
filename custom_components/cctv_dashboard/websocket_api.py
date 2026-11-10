@@ -21,6 +21,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_settings)
     websocket_api.async_register_command(hass, ws_set_sensor_links)
     websocket_api.async_register_command(hass, ws_set_force_aspect)
+    websocket_api.async_register_command(hass, ws_set_camera_prefs)
     websocket_api.async_register_command(hass, ws_list_recordings)
     websocket_api.async_register_command(hass, ws_list_detections)
     websocket_api.async_register_command(hass, ws_delete_recording)
@@ -141,6 +142,36 @@ async def ws_set_force_aspect(
         connection.send_error(msg["id"], "not_ready", "CCTV store not ready")
         return
     data = await store.async_save({"force_aspect": msg["force_aspect"]})
+    connection.send_result(msg["id"], data)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cctv_dashboard/set_camera_prefs",
+        vol.Optional("camera_quality"): dict,
+        vol.Optional("force_aspect"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_set_camera_prefs(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save shared per-camera quality + force-aspect (all HA users)."""
+    store = _store(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "CCTV store not ready")
+        return
+    patch: dict[str, Any] = {}
+    if "camera_quality" in msg:
+        patch["camera_quality"] = msg["camera_quality"]
+    if "force_aspect" in msg:
+        patch["force_aspect"] = msg["force_aspect"]
+    if not patch:
+        connection.send_result(msg["id"], dict(store.data))
+        return
+    data = await store.async_save(patch)
     connection.send_result(msg["id"], data)
 
 
