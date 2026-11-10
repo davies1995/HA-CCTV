@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.4.0 — 2026-11-10
+
+### Added
+
+- Per-camera detection sensor linking (person / car / animal / package / …) with suggestions + manual confirm
+- Bottom detection timeline for selected cameras (on/off flags, durations, 15m–24h windows)
+- Detection-triggered recordings: when a linked sensor fires, record **all available cameras** until sensors clear
+- Retention configurable in panel Settings as **days** (default 1 / 24 hours)
+- Saved detections browser (clips via `camera.record`, snapshot fallback)
+
 ## 0.3.0 — 2026-11-10
 
 ### Added
