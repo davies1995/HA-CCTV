@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Detection **Play** actually starts clips again (v0.18.1 left a freeze frame): restore stable `.src` + muted autoplay, stop calling `video.load()` after setting src, wait for pack settle, and re-kick `play()` for Companion/desktop
+
 ## 0.18.1 — 2026-11-11
 
 ### Fixed
