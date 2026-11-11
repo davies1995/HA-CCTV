@@ -7,7 +7,7 @@
 
 export const TV_MODE_STORAGE_KEY = "cctv_dashboard:tv_mode";
 
-/** Target stage aspect for wall TVs / kiosk displays. */
+/** Fixed mosaic stage aspect (width / height). */
 export const TV_STAGE_ASPECT = 16 / 9;
 
 /**
@@ -50,8 +50,6 @@ export function estimateTvChromePx(doc = typeof document !== "undefined" ? docum
     if (root) {
       const styles = getComputedStyle(root);
       header = parseFloat(styles.getPropertyValue("--app-header-height")) || header;
-      safeTop = parseFloat(styles.getPropertyValue("env(safe-area-inset-top)")) || 0;
-      // env() via getPropertyValue is unreliable; try padding on body as fallback later.
       kiosk = parseFloat(styles.getPropertyValue("--cctv-kiosk-inset")) || 0;
     }
   } catch {
@@ -65,44 +63,97 @@ export function estimateTvChromePx(doc = typeof document !== "undefined" ? docum
 }
 
 /**
- * Largest 16:9 rectangle that fits in the available area.
- * @param {number} availW
- * @param {number} availH
- * @param {number} [aspect]
- * @returns {{ width: number, height: number }}
+ * Content-box width of an element (clientWidth minus horizontal padding).
+ * Prefer measuring the panel wrap so HA sidebar is already excluded.
+ * @param {Element | null | undefined} el
+ * @returns {number}
  */
-export function fitStageBox(availW, availH, aspect = TV_STAGE_ASPECT) {
-  const w = Number(availW) || 0;
-  const h = Number(availH) || 0;
-  const r = Number(aspect) > 0.05 ? Number(aspect) : TV_STAGE_ASPECT;
-  if (w <= 1 || h <= 1) return { width: 0, height: 0 };
-  if (w / h >= r) {
-    const height = h;
-    return { width: height * r, height };
+export function contentBoxWidth(el) {
+  if (!el || typeof el.clientWidth !== "number") return 0;
+  let pad = 0;
+  try {
+    if (typeof getComputedStyle === "function") {
+      const styles = getComputedStyle(el);
+      pad =
+        (parseFloat(styles.paddingLeft) || 0) +
+        (parseFloat(styles.paddingRight) || 0);
+    }
+  } catch {
+    /* ignore */
   }
-  const width = w;
-  return { width, height: width / r };
+  return Math.max(0, el.clientWidth - pad);
 }
 
 /**
- * Available mosaic viewport for TV mode (window minus chrome).
+ * Largest 16:9 box that fits inside maxW × maxH (inscribed).
+ * Prefer {@link tvStageFullContentWidth} for TV mode — inscribing against
+ * height shrinks width and leaves side gutters.
+ *
+ * @param {number} maxW
+ * @param {number} maxH
+ * @param {number} [aspect]
+ * @returns {{ width: number, height: number }}
+ */
+export function fitStageBox(maxW, maxH, aspect = TV_STAGE_ASPECT) {
+  const w = Math.max(0, Number(maxW) || 0);
+  const h = Math.max(0, Number(maxH) || 0);
+  const a = Number(aspect) > 0 ? Number(aspect) : TV_STAGE_ASPECT;
+  if (w <= 0 || h <= 0) return { width: 0, height: 0 };
+  if (w / h >= a) {
+    return { width: h * a, height: h };
+  }
+  return { width: w, height: w / a };
+}
+
+/**
+ * TV mosaic stage: **16:9**, width = full content width (sidebar excluded),
+ * height = width / (16/9). Never shrink width to fit chrome height — that
+ * was the old inscribed box that left large side gutters. Extra vertical
+ * room after chrome is reported as `offsetTop` for centering.
+ *
+ * @param {number} contentW  Panel content width (sidebar already excluded)
+ * @param {number} viewportH Window / viewport height
+ * @param {number} [chromePx]
+ * @returns {{
+ *   availW: number,
+ *   availH: number,
+ *   offsetTop: number,
+ *   stage: { width: number, height: number }
+ * }}
+ */
+export function tvStageFullContentWidth(contentW, viewportH, chromePx) {
+  const w = Math.max(0, Number(contentW) || 0);
+  const vh = Math.max(0, Number(viewportH) || 0);
+  const chrome = Number.isFinite(chromePx) ? Number(chromePx) : estimateTvChromePx();
+  const availH = Math.max(0, vh - chrome);
+  const stageH = w > 0 ? w / TV_STAGE_ASPECT : 0;
+  const offsetTop = Math.max(0, (availH - stageH) / 2);
+  return {
+    availW: w,
+    availH,
+    offsetTop,
+    stage: { width: w, height: stageH },
+  };
+}
+
+/** @deprecated Use {@link tvStageFullContentWidth}. */
+export function tvStageFillWidth(contentW, viewportH, chromePx) {
+  return tvStageFullContentWidth(contentW, viewportH, chromePx);
+}
+
+/**
  * @param {{ innerWidth?: number, innerHeight?: number } | null | undefined} [win]
  * @param {number} [chromePx]
- * @returns {{ availW: number, availH: number, stage: { width: number, height: number } }}
+ * @param {number} [sidebarPx] Approximate HA sidebar width to subtract
  */
-export function tvStageFromViewport(win, chromePx) {
+export function tvStageFromViewport(win, chromePx, sidebarPx = 0) {
   const iw = Number(win?.innerWidth) || 0;
   const ih = Number(win?.innerHeight) || 0;
-  const chrome = Number.isFinite(chromePx) ? chromePx : estimateTvChromePx();
+  const side = Math.max(0, Number(sidebarPx) || 0);
   // Horizontal padding from .wrap (~1.25rem each side).
   const sidePad = 40;
-  const availW = Math.max(0, iw - sidePad);
-  const availH = Math.max(0, ih - chrome);
-  return {
-    availW,
-    availH,
-    stage: fitStageBox(availW, availH, TV_STAGE_ASPECT),
-  };
+  const contentW = Math.max(0, iw - side - sidePad);
+  return tvStageFullContentWidth(contentW, ih, chromePx);
 }
 
 /**

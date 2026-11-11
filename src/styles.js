@@ -21,7 +21,7 @@ export const sharedStyles = css`
       overflow: hidden;
     }
 
-    /* TV mode: page scrolls; mosaic stays above the fold on a 16:9 stage. */
+    /* TV mode: page scrolls; full-width 16:9 mosaic above the fold. */
     :host([panel-mode][tv-mode]) {
       height: auto;
       max-height: none;
@@ -82,7 +82,7 @@ export const sharedStyles = css`
       margin-top: 0;
     }
 
-    /* TV / kiosk: mosaic stage is fixed 16:9 above the fold; rest scrolls. */
+    /* TV / kiosk: full-width 16:9 mosaic stage; rest scrolls. */
     .panel-wrap.tv-mode {
       height: auto;
       max-height: none;
@@ -119,12 +119,14 @@ export const sharedStyles = css`
 
     .panel-wrap.tv-mode > .layout.layout-pack-tv {
       flex: 0 0 auto;
+      /* 16:9 stage sized to full content width — do not height-limit / shrink width. */
       width: var(--cctv-tv-stage-w, 100%);
-      height: var(--cctv-tv-stage-h, calc(100dvh - var(--cctv-tv-chrome, 96px)));
+      height: var(--cctv-tv-stage-h, auto);
       max-width: 100%;
-      max-height: calc(100dvh - var(--cctv-tv-chrome, 96px));
-      margin: 0 auto;
+      aspect-ratio: 16 / 9;
+      margin: var(--cctv-tv-stage-offset, 0) auto 0;
       align-self: center;
+      box-sizing: border-box;
     }
 
     .panel-wrap.tv-mode > cctv-detection-timeline,
