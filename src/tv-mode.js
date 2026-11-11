@@ -7,9 +7,6 @@
 
 export const TV_MODE_STORAGE_KEY = "cctv_dashboard:tv_mode";
 
-/** Target stage aspect for wall TVs / kiosk displays. */
-export const TV_STAGE_ASPECT = 16 / 9;
-
 /**
  * @returns {boolean}
  */
@@ -50,8 +47,6 @@ export function estimateTvChromePx(doc = typeof document !== "undefined" ? docum
     if (root) {
       const styles = getComputedStyle(root);
       header = parseFloat(styles.getPropertyValue("--app-header-height")) || header;
-      safeTop = parseFloat(styles.getPropertyValue("env(safe-area-inset-top)")) || 0;
-      // env() via getPropertyValue is unreliable; try padding on body as fallback later.
       kiosk = parseFloat(styles.getPropertyValue("--cctv-kiosk-inset")) || 0;
     }
   } catch {
@@ -65,44 +60,63 @@ export function estimateTvChromePx(doc = typeof document !== "undefined" ? docum
 }
 
 /**
- * Largest 16:9 rectangle that fits in the available area.
- * @param {number} availW
- * @param {number} availH
- * @param {number} [aspect]
- * @returns {{ width: number, height: number }}
+ * Content-box width of an element (clientWidth minus horizontal padding).
+ * Prefer measuring the panel wrap so HA sidebar is already excluded.
+ * @param {Element | null | undefined} el
+ * @returns {number}
  */
-export function fitStageBox(availW, availH, aspect = TV_STAGE_ASPECT) {
-  const w = Number(availW) || 0;
-  const h = Number(availH) || 0;
-  const r = Number(aspect) > 0.05 ? Number(aspect) : TV_STAGE_ASPECT;
-  if (w <= 1 || h <= 1) return { width: 0, height: 0 };
-  if (w / h >= r) {
-    const height = h;
-    return { width: height * r, height };
+export function contentBoxWidth(el) {
+  if (!el || typeof el.clientWidth !== "number") return 0;
+  let pad = 0;
+  try {
+    if (typeof getComputedStyle === "function") {
+      const styles = getComputedStyle(el);
+      pad =
+        (parseFloat(styles.paddingLeft) || 0) +
+        (parseFloat(styles.paddingRight) || 0);
+    }
+  } catch {
+    /* ignore */
   }
-  const width = w;
-  return { width, height: width / r };
+  return Math.max(0, el.clientWidth - pad);
 }
 
 /**
- * Available mosaic viewport for TV mode (window minus chrome).
- * @param {{ innerWidth?: number, innerHeight?: number } | null | undefined} [win]
+ * TV mosaic stage: **full content width** × chrome-aware height (above the fold).
+ * Do not letterbox to 16:9 — that left large side gutters on wide TVs.
+ *
+ * @param {number} contentW  Panel content width (sidebar already excluded)
+ * @param {number} viewportH Window / viewport height
  * @param {number} [chromePx]
  * @returns {{ availW: number, availH: number, stage: { width: number, height: number } }}
  */
-export function tvStageFromViewport(win, chromePx) {
+export function tvStageFillWidth(contentW, viewportH, chromePx) {
+  const w = Math.max(0, Number(contentW) || 0);
+  const vh = Math.max(0, Number(viewportH) || 0);
+  const chrome = Number.isFinite(chromePx) ? Number(chromePx) : estimateTvChromePx();
+  const h = Math.max(0, vh - chrome);
+  return {
+    availW: w,
+    availH: h,
+    stage: { width: w, height: h },
+  };
+}
+
+/**
+ * @deprecated Prefer tvStageFillWidth with measured panel content width.
+ * Kept for older call sites / tests that only have window metrics.
+ * @param {{ innerWidth?: number, innerHeight?: number } | null | undefined} [win]
+ * @param {number} [chromePx]
+ * @param {number} [sidebarPx] Approximate HA sidebar width to subtract
+ */
+export function tvStageFromViewport(win, chromePx, sidebarPx = 0) {
   const iw = Number(win?.innerWidth) || 0;
   const ih = Number(win?.innerHeight) || 0;
-  const chrome = Number.isFinite(chromePx) ? chromePx : estimateTvChromePx();
+  const side = Math.max(0, Number(sidebarPx) || 0);
   // Horizontal padding from .wrap (~1.25rem each side).
   const sidePad = 40;
-  const availW = Math.max(0, iw - sidePad);
-  const availH = Math.max(0, ih - chrome);
-  return {
-    availW,
-    availH,
-    stage: fitStageBox(availW, availH, TV_STAGE_ASPECT),
-  };
+  const contentW = Math.max(0, iw - side - sidePad);
+  return tvStageFillWidth(contentW, ih, chromePx);
 }
 
 /**

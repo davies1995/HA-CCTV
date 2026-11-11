@@ -1,30 +1,40 @@
 /** Sanity checks for TV mode geometry helpers. */
 import {
-  fitStageBox,
+  contentBoxWidth,
   tvPackGap,
+  tvStageFillWidth,
   tvStageFromViewport,
-  TV_STAGE_ASPECT,
 } from "../src/tv-mode.js";
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-const box = fitStageBox(1920, 1080);
-assert(Math.abs(box.width / box.height - TV_STAGE_ASPECT) < 1e-6, "16:9 full HD");
-assert(box.width === 1920 && box.height === 1080, "fills 1920x1080");
+const filled = tvStageFillWidth(1600, 1080, 80);
+assert(filled.stage.width === 1600, "fills measured content width");
+assert(filled.stage.height === 1000, "chrome reserved from height");
+assert(filled.availW === 1600 && filled.availH === 1000, "avail matches stage");
 
-const tall = fitStageBox(1000, 2000);
-assert(Math.abs(tall.width - 1000) < 1e-6, "width limited");
-assert(Math.abs(tall.height - 1000 / TV_STAGE_ASPECT) < 1e-6, "height from aspect");
+const tall = tvStageFillWidth(1000, 2000, 100);
+assert(tall.stage.width === 1000, "tall viewport still full width");
+assert(tall.stage.height === 1900, "tall height uses remaining chrome space");
 
-const wide = fitStageBox(2000, 800);
-assert(Math.abs(wide.height - 800) < 1e-6, "height limited");
-assert(Math.abs(wide.width - 800 * TV_STAGE_ASPECT) < 1e-6, "width from aspect");
+const wide = tvStageFillWidth(2400, 900, 100);
+assert(wide.stage.width === 2400, "ultrawide uses full content width");
+assert(wide.stage.height === 800, "height is chrome-aware, not 16:9 letterbox");
+assert(
+  Math.abs(wide.stage.width / wide.stage.height - 16 / 9) > 0.2,
+  "stage is not forced to 16:9"
+);
 
-const stage = tvStageFromViewport({ innerWidth: 1920, innerHeight: 1080 }, 80);
-assert(stage.stage.height <= 1080 - 80, "chrome reserved");
-assert(stage.stage.width / stage.stage.height - TV_STAGE_ASPECT < 1e-6, "stage 16:9");
+const stage = tvStageFromViewport({ innerWidth: 1920, innerHeight: 1080 }, 80, 256);
+assert(stage.stage.height === 1000, "viewport helper reserves chrome");
+assert(stage.stage.width === 1920 - 256 - 40, "subtracts sidebar + side pad");
+
+const fakeEl = {
+  clientWidth: 1200,
+};
+assert(contentBoxWidth(fakeEl) === 1200, "contentBoxWidth without padding");
 
 assert(tvPackGap(1) === 6, "tight gap for 1");
 assert(tvPackGap(2) === 6, "tight gap for 2");

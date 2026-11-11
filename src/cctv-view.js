@@ -61,11 +61,12 @@ import {
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import {
+  contentBoxWidth,
   estimateTvChromePx,
   loadTvMode,
   saveTvMode,
   tvPackGap,
-  tvStageFromViewport,
+  tvStageFillWidth,
 } from "./tv-mode.js";
 import "./stream-player.js";
 import "./detection-timeline.js";
@@ -309,7 +310,10 @@ export class CctvView extends LitElement {
     this._onTvResize = null;
   }
 
-  /** Size the above-the-fold 16:9 mosaic stage for TV / kiosk displays. */
+  /**
+   * Size the above-the-fold mosaic stage for TV / kiosk displays.
+   * Fills the panel content width (no centered 16:9 letterbox / side gutters).
+   */
   _refreshTvStage() {
     if (!this._tvMode || !this.panelMode) {
       if (this._tvStage?.width || this._tvStage?.height) {
@@ -318,14 +322,33 @@ export class CctvView extends LitElement {
       return;
     }
     const chrome = estimateTvChromePx();
-    const { stage } = tvStageFromViewport(
-      typeof window !== "undefined" ? window : null,
-      chrome
-    );
+    const wrap = this.renderRoot?.querySelector?.(".panel-wrap");
+    const layout = this.renderRoot?.querySelector?.(".layout-pack-tv");
+    // Prefer measured panel / layout width so the HA sidebar is already excluded.
+    let contentW = contentBoxWidth(wrap);
+    if (contentW < 8) contentW = contentBoxWidth(layout);
+    if (contentW < 8 && typeof this.clientWidth === "number") {
+      contentW = Math.max(0, this.clientWidth);
+    }
+    if (contentW < 8 && typeof window !== "undefined") {
+      // Last resort before first layout: viewport minus a typical HA sidebar + pad.
+      contentW = Math.max(0, (Number(window.innerWidth) || 0) - 256 - 40);
+    }
+    const viewportH =
+      typeof window !== "undefined" ? Number(window.innerHeight) || 0 : 0;
+    const { stage } = tvStageFillWidth(contentW, viewportH, chrome);
     const next = {
       width: Math.round(stage.width),
       height: Math.round(stage.height),
     };
+    // Avoid stamping a 0×N stage before the panel has laid out.
+    if (next.width < 8) {
+      this.style.setProperty("--cctv-tv-chrome", `${chrome}px`);
+      if (next.height >= 8) {
+        this.style.setProperty("--cctv-tv-stage-h", `${next.height}px`);
+      }
+      return;
+    }
     if (
       next.width !== this._tvStage?.width ||
       next.height !== this._tvStage?.height
@@ -498,7 +521,20 @@ export class CctvView extends LitElement {
         changed.has("_panelActive"))
     ) {
       this._schedulePack();
-      this.updateComplete.then(() => this._bindPackObserver());
+      this.updateComplete.then(() => {
+        if (this._tvMode) this._refreshTvStage();
+        this._bindPackObserver();
+      });
+    }
+  }
+
+  firstUpdated() {
+    if (this._tvMode && this.panelMode) {
+      this.updateComplete.then(() => {
+        this._refreshTvStage();
+        this._schedulePack();
+        this._bindPackObserver();
+      });
     }
   }
 
@@ -541,14 +577,18 @@ export class CctvView extends LitElement {
       if (Object.keys(this._packStyles).length) this._packStyles = {};
       return;
     }
+    if (this._tvMode) this._refreshTvStage();
     const el = this.renderRoot?.querySelector?.(".layout-pack");
     if (!el) return;
     const rect = el.getBoundingClientRect();
     let boxW = Math.max(0, rect.width);
     let boxH = Math.max(0, rect.height);
-    // TV mode: prefer the computed 16:9 stage so packing matches above-the-fold fit.
-    if (this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8) {
-      boxW = this._tvStage.width;
+    // TV mode: prefer the full-width chrome-aware stage so packing matches the fold.
+    // Prefer the laid-out width when the stage is already stretched to 100%.
+    if (this._tvMode && this._tvStage?.height >= 8) {
+      if (this._tvStage.width >= 8) {
+        boxW = Math.max(boxW, this._tvStage.width);
+      }
       boxH = this._tvStage.height;
     }
     if (boxW < 8 || boxH < 8) return;
@@ -1105,7 +1145,7 @@ export class CctvView extends LitElement {
     }
     this._refreshTvStage();
     this._status = this._tvMode
-      ? "TV mode on — 16:9 mosaic fills this display (saved on this device)"
+      ? "TV mode on — mosaic fills this display width (saved on this device)"
       : "TV mode off";
     this._schedulePack();
     this.updateComplete.then(() => this._bindPackObserver());
@@ -1796,7 +1836,7 @@ export class CctvView extends LitElement {
             />
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
-              Per-device (this browser / kiosk). Fits a 16:9 mosaic above the fold
+              Per-device (this browser / kiosk). Fills the panel width above the fold
               (accounts for HA / kiosk chrome); up to 4 cams fill the stage; 1–2 cams
               maximize. Timeline and Saved detections scroll below.
             </span>
@@ -1998,10 +2038,13 @@ export class CctvView extends LitElement {
       `;
     }
 
+    // Width always 100% of the panel content box; height is chrome-aware above the fold.
     const tvStage =
-      this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8
-        ? `width:${this._tvStage.width}px;height:${this._tvStage.height}px;max-width:100%;`
-        : nothing;
+      this._tvMode && this._tvStage?.height >= 8
+        ? `width:100%;height:${this._tvStage.height}px;max-width:100%;`
+        : this._tvMode
+          ? `width:100%;max-width:100%;`
+          : nothing;
     const countClass =
       this._tvMode && list.length <= 2 ? "layout-pack-maximize" : "";
 
