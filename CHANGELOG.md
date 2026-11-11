@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Detection **Play** waits until mosaic `<video class="playback-media">` nodes exist before kicking `play()` (fixes toast “Playback ready but no video elements found”)
+
 ## 0.18.4 — 2026-11-11
 
 ### Fixed
