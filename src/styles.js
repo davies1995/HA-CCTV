@@ -457,7 +457,6 @@ export const sharedStyles = css`
   }
 
   .layout-tile .tile-media {
-    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     background: #0a0e13;
@@ -499,42 +498,6 @@ export const sharedStyles = css`
     height: 100%;
     min-height: 0;
     align-self: stretch;
-  }
-
-  /*
-   * Trigger-cam highlight during detection playback: overlay inside .tile-media
-   * so we never rewrite the tile class/style (that broke src/controls/play).
-   * pointer-events:none keeps native <video controls> clickable.
-   */
-  .layout-tile .trigger-cam-overlay {
-    position: absolute;
-    inset: 0;
-    box-sizing: border-box;
-    border: 3px solid var(--cctv-trigger-color, var(--cctv-accent));
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .layout-tile .trigger-cam-overlay.kind-person {
-    --cctv-trigger-color: #5eb1ff;
-  }
-  .layout-tile .trigger-cam-overlay.kind-car {
-    --cctv-trigger-color: #f0b45a;
-  }
-  .layout-tile .trigger-cam-overlay.kind-animal {
-    --cctv-trigger-color: #7dcf8a;
-  }
-  .layout-tile .trigger-cam-overlay.kind-package {
-    --cctv-trigger-color: #c9a0ff;
-  }
-  .layout-tile .trigger-cam-overlay.kind-bicycle {
-    --cctv-trigger-color: #67d5c8;
-  }
-  .layout-tile .trigger-cam-overlay.kind-motion {
-    --cctv-trigger-color: #e6d36a;
-  }
-  .layout-tile .trigger-cam-overlay.kind-other {
-    --cctv-trigger-color: #8b9aab;
   }
 
   .layout-1 .layout-tile cctv-stream-player {
