@@ -1,7 +1,7 @@
 """Constants for the CCTV Dashboard integration."""
 
 DOMAIN = "cctv_dashboard"
-VERSION = "0.18.0"
+VERSION = "0.18.1"
 PANEL_URL_PATH = "cctv"
 URL_BASE = "/cctv_dashboard"
 JS_FILENAME = "cctv-dashboard.js"
