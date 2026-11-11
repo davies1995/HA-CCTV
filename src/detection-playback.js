@@ -80,6 +80,103 @@ export function clipTimeBounds(clip) {
 }
 
 /**
+ * @param {any} clip
+ * @returns {boolean}
+ */
+export function clipIsPlayable(clip) {
+  if (!clip) return false;
+  // Empty/incomplete camera.record files are unplayable in <video>.
+  if (clip.kind === "snapshot") return true;
+  return Number(clip.size) > 0 || !("size" in (clip || {}));
+}
+
+/**
+ * Resolve camera.* id from a clip (index field, else filename hint).
+ * @param {any} clip
+ * @returns {string}
+ */
+export function clipCameraId(clip) {
+  const direct = String(clip?.camera_id || "").trim();
+  if (direct.startsWith("camera.")) return direct;
+  // Filename: {session_id}_{cam_safe}_{seq}_{stamp}.(mp4|jpg)
+  // session_id is YYYYMMDDTHHMMSSZ_<8 hex>.
+  const name = String(clip?.path || clip?.url || "")
+    .split("?")[0]
+    .split("/")
+    .pop();
+  if (!name) return "";
+  const match = name.match(
+    /^(\d{8}T\d{6}Z_[a-f0-9]{8})_(.+)_(\d{3})_(\d{8}T\d{6}Z)\.(?:mp4|jpg|jpeg|webp)$/i
+  );
+  if (!match) return "";
+  return `camera.${match[2]}`;
+}
+
+/**
+ * Cameras in a session that have at least one playable clip.
+ * @param {any} session
+ * @returns {string[]}
+ */
+export function playableCameraIdsFromSession(session) {
+  /** @type {Map<string, boolean>} */
+  const found = new Map();
+  for (const clip of session?.clips || []) {
+    const cam = clipCameraId(clip);
+    if (!cam || found.get(cam)) continue;
+    if (clipIsPlayable(clip)) found.set(cam, true);
+  }
+  // Prefer session.cameras order when present (recording order).
+  const preferred = Array.isArray(session?.cameras)
+    ? session.cameras.map(String).filter((id) => found.has(id))
+    : [];
+  if (preferred.length) {
+    for (const id of found.keys()) {
+      if (!preferred.includes(id)) preferred.push(id);
+    }
+    return preferred;
+  }
+  return [...found.keys()];
+}
+
+/**
+ * Choose which cameras to play for a saved detection.
+ * Prefers the user's mosaic selection (same slots) when those cams have clips;
+ * if selection is empty or none of the selected cams have playable clips, fall
+ * back to cameras that do have clips (capped at maxStreams).
+ *
+ * @param {any} session
+ * @param {string[] | null | undefined} visibleIds
+ * @param {number} [maxStreams]
+ * @returns {{ cameraIds: string[], usedFallback: boolean, reason: "" | "empty-selection" | "no-selected-clips" }}
+ */
+export function resolvePlaybackCameraIds(session, visibleIds, maxStreams = 4) {
+  const max = Math.max(1, Number(maxStreams) || 4);
+  const playable = playableCameraIdsFromSession(session);
+  const playableSet = new Set(playable);
+  const selected = (visibleIds || [])
+    .map(String)
+    .filter((id) => id.startsWith("camera."));
+
+  if (selected.length) {
+    const matched = selected.filter((id) => playableSet.has(id)).slice(0, max);
+    if (matched.length) {
+      return { cameraIds: matched, usedFallback: false, reason: "" };
+    }
+    return {
+      cameraIds: playable.slice(0, max),
+      usedFallback: true,
+      reason: "no-selected-clips",
+    };
+  }
+
+  return {
+    cameraIds: playable.slice(0, max),
+    usedFallback: true,
+    reason: "empty-selection",
+  };
+}
+
+/**
  * Group session clips by camera.
  * When `cameraIds` is provided, return tracks in that exact order (visible mosaic
  * order) and only for those cameras — never extra cams from the recording.
@@ -91,15 +188,19 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
   /** @type {Map<string, Array<any>>} */
   const byCam = new Map();
   for (const clip of session?.clips || []) {
-    const cam = String(clip.camera_id || "");
+    const cam = clipCameraId(clip);
     if (!cam) continue;
     if (!byCam.has(cam)) byCam.set(cam, []);
     byCam.get(cam).push(clip);
   }
 
-  const ids =
-    cameraIds && cameraIds.length
-      ? cameraIds.map(String)
+  let ids;
+  if (cameraIds && cameraIds.length) {
+    ids = cameraIds.map(String);
+  } else {
+    const playableIds = playableCameraIdsFromSession(session);
+    ids = playableIds.length
+      ? playableIds
       : [...byCam.keys()].sort((a, b) => {
           const na =
             hass?.states?.[a]?.attributes?.friendly_name ||
@@ -109,6 +210,7 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
             b.replace(/^camera\./, "");
           return na.localeCompare(nb);
         });
+  }
 
   return ids.map((cameraId) => {
     const clips = byCam.get(cameraId) || [];
@@ -120,28 +222,22 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
       name:
         hass?.states?.[cameraId]?.attributes?.friendly_name ||
         cameraId.replace(/^camera\./, ""),
-      items: ordered
-        .filter((clip) => {
-          // Empty/incomplete camera.record files are unplayable in <video>.
-          if (clip.kind === "snapshot") return true;
-          return Number(clip.size) > 0 || !("size" in (clip || {}));
-        })
-        .map((clip) => {
-          const bounds = clipTimeBounds(clip);
-          const path = String(clip.url || "");
-          return {
-            path,
-            // Unsigned until Play; signRecordingUrl is required for <video src>.
-            url: recordingMediaUrl(hass, path),
-            kind: clip.kind === "snapshot" ? "snapshot" : "video",
-            size: Number(clip.size) || 0,
-            seq: Number(clip.seq) || 0,
-            started: clip.started,
-            startedMs: bounds.start,
-            durationMs: bounds.durationMs,
-            endMs: bounds.end,
-          };
-        }),
+      items: ordered.filter(clipIsPlayable).map((clip) => {
+        const bounds = clipTimeBounds(clip);
+        const path = String(clip.url || "");
+        return {
+          path,
+          // Unsigned until Play; signRecordingUrl is required for <video src>.
+          url: recordingMediaUrl(hass, path),
+          kind: clip.kind === "snapshot" ? "snapshot" : "video",
+          size: Number(clip.size) || 0,
+          seq: Number(clip.seq) || 0,
+          started: clip.started,
+          startedMs: bounds.start,
+          durationMs: bounds.durationMs,
+          endMs: bounds.end,
+        };
+      }),
     };
   });
 }

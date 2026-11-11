@@ -364,8 +364,15 @@ class RecordingManager:
 
     async def _capture_chunk(self, session: RecordingSession, seq: int) -> None:
         stamp = dt_util.utcnow().strftime("%Y%m%dT%H%M%SZ")
-        for camera_id in session.cameras:
-            clip = await self._record_or_snapshot(session, camera_id, stamp, seq)
+        # Parallel per-camera capture; each call blocks until that clip finishes
+        # so we can verify the file (or fall back to snapshot) before indexing.
+        results = await asyncio.gather(
+            *[
+                self._record_or_snapshot(session, camera_id, stamp, seq)
+                for camera_id in session.cameras
+            ]
+        )
+        for clip in results:
             if clip:
                 session.clips.append(clip)
 
@@ -388,8 +395,17 @@ class RecordingManager:
                     "duration": RECORD_CHUNK_SECONDS,
                     "lookback": RECORD_LOOKBACK_SECONDS,
                 },
-                blocking=False,
+                blocking=True,
             )
+            # Non-blocking used to index clips before bytes landed → size 0 →
+            # frontend Play filtered them out ("No clips for … selected …").
+            if not await self.hass.async_add_executor_job(filename.is_file):
+                raise RuntimeError("record finished but file missing")
+            size = await self.hass.async_add_executor_job(
+                lambda: filename.stat().st_size
+            )
+            if size <= 0:
+                raise RuntimeError("record finished with empty file")
             return {
                 "camera_id": camera_id,
                 "path": str(filename),
@@ -398,6 +414,7 @@ class RecordingManager:
                 "seq": seq,
                 "started": stamp,
                 "duration": RECORD_CHUNK_SECONDS,
+                "size": int(size),
             }
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(

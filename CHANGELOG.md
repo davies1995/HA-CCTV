@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Saved detection **Play** on mobile no longer fails with “No clips for the currently selected mosaic cameras” when selection is empty or selected cams lack playable files — falls back to cameras that have clips; refreshes session metadata before Play
+- Detection `camera.record` now waits for each clip file (parallel per camera) and snapshots on empty/missing output so indexed clips are actually playable
+
 ## 0.13.0 — 2026-11-10
 
 ### Added

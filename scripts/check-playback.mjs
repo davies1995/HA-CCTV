@@ -1,10 +1,13 @@
 /** Sanity checks for detection playback helpers (no HA required). */
 import {
+  clipCameraId,
   clipPositionAtTime,
   clipTimeBounds,
   parseClipStartedMs,
+  playableCameraIdsFromSession,
   playbackTracksFromSession,
   playbackWindow,
+  resolvePlaybackCameraIds,
 } from "../src/detection-playback.js";
 
 function assert(cond, msg) {
@@ -82,5 +85,56 @@ const win = playbackWindow(session, {
 });
 assert(win.start === Date.parse("2026-11-10T12:15:00Z"), "window start");
 assert(win.end === Date.parse("2026-11-10T12:15:45Z"), "window end");
+
+assert(
+  clipCameraId({
+    path: "/media/cctv_dashboard/recordings/20261110T121500Z_ab12cd34_doorbell_001_20261110T121500Z.mp4",
+  }) === "camera.doorbell",
+  "camera id from filename"
+);
+
+const playableIds = playableCameraIdsFromSession(session);
+assert(playableIds.includes("camera.doorbell"), "playable doorbell");
+assert(playableIds.includes("camera.driveway"), "playable driveway");
+
+const preferSelected = resolvePlaybackCameraIds(
+  session,
+  ["camera.driveway", "camera.missing"],
+  4
+);
+assert(preferSelected.cameraIds[0] === "camera.driveway", "prefer selected with clips");
+assert(preferSelected.usedFallback === false, "no fallback when match");
+
+const emptySel = resolvePlaybackCameraIds(session, [], 2);
+assert(emptySel.reason === "empty-selection", "empty selection reason");
+assert(emptySel.cameraIds.length === 2, "empty selection uses playable cams");
+
+const noOverlap = resolvePlaybackCameraIds(
+  session,
+  ["camera.not_recorded"],
+  4
+);
+assert(noOverlap.reason === "no-selected-clips", "no overlap reason");
+assert(noOverlap.cameraIds.includes("camera.doorbell"), "fallback has clips");
+
+const emptyVideos = {
+  clips: [
+    {
+      camera_id: "camera.front",
+      url: "/empty.mp4",
+      kind: "video",
+      size: 0,
+      seq: 1,
+      started: "20261110T121455Z",
+      duration: 30,
+    },
+  ],
+  cameras: ["camera.front"],
+};
+assert(playableCameraIdsFromSession(emptyVideos).length === 0, "size 0 video skipped");
+assert(
+  resolvePlaybackCameraIds(emptyVideos, ["camera.front"], 4).cameraIds.length === 0,
+  "no fallback when nothing playable"
+);
 
 console.log("detection-playback checks ok");
