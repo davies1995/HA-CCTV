@@ -358,7 +358,7 @@ export class CctvView extends LitElement {
     this._playbackDone = new Map();
     this._tearDownObservers();
     // Stop media before Lit removes the nodes (HA may keep this panel mounted).
-    this._unloadStreamPlayers();
+    this._resetLiveStreamSlots();
     if (this.panelMode) {
       this._status = "Suspended — streams unloaded";
     }
@@ -695,18 +695,29 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * While a detection is loaded/playing, mosaic slots follow playback tracks
+   * While detection playback is active, mosaic slots follow playback tracks
    * (selected cams with clips, or fallback cams that have recordings).
+   * When not playing, keep the user's live mosaic selection.
    * @param {ReturnType<typeof listCameras>} cameras
    */
   _layoutCameras(cameras) {
-    const tracks = this._playback?.tracks;
+    const tracks = this._playback?.playing ? this._playback.tracks : null;
     if (!tracks?.length) return this._visibleCameras(cameras);
     const byId = new Map(cameras.map((c) => [c.entityId, c]));
     return tracks.map((track) => {
       if (byId.has(track.cameraId)) return byId.get(track.cameraId);
       return cameraFromState(track.cameraId, this.hass?.states?.[track.cameraId]);
     });
+  }
+
+  /** Clear global live-stream slots before swapping mosaic live ↔ playback. */
+  _resetLiveStreamSlots() {
+    try {
+      streamSlots.releaseAll();
+    } catch (err) {
+      console.warn("CCTV: stream slot reset failed", err);
+    }
+    this._unloadStreamPlayers();
   }
 
   _linksFor(cameraId) {
@@ -1121,7 +1132,8 @@ export class CctvView extends LitElement {
       this._status = "No playable clips (files missing or empty)";
       return;
     }
-    // Unload live streams by swapping mosaic media to recordings (same tiles).
+    // Drop live slots before swapping mosaic media to recordings.
+    this._resetLiveStreamSlots();
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     await this.updateComplete;
@@ -1136,6 +1148,8 @@ export class CctvView extends LitElement {
     this._playbackIndex = new Map();
     this._playbackSeek = new Map();
     this._playbackDone = new Map();
+    // Ensure remounted live players are not blocked by stale slot holders.
+    this._resetLiveStreamSlots();
     this._status = "Live mosaic";
     this._schedulePack();
   }
@@ -1144,6 +1158,7 @@ export class CctvView extends LitElement {
     if (!this._playback) return;
     this._teardownPlaybackMedia();
     this._playback = { ...this._playback, playing: false };
+    this._resetLiveStreamSlots();
     this._status = "Stopped — back to live mosaic";
     this._schedulePack();
   }

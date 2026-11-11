@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Mosaic tiles stuck on a still with a **queued** badge: release previous stream-slot ids when quality/substream resolution changes, clear slots when entering/leaving detection playback, and do not re-request slots from `releaseAll`
+
 ## 0.14.0 — 2026-11-11
 
 ### Fixed
