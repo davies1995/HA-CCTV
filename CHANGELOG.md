@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.18.9 — 2026-11-11
+
 ### Fixed
 
 - When a camera lacks `camera.record` (e.g. `*_high_resolution_channel`), capture via its fluent/recordable sibling and attribute the mp4 to the high-res mosaic entity so Play finds video

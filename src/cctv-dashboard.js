@@ -2,7 +2,7 @@ import "./panel.js";
 import "./card.js";
 import "./camera-card.js";
 
-export const VERSION = "0.18.8";
+export const VERSION = "0.18.9";
 
 console.info(
   `%c CCTV-DASHBOARD %c ${VERSION} `,
