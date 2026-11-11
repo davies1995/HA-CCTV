@@ -32,6 +32,7 @@ import {
   resolvePlaybackCameraIds,
   sessionIsPlayable,
   sessionTotalBytes,
+  triggerHighlightsForPlayback,
 } from "./detection-playback.js";
 import {
   cellsToPercentStyles,
@@ -1335,6 +1336,13 @@ export class CctvView extends LitElement {
       windowStart: window.start,
       windowEnd: window.end,
       eventDetail: event,
+      /** @type {Record<string, { kindId: string, color: string }>} */
+      triggerHighlights: triggerHighlightsForPlayback(
+        this.hass,
+        session,
+        this._sensorLinks,
+        event
+      ),
     };
     const n = resolved.cameraIds.length;
     if (resolved.reason === "empty-selection") {
@@ -2180,6 +2188,12 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
+    // Trigger highlight is a pointer-events:none overlay — never rewrite the
+    // tile class/style or video src/kick (that broke pre-#46 playback).
+    const triggerMeta =
+      playing && this._playback?.triggerHighlights
+        ? this._playback.triggerHighlights[cam.entityId]
+        : null;
     // Mobile / unpacked tiles: seed a definite box from the shared override.
     const mediaStyle =
       !positioned && forcedRatio
@@ -2243,6 +2257,13 @@ export class CctvView extends LitElement {
                   muted
                 ></cctv-stream-player>
               `}
+          ${triggerMeta
+            ? html`<div
+                class="trigger-cam-overlay kind-${triggerMeta.kindId}"
+                style=${`--cctv-trigger-color:${triggerMeta.color}`}
+                aria-hidden="true"
+              ></div>`
+            : nothing}
         </div>
         ${playing
           ? html`

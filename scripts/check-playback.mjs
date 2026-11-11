@@ -1,14 +1,17 @@
 /** Sanity checks for detection playback helpers (no HA required). */
 import {
+  camerasForTriggerSensors,
   clipCameraId,
   clipPositionAtTime,
   clipTimeBounds,
+  detectionKindColor,
   parseClipStartedMs,
   playableCameraIdsFromSession,
   playbackTracksFromSession,
   playbackWindow,
   preferVideoClips,
   resolvePlaybackCameraIds,
+  triggerHighlightsForPlayback,
 } from "../src/detection-playback.js";
 import { mediaApiPathFromClip } from "../src/recordings-api.js";
 
@@ -188,5 +191,42 @@ const mixedTracks = playbackTracksFromSession({}, mixedSession, [
 ]);
 assert(mixedTracks[0].items.length === 1, "track drops snapshot when video exists");
 assert(mixedTracks[0].items[0].kind === "video", "track keeps video");
+
+assert(detectionKindColor("person") === "#5eb1ff", "person color");
+assert(detectionKindColor("car") === "#f0b45a", "car color");
+const links = {
+  "camera.front": ["binary_sensor.front_person"],
+  "camera.drive": ["binary_sensor.drive_car"],
+};
+assert(
+  camerasForTriggerSensors(links, ["binary_sensor.front_person"]).includes(
+    "camera.front"
+  ),
+  "trigger cam from links"
+);
+const highlights = triggerHighlightsForPlayback(
+  {
+    states: {
+      "binary_sensor.front_person": {
+        attributes: { friendly_name: "Front Person" },
+      },
+    },
+  },
+  { trigger_sensors: ["binary_sensor.front_person"] },
+  links,
+  null
+);
+assert(highlights["camera.front"]?.kindId === "person", "highlight kind");
+assert(highlights["camera.front"]?.color === "#5eb1ff", "highlight color");
+assert(!highlights["camera.drive"], "non-trigger cam not highlighted");
+
+const fromEvent = triggerHighlightsForPlayback(
+  {},
+  { trigger_sensors: [] },
+  {},
+  { kind: { id: "animal" }, cameras: ["camera.yard"] }
+);
+assert(fromEvent["camera.yard"]?.kindId === "animal", "event cameras");
+assert(fromEvent["camera.yard"]?.color === "#7dcf8a", "animal color");
 
 console.log("detection-playback checks ok");

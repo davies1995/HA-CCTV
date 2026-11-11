@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- When a camera lacks `camera.record` (e.g. `*_high_resolution_channel`), capture via its fluent/recordable sibling and attribute the mp4 to the high-res mosaic entity so Play finds video
+
+### Added
+
+- Trigger-camera **event-type color overlay** during detection playback (`pointer-events: none` only — does not rewrite video/src/kick)
+
 ## 0.18.8 — 2026-11-11
 
 ### Fixed

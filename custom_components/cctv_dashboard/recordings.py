@@ -35,6 +35,23 @@ _LOGGER = logging.getLogger(__name__)
 ON_STATES = {STATE_ON, "true", "detected", "active", "home", "1"}
 SAFE_NAME = re.compile(r"[^a-zA-Z0-9._-]+")
 
+# High-res / main entities that often lack camera.record (e.g. Reolink).
+_HIGH_RECORD_UNFRIENDLY_SUFFIXES = (
+    "_high_resolution_channel",
+    "_high_resolution",
+    "_high_res",
+    "_clear",
+)
+# Fluent / substream siblings that typically support camera.record.
+_RECORD_SIBLING_SUFFIXES = (
+    "_fluent",
+    "_sub",
+    "_lq",
+    "_low",
+    "_sd",
+    "_substream",
+)
+
 # HA exposes slugify on homeassistant.util (not homeassistant.util.slugify).
 # Keep a local fallback so setup never fails if the util API moves again.
 try:
@@ -57,6 +74,76 @@ def clip_media_url(filename: str) -> str:
     """Public authenticated media URL for a clip filename."""
     name = Path(str(filename)).name
     return f"{MEDIA_API_URL_BASE}/{name}"
+
+
+def _camera_object_id(entity_id: str) -> str:
+    return str(entity_id or "").removeprefix("camera.")
+
+
+def _strip_camera_suffix(object_id: str) -> str:
+    name = str(object_id or "")
+    for suffix in (
+        *_HIGH_RECORD_UNFRIENDLY_SUFFIXES,
+        *_RECORD_SIBLING_SUFFIXES,
+        "_main",
+    ):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _needs_record_sibling(entity_id: str) -> bool:
+    name = _camera_object_id(entity_id)
+    return any(name.endswith(suffix) for suffix in _HIGH_RECORD_UNFRIENDLY_SUFFIXES)
+
+
+def find_recordable_sibling(
+    entity_id: str, available: set[str] | list[str] | tuple[str, ...]
+) -> str | None:
+    """
+    Pick a fluent/substream sibling for cameras that lack camera.record.
+
+    Example: camera.drive_high_resolution_channel → camera.drive_fluent
+    """
+    cam = str(entity_id or "")
+    if not cam.startswith("camera."):
+        return None
+    available_set = {str(item) for item in (available or [])}
+    if not _needs_record_sibling(cam):
+        return None
+    base = _strip_camera_suffix(_camera_object_id(cam))
+    if not base:
+        return None
+    for suffix in _RECORD_SIBLING_SUFFIXES:
+        candidate = f"camera.{base}{suffix}"
+        if candidate != cam and candidate in available_set:
+            return candidate
+    bare = f"camera.{base}"
+    if bare != cam and bare in available_set:
+        return bare
+    return None
+
+
+def build_record_capture_groups(
+    cameras: list[str], available: set[str] | list[str] | tuple[str, ...]
+) -> dict[str, list[str]]:
+    """
+    Map record_entity → mosaic camera ids that should receive that clip.
+
+    High-res cams that cannot record map onto their fluent sibling so one
+    camera.record call can attribute mp4s to the high-res mosaic entity.
+    """
+    groups: dict[str, list[str]] = {}
+    for camera_id in cameras:
+        cam = str(camera_id)
+        if not cam.startswith("camera."):
+            continue
+        sibling = find_recordable_sibling(cam, available)
+        record_entity = sibling or cam
+        attrs = groups.setdefault(record_entity, [])
+        if cam not in attrs:
+            attrs.append(cam)
+    return groups
 
 # Keep in sync with frontend detection-sensors.js kind tokens.
 _KIND_TOKENS: list[tuple[str, str, tuple[str, ...]]] = [
@@ -655,145 +742,232 @@ class RecordingManager:
         elif session.clips:
             session.mode = "snapshot"
 
+    def _available_camera_ids(self) -> set[str]:
+        return {
+            state.entity_id
+            for state in self.hass.states.async_all()
+            if state.domain == "camera"
+            and state.state not in {STATE_UNAVAILABLE, STATE_UNKNOWN}
+        }
+
     async def _capture_chunk(self, session: RecordingSession, seq: int) -> None:
         stamp = dt_util.utcnow().strftime("%Y%m%dT%H%M%SZ")
-        # Sequential per-camera capture: many camera integrations fail or stall
-        # when multiple camera.record calls run in parallel on the same host.
-        for camera_id in session.cameras:
-            clip = await self._record_or_snapshot(session, camera_id, stamp, seq)
-            if clip:
-                session.clips.append(clip)
+        available = self._available_camera_ids()
+        # Group high-res mosaic cams onto fluent/recordable siblings so one
+        # camera.record can attribute mp4s back to the high-res entity for Play.
+        groups = build_record_capture_groups(list(session.cameras), available)
+        # Sequential capture: many camera integrations fail/stall when multiple
+        # camera.record calls run in parallel on the same host.
+        for record_entity, attribute_ids in groups.items():
+            clips = await self._record_or_snapshot_group(
+                session,
+                record_entity=record_entity,
+                attribute_ids=attribute_ids,
+                stamp=stamp,
+                seq=seq,
+            )
+            session.clips.extend(clips)
         self._refresh_session_mode(session)
 
-    async def _record_or_snapshot(
+    async def _record_or_snapshot_group(
         self,
         session: RecordingSession,
-        camera_id: str,
+        *,
+        record_entity: str,
+        attribute_ids: list[str],
         stamp: str,
         seq: int,
-    ) -> dict[str, Any] | None:
-        cam_safe = _safe(camera_id.replace("camera.", ""))
-        filename = self.record_dir / f"{session.session_id}_{cam_safe}_{seq:03d}_{stamp}.mp4"
+    ) -> list[dict[str, Any]]:
+        """Record once via record_entity; attribute clips to each mosaic camera id."""
+        attrs = [str(item) for item in attribute_ids if str(item).startswith("camera.")]
+        if not attrs:
+            attrs = [record_entity]
+        primary = attrs[0]
+        via = record_entity if record_entity != primary or len(attrs) > 1 else None
+        if via and record_entity != primary:
+            via_reason = (
+                f"record via {record_entity} (fluent/recordable sibling of {primary})"
+            )
+        elif via:
+            via_reason = f"shared record via {record_entity}"
+        else:
+            via_reason = None
+
+        rec_safe = _safe(record_entity.replace("camera.", ""))
+        filename = (
+            self.record_dir
+            / f"{session.session_id}_{rec_safe}_{seq:03d}_{stamp}.mp4"
+        )
         record_error: str | None = None
+
+        def _video_clips(size: int, *, recovered: bool = False) -> list[dict[str, Any]]:
+            url = clip_media_url(filename.name)
+            note = {
+                "camera_id": primary,
+                "attribute_ids": attrs,
+                "recorded_via": record_entity if record_entity != primary else None,
+                "seq": seq,
+                "result": "video_recovered" if recovered else "video",
+                "size": int(size),
+                "path": str(filename),
+                "url": url,
+            }
+            if via_reason:
+                note["via_reason"] = via_reason
+            if recovered and record_error:
+                note["record_error"] = record_error
+            session.capture_notes.append(note)
+            out: list[dict[str, Any]] = []
+            for camera_id in attrs:
+                clip: dict[str, Any] = {
+                    "camera_id": camera_id,
+                    "path": str(filename),
+                    "url": url,
+                    "kind": "video",
+                    "seq": seq,
+                    "started": stamp,
+                    "duration": RECORD_CHUNK_SECONDS,
+                    "size": int(size),
+                }
+                if record_entity != camera_id:
+                    clip["recorded_via"] = record_entity
+                    clip["via_reason"] = (
+                        via_reason
+                        or f"record via {record_entity} for mosaic camera {camera_id}"
+                    )
+                if recovered and record_error:
+                    clip["record_error"] = record_error
+                out.append(clip)
+            return out
+
         try:
             await self.hass.services.async_call(
                 "camera",
                 "record",
                 {
-                    "entity_id": camera_id,
+                    "entity_id": record_entity,
                     "filename": str(filename),
                     "duration": RECORD_CHUNK_SECONDS,
                     "lookback": RECORD_LOOKBACK_SECONDS,
                 },
                 blocking=True,
             )
-            # camera.record often returns before bytes finish landing on disk.
             size = await self._wait_for_media_file(filename)
             if size <= 0:
                 raise RuntimeError(
                     f"record finished but file missing/empty after "
                     f"{self._RECORD_FILE_WAIT_SEC:.0f}s ({filename.name})"
                 )
-            note = {
-                "camera_id": camera_id,
-                "seq": seq,
-                "result": "video",
-                "size": int(size),
-                "path": str(filename),
-                "url": clip_media_url(filename.name),
-            }
-            session.capture_notes.append(note)
-            return {
-                "camera_id": camera_id,
-                "path": str(filename),
-                "url": clip_media_url(filename.name),
-                "kind": "video",
-                "seq": seq,
-                "started": stamp,
-                "duration": RECORD_CHUNK_SECONDS,
-                "size": int(size),
-            }
+            return _video_clips(size)
         except Exception as err:  # noqa: BLE001
             record_error = f"{type(err).__name__}: {err}"
-            # Race: service raised/returned early but mp4 still landed — prefer it.
             recovered = await self._wait_for_media_file(filename, timeout=3.0)
             if recovered > 0:
                 _LOGGER.info(
-                    "Recovered mp4 for %s after record error (%s) size=%s",
-                    camera_id,
+                    "Recovered mp4 via %s for %s after record error (%s) size=%s",
+                    record_entity,
+                    ",".join(attrs),
                     record_error,
                     recovered,
                 )
-                note = {
-                    "camera_id": camera_id,
-                    "seq": seq,
-                    "result": "video_recovered",
-                    "size": int(recovered),
-                    "path": str(filename),
-                    "url": clip_media_url(filename.name),
-                    "record_error": record_error,
-                }
-                session.capture_notes.append(note)
-                return {
-                    "camera_id": camera_id,
-                    "path": str(filename),
-                    "url": clip_media_url(filename.name),
-                    "kind": "video",
-                    "seq": seq,
-                    "started": stamp,
-                    "duration": RECORD_CHUNK_SECONDS,
-                    "size": int(recovered),
-                    "record_error": record_error,
-                }
+                return _video_clips(recovered, recovered=True)
+
+            # If we recorded the mosaic cam itself, try a fluent sibling once.
+            if record_entity == primary:
+                sibling = find_recordable_sibling(
+                    primary, self._available_camera_ids()
+                )
+                if sibling and sibling != record_entity:
+                    _LOGGER.warning(
+                        "camera.record failed for %s (%s); retrying via sibling %s",
+                        primary,
+                        record_error,
+                        sibling,
+                    )
+                    return await self._record_or_snapshot_group(
+                        session,
+                        record_entity=sibling,
+                        attribute_ids=attrs,
+                        stamp=stamp,
+                        seq=seq,
+                    )
+
             _LOGGER.warning(
-                "camera.record failed for %s (%s); falling back to snapshot",
-                camera_id,
+                "camera.record failed for %s via %s (%s); falling back to snapshot",
+                ",".join(attrs),
+                record_entity,
                 record_error,
             )
-            snap = self.record_dir / f"{session.session_id}_{cam_safe}_{seq:03d}_{stamp}.jpg"
+            # Snapshot the mosaic/high-res entity (better still for Play tiles).
+            snap_entity = primary
+            snap_safe = _safe(snap_entity.replace("camera.", ""))
+            snap = (
+                self.record_dir
+                / f"{session.session_id}_{snap_safe}_{seq:03d}_{stamp}.jpg"
+            )
             try:
                 await self.hass.services.async_call(
                     "camera",
                     "snapshot",
-                    {"entity_id": camera_id, "filename": str(snap)},
+                    {"entity_id": snap_entity, "filename": str(snap)},
                     blocking=True,
                 )
                 snap_size = await self._wait_for_media_file(snap, timeout=8.0)
                 if snap_size <= 0:
                     raise RuntimeError("snapshot finished but file missing/empty")
-                note = {
-                    "camera_id": camera_id,
-                    "seq": seq,
-                    "result": "snapshot",
-                    "size": int(snap_size),
-                    "path": str(snap),
-                    "url": clip_media_url(snap.name),
-                    "fallback_reason": record_error or "camera.record failed",
-                }
-                session.capture_notes.append(note)
-                return {
-                    "camera_id": camera_id,
-                    "path": str(snap),
-                    "url": clip_media_url(snap.name),
-                    "kind": "snapshot",
-                    "seq": seq,
-                    "started": stamp,
-                    "duration": SNAPSHOT_INTERVAL_SECONDS,
-                    "size": int(snap_size),
-                    "fallback_reason": record_error or "camera.record failed",
-                }
-            except Exception as snap_err:  # noqa: BLE001
-                _LOGGER.exception("Snapshot fallback failed for %s", camera_id)
+                url = clip_media_url(snap.name)
+                fallback = record_error or "camera.record failed"
+                if via_reason:
+                    fallback = f"{fallback}; {via_reason}"
                 session.capture_notes.append(
                     {
-                        "camera_id": camera_id,
+                        "camera_id": primary,
+                        "attribute_ids": attrs,
+                        "recorded_via": record_entity
+                        if record_entity != primary
+                        else None,
+                        "seq": seq,
+                        "result": "snapshot",
+                        "size": int(snap_size),
+                        "path": str(snap),
+                        "url": url,
+                        "fallback_reason": fallback,
+                    }
+                )
+                out: list[dict[str, Any]] = []
+                for camera_id in attrs:
+                    out.append(
+                        {
+                            "camera_id": camera_id,
+                            "path": str(snap),
+                            "url": url,
+                            "kind": "snapshot",
+                            "seq": seq,
+                            "started": stamp,
+                            "duration": SNAPSHOT_INTERVAL_SECONDS,
+                            "size": int(snap_size),
+                            "fallback_reason": fallback,
+                            **(
+                                {"recorded_via": record_entity}
+                                if record_entity != camera_id
+                                else {}
+                            ),
+                        }
+                    )
+                return out
+            except Exception as snap_err:  # noqa: BLE001
+                _LOGGER.exception("Snapshot fallback failed for %s", snap_entity)
+                session.capture_notes.append(
+                    {
+                        "camera_id": primary,
+                        "attribute_ids": attrs,
                         "seq": seq,
                         "result": "failed",
                         "fallback_reason": record_error or "camera.record failed",
                         "snapshot_error": f"{type(snap_err).__name__}: {snap_err}",
                     }
                 )
-                return None
+                return []
 
     def _load_index_sync(self) -> list[dict[str, Any]]:
         if not self._index_path.exists():
@@ -1024,6 +1198,8 @@ class RecordingManager:
                         f"size={clip.get('size')}",
                         f"path={clip.get('path')}",
                         f"url={clip.get('url')}",
+                        f"recorded_via={clip.get('recorded_via') or ''}",
+                        f"via_reason={clip.get('via_reason') or ''}",
                         f"fallback={clip.get('fallback_reason') or ''}",
                     ]
                 )
