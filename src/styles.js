@@ -457,6 +457,7 @@ export const sharedStyles = css`
   }
 
   .layout-tile .tile-media {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     background: #0a0e13;
@@ -501,34 +502,38 @@ export const sharedStyles = css`
   }
 
   /*
-   * During detection playback: outline the trigger camera in the event-type
-   * color. Use outline (not box-shadow / z-index) so packing geometry and
-   * ResizeObserver stay stable — layout thrash was reloading playback media.
+   * Trigger-cam highlight during detection playback: overlay inside .tile-media
+   * so we never rewrite the tile class/style (that broke src/controls/play).
+   * pointer-events:none keeps native <video controls> clickable.
    */
-  .layout-tile.trigger-cam {
-    outline: 3px solid var(--cctv-trigger-color, var(--cctv-accent));
-    outline-offset: -3px;
+  .layout-tile .trigger-cam-overlay {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border: 3px solid var(--cctv-trigger-color, var(--cctv-accent));
+    pointer-events: none;
+    z-index: 2;
   }
 
-  .layout-tile.trigger-cam.kind-person {
+  .layout-tile .trigger-cam-overlay.kind-person {
     --cctv-trigger-color: #5eb1ff;
   }
-  .layout-tile.trigger-cam.kind-car {
+  .layout-tile .trigger-cam-overlay.kind-car {
     --cctv-trigger-color: #f0b45a;
   }
-  .layout-tile.trigger-cam.kind-animal {
+  .layout-tile .trigger-cam-overlay.kind-animal {
     --cctv-trigger-color: #7dcf8a;
   }
-  .layout-tile.trigger-cam.kind-package {
+  .layout-tile .trigger-cam-overlay.kind-package {
     --cctv-trigger-color: #c9a0ff;
   }
-  .layout-tile.trigger-cam.kind-bicycle {
+  .layout-tile .trigger-cam-overlay.kind-bicycle {
     --cctv-trigger-color: #67d5c8;
   }
-  .layout-tile.trigger-cam.kind-motion {
+  .layout-tile .trigger-cam-overlay.kind-motion {
     --cctv-trigger-color: #e6d36a;
   }
-  .layout-tile.trigger-cam.kind-other {
+  .layout-tile .trigger-cam-overlay.kind-other {
     --cctv-trigger-color: #8b9aab;
   }
 
