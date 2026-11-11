@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .const import DOMAIN
+from .const import DOMAIN, RECORD_DETECTION_KIND_IDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_list_recordings)
     websocket_api.async_register_command(hass, ws_list_detections)
     websocket_api.async_register_command(hass, ws_delete_recording)
+    websocket_api.async_register_command(hass, ws_clear_detections)
     # Backward-compatible alias used by older frontend builds.
     websocket_api.async_register_command(hass, ws_sync_panel)
 
@@ -64,6 +65,7 @@ async def ws_get_settings(
             vol.Coerce(int), vol.Range(min=1, max=30)
         ),
         vol.Optional("record_on_detection"): bool,
+        vol.Optional("record_detection_kinds"): [str],
     }
 )
 @websocket_api.async_response
@@ -82,6 +84,18 @@ async def ws_set_settings(
         patch["retention_days"] = msg["retention_days"]
     if "record_on_detection" in msg:
         patch["record_on_detection"] = msg["record_on_detection"]
+    if "record_detection_kinds" in msg:
+        # Reject unknown ids early; store normalizer also filters.
+        kinds = [str(k).strip().lower() for k in (msg["record_detection_kinds"] or [])]
+        unknown = [k for k in kinds if k and k not in RECORD_DETECTION_KIND_IDS]
+        if unknown:
+            connection.send_error(
+                msg["id"],
+                "invalid_format",
+                f"Unknown detection kinds: {', '.join(sorted(set(unknown)))}",
+            )
+            return
+        patch["record_detection_kinds"] = kinds
     data = await store.async_save(patch)
     if manager:
         manager.apply_store_update()
@@ -281,3 +295,22 @@ async def ws_delete_recording(
         return
     ok = await manager.async_delete_session(msg["session_id"])
     connection.send_result(msg["id"], {"deleted": ok})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "cctv_dashboard/clear_detections"}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_clear_detections(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Admin-only: delete all saved detections and reset the shared timeline."""
+    manager = _manager(hass)
+    if not manager:
+        connection.send_error(msg["id"], "not_ready", "Recording manager not ready")
+        return
+    result = await manager.async_clear_all()
+    connection.send_result(msg["id"], result)

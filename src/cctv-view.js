@@ -30,6 +30,7 @@ import {
   playbackTracksFromSession,
   playbackWindow,
   resolvePlaybackCameraIds,
+  sessionIsPlayable,
   sessionTotalBytes,
 } from "./detection-playback.js";
 import {
@@ -45,6 +46,7 @@ import {
   packAspectMosaic,
 } from "./mosaic-pack.js";
 import {
+  clearAllDetections,
   deleteRecording,
   listRecordings,
   loadSharedConfig,
@@ -99,6 +101,8 @@ export class CctvView extends LitElement {
     _deviceMapReady: { state: true },
     _retentionDays: { state: true },
     _recordOnDetection: { state: true },
+    /** @type {string[]} detection kinds that save video clips */
+    _recordDetectionKinds: { state: true },
     /** @type {Array<any>} */
     _sessions: { state: true },
     _recordDir: { state: true },
@@ -142,6 +146,7 @@ export class CctvView extends LitElement {
     this._deviceMapReady = false;
     this._retentionDays = 1;
     this._recordOnDetection = true;
+    this._recordDetectionKinds = DETECTION_KINDS.map((k) => k.id);
     this._sessions = [];
     this._recordDir = "";
     this._loadedForUser = null;
@@ -587,6 +592,9 @@ export class CctvView extends LitElement {
     if (shared) {
       this._retentionDays = Number(shared.retention_days) || 1;
       this._recordOnDetection = shared.record_on_detection !== false;
+      this._recordDetectionKinds = this._normalizeRecordKinds(
+        shared.record_detection_kinds
+      );
       this._recordDir = shared.record_dir || "";
       this._applySharedCameraPrefs(shared);
     } else if (this.config?.retention_days) {
@@ -615,6 +623,9 @@ export class CctvView extends LitElement {
     if (settings) {
       this._retentionDays = Number(settings.retention_days) || 1;
       this._recordOnDetection = settings.record_on_detection !== false;
+      this._recordDetectionKinds = this._normalizeRecordKinds(
+        settings.record_detection_kinds
+      );
       this._recordDir = settings.record_dir || "";
       if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
       // Don't clobber unsaved quality/aspect drafts while editing.
@@ -624,6 +635,24 @@ export class CctvView extends LitElement {
       this._recordOnDetection = this.config.record_on_detection !== false;
     }
     this._sessions = await listRecordings(this.hass);
+  }
+
+  /**
+   * @param {unknown} raw
+   * @returns {string[]}
+   */
+  _normalizeRecordKinds(raw) {
+    const allowed = new Set(DETECTION_KINDS.map((k) => k.id));
+    if (!Array.isArray(raw)) return DETECTION_KINDS.map((k) => k.id);
+    const out = [];
+    const seen = new Set();
+    for (const item of raw) {
+      const id = String(item || "").trim().toLowerCase();
+      if (!allowed.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
   }
 
   /**
@@ -961,9 +990,40 @@ export class CctvView extends LitElement {
     }
   }
 
+  async _toggleRecordKind(kindId, enabled) {
+    const id = String(kindId || "");
+    const next = new Set(this._recordDetectionKinds || []);
+    if (enabled) next.add(id);
+    else next.delete(id);
+    const ordered = DETECTION_KINDS.map((k) => k.id).filter((k) => next.has(k));
+    this._recordDetectionKinds = ordered;
+    this._saving = true;
+    try {
+      await saveRecordingSettings(this.hass, {
+        record_detection_kinds: ordered,
+      });
+      const labels = DETECTION_KINDS.filter((k) => ordered.includes(k.id)).map(
+        (k) => k.label
+      );
+      this._status = ordered.length
+        ? `Saving video for: ${labels.join(", ")}`
+        : "Video save disabled for all detection types (timeline still logs events)";
+    } catch (err) {
+      this._status = err?.message || "Could not save detection-type filter";
+      await this._loadRecordingUi();
+    } finally {
+      this._saving = false;
+    }
+  }
+
   async _refreshSessions() {
     this._sessions = await listRecordings(this.hass);
     this._status = "Recordings refreshed";
+  }
+
+  _refreshTimeline() {
+    const timeline = this.renderRoot?.querySelector?.("cctv-detection-timeline");
+    timeline?.reload?.();
   }
 
   _isAdmin() {
@@ -997,12 +1057,43 @@ export class CctvView extends LitElement {
     }
   }
 
+  async _clearAllDetections(event) {
+    event?.stopPropagation?.();
+    event?.preventDefault?.();
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can clear saved detections";
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Delete ALL saved detections and reset the detection timeline for every Home Assistant user? This cannot be undone."
+      )
+    ) {
+      return;
+    }
+    this._saving = true;
+    try {
+      const result = await clearAllDetections(this.hass);
+      this._sessions = await listRecordings(this.hass);
+      this._refreshTimeline();
+      if (this._playback) this._stopPlayback();
+      const sessions = Number(result?.sessions_cleared) || 0;
+      const events = Number(result?.events_cleared) || 0;
+      this._status = `Cleared ${sessions} recording${sessions === 1 ? "" : "s"} and ${events} timeline event${events === 1 ? "" : "s"} for all users`;
+    } catch (err) {
+      this._status = err?.message || "Could not clear detections";
+    } finally {
+      this._saving = false;
+    }
+  }
+
   /**
    * @param {any} session
    * @param {{ start?: number, end?: number } | null} [event]
    */
   async _selectPlaybackSession(session, event = null) {
-    if (!session || session.active || !(session.clips || []).length) {
+    if (!sessionIsPlayable(session)) {
       this._status = "No playable recording for that detection";
       return false;
     }
@@ -1512,6 +1603,7 @@ export class CctvView extends LitElement {
   }
 
   _renderSettings() {
+    const kinds = this._recordDetectionKinds || [];
     return html`
       <section class="settings-panel" aria-label="CCTV settings">
         <div class="picker-head">
@@ -1519,7 +1611,8 @@ export class CctvView extends LitElement {
           <span class="hint">
             When any site-wide linked detection sensor triggers, HA logs the event for
             the shared timeline and (if enabled) saves clips for <em>all</em> available
-            cameras until sensors clear. Timeline + saved detections survive reboot and
+            cameras until sensors clear. Choose which detection types save video — shared
+            for all users. Timeline + saved detections survive reboot and
             are purged only after retention days. Uses <code>camera.record</code>
             (30s chunks + lookback) with snapshot fallback. Mosaic selection stays personal.
           </span>
@@ -1545,6 +1638,29 @@ export class CctvView extends LitElement {
             <span class="picker-id">Default retention is 1 day (24 hours).</span>
           </label>
         </div>
+        <div class="kind-filter" role="group" aria-label="Detection types that save video">
+          <strong class="kind-filter-title">Save video for</strong>
+          <span class="hint">
+            Unchecked types still appear on the timeline, but do not start a recording.
+            Shared for all Home Assistant users.
+          </span>
+          <div class="kind-filter-list">
+            ${DETECTION_KINDS.map(
+              (kind) => html`
+                <label class="picker-item kind-filter-item">
+                  <input
+                    type="checkbox"
+                    .checked=${kinds.includes(kind.id)}
+                    ?disabled=${!this._recordOnDetection || this._saving}
+                    @change=${(e) =>
+                      this._toggleRecordKind(kind.id, e.target.checked)}
+                  />
+                  <span class="picker-name">${kind.label}</span>
+                </label>
+              `
+            )}
+          </div>
+        </div>
         <p class="hint">
           Storage: ${this._recordDir || "HA media / www /cctv_dashboard/recordings"}.
           Multi-cam continuous video needs a writable media folder and cameras that support streaming;
@@ -1556,7 +1672,9 @@ export class CctvView extends LitElement {
   }
 
   _renderRecordings() {
-    const sessions = this._sessions || [];
+    const sessions = (this._sessions || []).filter(
+      (session) => session.active || sessionIsPlayable(session)
+    );
     const admin = this._isAdmin();
     return html`
       <section class="recordings" aria-label="Saved detections">
@@ -1568,14 +1686,30 @@ export class CctvView extends LitElement {
               playback for the visible cameras; click the row to load it first
               (desktop bar still works). Shared for all users; survives reboot;
               kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
+              Empty 0&nbsp;B stubs are hidden.
               ${admin
-                ? " Admins can delete a detection’s file set for everyone."
+                ? " Admins can delete one detection or clear all for everyone."
                 : ""}
             </span>
           </div>
-          <button class="btn" type="button" @click=${() => this._refreshSessions()}>
-            Refresh
-          </button>
+          <div class="recording-toolbar">
+            <button class="btn" type="button" @click=${() => this._refreshSessions()}>
+              Refresh
+            </button>
+            ${admin
+              ? html`
+                  <button
+                    class="btn recording-delete"
+                    type="button"
+                    ?disabled=${this._saving}
+                    title="Delete all saved detections and reset the timeline"
+                    @click=${(e) => this._clearAllDetections(e)}
+                  >
+                    Clear all
+                  </button>
+                `
+              : nothing}
+          </div>
         </div>
         ${!sessions.length
           ? html`<p class="empty">No detection recordings yet.</p>`
@@ -1599,7 +1733,7 @@ export class CctvView extends LitElement {
     const size = formatBytes(sessionTotalBytes(session));
     const selected =
       this._playback?.session?.session_id === session.session_id;
-    const canPlay = !session.active && (session.clips || []).length;
+    const canPlay = sessionIsPlayable(session);
     return html`
       <div
         class="recording-item ${session.active ? "active" : ""} ${selected ? "selected" : ""}"

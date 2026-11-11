@@ -85,9 +85,20 @@ export function clipTimeBounds(clip) {
  */
 export function clipIsPlayable(clip) {
   if (!clip) return false;
-  // Empty/incomplete camera.record files are unplayable in <video>.
+  // Empty/incomplete camera.record or snapshot files are unplayable.
+  if ("size" in (clip || {}) && Number(clip.size) <= 0) return false;
   if (clip.kind === "snapshot") return true;
   return Number(clip.size) > 0 || !("size" in (clip || {}));
+}
+
+/**
+ * True when a saved detection has at least one playable clip / non-zero bytes.
+ * @param {any} session
+ */
+export function sessionIsPlayable(session) {
+  if (!session || session.active) return false;
+  if (sessionTotalBytes(session) > 0) return true;
+  return (session.clips || []).some(clipIsPlayable);
 }
 
 /**

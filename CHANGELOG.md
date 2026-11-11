@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Saved detections no longer fill with **0 B** stubs when sensors clear mid-`camera.record`: finish the in-flight chunk instead of cancelling, discard sessions with no playable media, and hide empty stubs from the list
+
+### Added
+
+- Shared **Save video for** detection-type filter (Person / Car / Animal / …) — timeline still logs all types
+- Admin **Clear all** deletes every saved detection’s files and resets the shared detection timeline (confirm required)
+
 ## 0.15.0 — 2026-11-11
 
 ### Fixed

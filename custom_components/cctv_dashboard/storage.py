@@ -9,8 +9,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    DEFAULT_RECORD_DETECTION_KINDS,
     DEFAULT_RECORD_ON_DETECTION,
     DEFAULT_RETENTION_DAYS,
+    RECORD_DETECTION_KIND_IDS,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -113,6 +115,27 @@ def _normalize_camera_quality(raw: Any) -> dict[str, str]:
     return out
 
 
+def _normalize_record_detection_kinds(raw: Any) -> list[str]:
+    """Shared allow-list of detection kinds that start video recording."""
+    allowed = set(RECORD_DETECTION_KIND_IDS)
+    if raw is None:
+        return list(DEFAULT_RECORD_DETECTION_KINDS)
+    if not isinstance(raw, (list, tuple, set)):
+        return list(DEFAULT_RECORD_DETECTION_KINDS)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        kind = str(item or "").strip().lower()
+        if kind not in allowed or kind in seen:
+            continue
+        seen.add(kind)
+        cleaned.append(kind)
+    # Empty list is intentional (record nothing); missing/invalid → defaults.
+    if not cleaned and raw not in ([], (), set()):
+        return list(DEFAULT_RECORD_DETECTION_KINDS)
+    return cleaned
+
+
 def default_data() -> dict[str, Any]:
     # Site-wide only. Per-user camera mosaic selection stays in frontend user data.
     return {
@@ -121,6 +144,7 @@ def default_data() -> dict[str, Any]:
         "camera_quality": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
         "record_on_detection": DEFAULT_RECORD_ON_DETECTION,
+        "record_detection_kinds": list(DEFAULT_RECORD_DETECTION_KINDS),
     }
 
 
@@ -148,6 +172,11 @@ class PanelStore:
             data["record_on_detection"] = bool(
                 loaded.get("record_on_detection", DEFAULT_RECORD_ON_DETECTION)
             )
+            data["record_detection_kinds"] = _normalize_record_detection_kinds(
+                loaded.get(
+                    "record_detection_kinds", DEFAULT_RECORD_DETECTION_KINDS
+                )
+            )
         self.data = data
         return data
 
@@ -170,6 +199,10 @@ class PanelStore:
                 data["retention_days"] = max(1, min(days, 30))
             if "record_on_detection" in patch:
                 data["record_on_detection"] = bool(patch["record_on_detection"])
+            if "record_detection_kinds" in patch:
+                data["record_detection_kinds"] = _normalize_record_detection_kinds(
+                    patch["record_detection_kinds"]
+                )
         self.data = data
         await self._store.async_save(data)
         return data

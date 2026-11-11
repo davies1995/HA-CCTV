@@ -18,9 +18,11 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DEFAULT_RECORD_DETECTION_KINDS,
     DOMAIN,
     MEDIA_API_URL_BASE,
     RECORD_CHUNK_SECONDS,
+    RECORD_DETECTION_KIND_IDS,
     RECORD_LOOKBACK_SECONDS,
     RECORDINGS_URL_BASE,
     SNAPSHOT_INTERVAL_SECONDS,
@@ -47,6 +49,20 @@ _KIND_TOKENS: list[tuple[str, str, tuple[str, ...]]] = [
     ("bicycle", "Bicycle", ("bicycle", "bike", "cyclist")),
     ("motion", "Motion", ("motion", "occupancy", "presence", "moving")),
 ]
+
+
+def _clip_has_media(clip: dict[str, Any] | None) -> bool:
+    """True when a clip points at a non-empty on-disk file."""
+    if not clip:
+        return False
+    path = Path(clip.get("path") or "")
+    if path.is_file():
+        try:
+            return path.stat().st_size > 0
+        except OSError:
+            return False
+    size = clip.get("size")
+    return isinstance(size, (int, float)) and size > 0
 
 
 def _is_active_state(state: str | None) -> bool:
@@ -109,6 +125,8 @@ class RecordingManager:
         self._session: RecordingSession | None = None
         self._chunk_task: asyncio.Task | None = None
         self._cleanup_task: asyncio.Task | None = None
+        # True while finishing the in-flight chunk after sensors clear.
+        self._ending = False
         self._index_path = self.record_dir / "index.json"
         self._detections_path = self.record_dir / "detections.json"
         self._sessions_meta: list[dict[str, Any]] = []
@@ -213,6 +231,40 @@ class RecordingManager:
         ]
         return sorted(cams)
 
+    def _enabled_record_kinds(self) -> set[str]:
+        raw = self.store.data.get("record_detection_kinds")
+        if raw is None:
+            return set(DEFAULT_RECORD_DETECTION_KINDS)
+        kinds = {str(k).strip().lower() for k in (raw or [])}
+        return kinds.intersection(RECORD_DETECTION_KIND_IDS)
+
+    def _sensor_kind_id(self, sensor_id: str) -> str:
+        state = self.hass.states.get(sensor_id)
+        friendly = (
+            state.attributes.get("friendly_name") if state is not None else None
+        )
+        return _classify_kind(
+            sensor_id, friendly if isinstance(friendly, str) else None
+        )["id"]
+
+    def _kind_enabled_for_recording(self, sensor_id: str) -> bool:
+        """Whether this sensor's detection kind may start/extend video capture."""
+        enabled = self._enabled_record_kinds()
+        if not enabled:
+            return False
+        return self._sensor_kind_id(sensor_id) in enabled
+
+    def _active_record_sensors(self) -> list[str]:
+        """Watched sensors that are ON and allowed to keep a recording session open."""
+        active: list[str] = []
+        for sid in self._watched_sensors():
+            if not self._kind_enabled_for_recording(sid):
+                continue
+            state = self.hass.states.get(sid)
+            if state is not None and _is_active_state(state.state):
+                active.append(sid)
+        return active
+
     def _rebuild_open_detections(self) -> None:
         self._open_detections = {}
         for event in self._detection_events:
@@ -271,42 +323,53 @@ class RecordingManager:
 
         if not self.store.data.get("record_on_detection", True):
             return
+        if not self._kind_enabled_for_recording(sensor_id):
+            _LOGGER.debug(
+                "Skipping video for %s — kind %s not in record_detection_kinds",
+                sensor_id,
+                self._sensor_kind_id(sensor_id),
+            )
+            return
+        # Finishing in-flight chunk after clear; restart is checked when end completes.
+        if self._ending:
+            return
         if self._session and self._session.active:
             if sensor_id not in self._session.trigger_sensors:
                 self._session.trigger_sensors.append(sensor_id)
             return
+        await self._start_session([sensor_id])
+
+    async def _start_session(self, trigger_sensors: list[str]) -> None:
         cameras = self._all_cameras()
         if not cameras:
             _LOGGER.warning("Detection recording skipped — no cameras available")
+            return
+        triggers = [sid for sid in trigger_sensors if sid]
+        if not triggers:
             return
         session = RecordingSession(
             session_id=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             + "_"
             + uuid4().hex[:8],
             started=dt_util.utcnow(),
-            trigger_sensors=[sensor_id],
+            trigger_sensors=list(dict.fromkeys(triggers)),
             cameras=cameras,
         )
         self._session = session
         _LOGGER.info(
             "Detection recording session %s started by %s (%s cameras)",
             session.session_id,
-            sensor_id,
+            ",".join(session.trigger_sensors),
             len(cameras),
         )
         self._chunk_task = self.hass.async_create_task(self._chunk_loop(session))
 
     async def _handle_sensor_clear(self, sensor_id: str) -> None:
         await self._close_detection_event(sensor_id)
-        if not self._session or not self._session.active:
+        if not self._session or not self._session.active or self._ending:
             return
-        # End recording only when every watched sensor is clear.
-        if any(
-            _is_active_state(self.hass.states.get(sid).state)
-            if self.hass.states.get(sid)
-            else False
-            for sid in self._watched_sensors()
-        ):
+        # Keep recording while any *video-enabled* detection sensor is still on.
+        if self._active_record_sensors():
             return
         await self._end_session()
 
@@ -314,29 +377,57 @@ class RecordingManager:
         session = self._session
         if not session:
             return
-        session.active = False
-        session.ended = dt_util.utcnow()
-        if self._chunk_task and not self._chunk_task.done():
-            self._chunk_task.cancel()
-            try:
-                await self._chunk_task
-            except asyncio.CancelledError:
-                pass
-        self._chunk_task = None
-        meta = {
-            "session_id": session.session_id,
-            "started": session.started.isoformat(),
-            "ended": session.ended.isoformat() if session.ended else None,
-            "trigger_sensors": session.trigger_sensors,
-            "cameras": session.cameras,
-            "clips": session.clips,
-            "mode": session.mode,
-        }
-        self._sessions_meta.insert(0, meta)
-        self._sessions_meta = self._sessions_meta[:500]
-        await self.hass.async_add_executor_job(self._save_index_sync)
-        _LOGGER.info("Detection recording session %s ended", session.session_id)
-        self._session = None
+        if self._ending:
+            return
+        self._ending = True
+        try:
+            # Stop scheduling new chunks, but finish the in-flight capture.
+            # Cancelling mid-camera.record left empty 0 B stub sessions when
+            # sensors cleared in a few seconds (common for person/animal pulses).
+            session.active = False
+            if self._chunk_task and not self._chunk_task.done():
+                try:
+                    await self._chunk_task
+                except asyncio.CancelledError:
+                    pass
+            self._chunk_task = None
+            session.ended = dt_util.utcnow()
+            playable = [clip for clip in session.clips if _clip_has_media(clip)]
+            if playable:
+                meta = {
+                    "session_id": session.session_id,
+                    "started": session.started.isoformat(),
+                    "ended": session.ended.isoformat() if session.ended else None,
+                    "trigger_sensors": session.trigger_sensors,
+                    "cameras": session.cameras,
+                    "clips": playable,
+                    "mode": session.mode,
+                }
+                self._sessions_meta.insert(0, meta)
+                self._sessions_meta = self._sessions_meta[:500]
+                await self.hass.async_add_executor_job(self._save_index_sync)
+                _LOGGER.info(
+                    "Detection recording session %s ended (%s playable clip(s))",
+                    session.session_id,
+                    len(playable),
+                )
+            else:
+                await self.hass.async_add_executor_job(
+                    self._purge_session_files_sync, session.session_id
+                )
+                _LOGGER.info(
+                    "Detection recording session %s discarded — no playable media",
+                    session.session_id,
+                )
+            self._session = None
+        finally:
+            self._ending = False
+
+        # Sensors may have re-triggered while we finished the last chunk.
+        if self.store.data.get("record_on_detection", True):
+            still_on = self._active_record_sensors()
+            if still_on and not self._session:
+                await self._start_session(still_on)
 
     def _all_cameras(self) -> list[str]:
         cameras = []
@@ -431,6 +522,13 @@ class RecordingManager:
                     {"entity_id": camera_id, "filename": str(snap)},
                     blocking=True,
                 )
+                if not await self.hass.async_add_executor_job(snap.is_file):
+                    raise RuntimeError("snapshot finished but file missing")
+                snap_size = await self.hass.async_add_executor_job(
+                    lambda: snap.stat().st_size
+                )
+                if snap_size <= 0:
+                    raise RuntimeError("snapshot finished with empty file")
                 return {
                     "camera_id": camera_id,
                     "path": str(snap),
@@ -439,6 +537,7 @@ class RecordingManager:
                     "seq": seq,
                     "started": stamp,
                     "duration": SNAPSHOT_INTERVAL_SECONDS,
+                    "size": int(snap_size),
                 }
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Snapshot fallback failed for %s", camera_id)
@@ -590,22 +689,39 @@ class RecordingManager:
             return count
 
         removed += await self.hass.async_add_executor_job(_purge_orphans)
-        self._sessions_meta = kept
+        # Drop empty stub sessions left by older builds that cancelled mid-record.
+        playable_kept: list[dict[str, Any]] = []
+        stubs = 0
+        for meta in kept:
+            enriched = self._enrich_session({**meta, "active": False})
+            if enriched.get("total_bytes", 0) > 0 or any(
+                _clip_has_media(c) for c in (enriched.get("clips") or [])
+            ):
+                playable_kept.append(meta)
+            else:
+                stubs += 1
+                await self.hass.async_add_executor_job(
+                    self._purge_session_files_sync, str(meta.get("session_id") or "")
+                )
+        if stubs:
+            _LOGGER.info("Purged %s empty (0 B) stub recording session(s)", stubs)
+        self._sessions_meta = playable_kept
         self._detection_events = det_kept
         self._rebuild_open_detections()
         await self.hass.async_add_executor_job(self._save_index_sync)
         await self.hass.async_add_executor_job(self._save_detections_sync)
-        if removed or det_removed:
+        if removed or det_removed or stubs:
             _LOGGER.info(
-                "Purged %s recording file(s) and %s detection event(s) older than %s day(s)",
+                "Purged %s recording file(s), %s detection event(s), %s stub session(s) (retention=%s day(s))",
                 removed,
                 det_removed,
+                stubs,
                 days,
             )
 
     def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
         active = None
-        if self._session and self._session.active:
+        if self._session and (self._session.active or self._ending):
             active = {
                 "session_id": self._session.session_id,
                 "started": self._session.started.isoformat(),
@@ -620,7 +736,11 @@ class RecordingManager:
         if active:
             items.append(self._enrich_session(active))
         for meta in self._sessions_meta:
-            items.append(self._enrich_session({**meta, "active": False}))
+            enriched = self._enrich_session({**meta, "active": False})
+            # Prefer not listing empty stubs as playable saved detections.
+            if enriched.get("total_bytes", 0) <= 0 and not enriched.get("active"):
+                continue
+            items.append(enriched)
         return items[:limit]
 
     def _cached_file_size(self, path: Path) -> int:
@@ -663,6 +783,26 @@ class RecordingManager:
             )
         return {**meta, "clips": clips_out, "total_bytes": total}
 
+    def _purge_session_files_sync(self, session_id: str) -> int:
+        """Delete media files for a session id. Returns number removed."""
+        if not session_id:
+            return 0
+        removed = 0
+        prefix = f"{session_id}_"
+        try:
+            for path in self.record_dir.glob(f"{prefix}*"):
+                if not path.is_file() or path.name in {"index.json", "detections.json"}:
+                    continue
+                try:
+                    path.unlink(missing_ok=True)
+                    removed += 1
+                    self._size_cache.pop(str(path), None)
+                except OSError:
+                    _LOGGER.debug("Could not delete %s", path)
+        except OSError:
+            _LOGGER.debug("Could not purge orphan files for %s", session_id)
+        return removed
+
     async def async_delete_session(self, session_id: str) -> bool:
         """Delete a saved detection's file set + index entry (site-wide)."""
         found = False
@@ -674,20 +814,89 @@ class RecordingManager:
                     path = Path(clip.get("path") or "")
                     if path.is_file():
                         path.unlink(missing_ok=True)
-                    # Also remove orphans named with this session id.
-                prefix = f"{session_id}_"
-                try:
-                    for orphan in self.record_dir.glob(f"{prefix}*"):
-                        if orphan.is_file() and orphan.name not in {
-                            "index.json",
-                            "detections.json",
-                        }:
-                            orphan.unlink(missing_ok=True)
-                except OSError:
-                    _LOGGER.debug("Could not purge orphan files for %s", session_id)
+                        self._size_cache.pop(str(path), None)
+                await self.hass.async_add_executor_job(
+                    self._purge_session_files_sync, session_id
+                )
             else:
                 remaining.append(meta)
         self._sessions_meta = remaining
         if found:
             await self.hass.async_add_executor_job(self._save_index_sync)
         return found
+
+    async def async_clear_all(self) -> dict[str, Any]:
+        """Admin: delete every saved recording + reset the shared detection timeline."""
+        if self._session:
+            # Discard in-flight session without indexing.
+            session = self._session
+            self._ending = True
+            try:
+                session.active = False
+                if self._chunk_task and not self._chunk_task.done():
+                    self._chunk_task.cancel()
+                    try:
+                        await self._chunk_task
+                    except asyncio.CancelledError:
+                        pass
+                self._chunk_task = None
+                await self.hass.async_add_executor_job(
+                    self._purge_session_files_sync, session.session_id
+                )
+                self._session = None
+            finally:
+                self._ending = False
+
+        files_removed = 0
+        for meta in list(self._sessions_meta):
+            sid = str(meta.get("session_id") or "")
+            for clip in meta.get("clips") or []:
+                path = Path(clip.get("path") or "")
+                if path.is_file():
+                    try:
+                        path.unlink(missing_ok=True)
+                        files_removed += 1
+                    except OSError:
+                        pass
+            files_removed += await self.hass.async_add_executor_job(
+                self._purge_session_files_sync, sid
+            )
+
+        def _wipe_media() -> int:
+            count = 0
+            keep = {"index.json", "detections.json"}
+            for path in self.record_dir.glob("*"):
+                if path.name in keep or not path.is_file():
+                    continue
+                try:
+                    path.unlink(missing_ok=True)
+                    count += 1
+                except OSError:
+                    pass
+            return count
+
+        files_removed += await self.hass.async_add_executor_job(_wipe_media)
+        events_cleared = len(self._detection_events)
+        sessions_cleared = len(self._sessions_meta)
+        self._sessions_meta = []
+        self._detection_events = []
+        self._open_detections = {}
+        self._size_cache.clear()
+        await self.hass.async_add_executor_job(self._save_index_sync)
+        await self.hass.async_add_executor_job(self._save_detections_sync)
+        # Re-open timeline events for sensors that are still active.
+        for sid in self._watched_sensors():
+            state = self.hass.states.get(sid)
+            if state is not None and _is_active_state(state.state):
+                await self._open_detection_event(sid)
+        _LOGGER.info(
+            "Cleared all detections (%s sessions, %s events, %s files)",
+            sessions_cleared,
+            events_cleared,
+            files_removed,
+        )
+        return {
+            "sessions_cleared": sessions_cleared,
+            "events_cleared": events_cleared,
+            "files_removed": files_removed,
+        }

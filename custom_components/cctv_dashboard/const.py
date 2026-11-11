@@ -26,6 +26,19 @@ DEFAULT_QUALITY = "auto"
 DEFAULT_RETENTION_DAYS = 1  # 24 hours
 DEFAULT_RECORD_ON_DETECTION = True
 
+# Which detection kinds start/extend video recording (timeline still logs all).
+# Keep ids in sync with recordings._KIND_TOKENS / frontend DETECTION_KINDS.
+RECORD_DETECTION_KIND_IDS = (
+    "person",
+    "car",
+    "animal",
+    "package",
+    "bicycle",
+    "motion",
+    "other",
+)
+DEFAULT_RECORD_DETECTION_KINDS = list(RECORD_DETECTION_KIND_IDS)
+
 # Chunked camera.record while a detection session is active.
 RECORD_CHUNK_SECONDS = 30
 RECORD_LOOKBACK_SECONDS = 5

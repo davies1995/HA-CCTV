@@ -101,7 +101,11 @@ export async function loadRecordingSettings(hass) {
 
 /**
  * @param {any} hass
- * @param {{ retention_days?: number, record_on_detection?: boolean }} patch
+ * @param {{
+ *   retention_days?: number,
+ *   record_on_detection?: boolean,
+ *   record_detection_kinds?: string[],
+ * }} patch
  */
 export async function saveRecordingSettings(hass, patch) {
   if (!hass?.callWS) return null;
@@ -162,6 +166,16 @@ export async function deleteRecording(hass, sessionId) {
     session_id: sessionId,
   });
   return Boolean(result?.deleted);
+}
+
+/**
+ * Admin-only: delete every saved detection and reset the shared timeline.
+ * @param {any} hass
+ * @returns {Promise<{ sessions_cleared?: number, events_cleared?: number, files_removed?: number } | null>}
+ */
+export async function clearAllDetections(hass) {
+  if (!hass?.callWS) return null;
+  return hass.callWS({ type: "cctv_dashboard/clear_detections" });
 }
 
 /**
