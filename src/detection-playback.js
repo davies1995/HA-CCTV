@@ -92,6 +92,17 @@ export function clipIsPlayable(clip) {
 }
 
 /**
+ * When a camera has both mp4 and snapshot chunks, prefer real video for Play.
+ * @param {any[]} clips
+ * @returns {any[]}
+ */
+export function preferVideoClips(clips) {
+  const list = Array.isArray(clips) ? clips : [];
+  const videos = list.filter((clip) => clip && clip.kind !== "snapshot");
+  return videos.length ? videos : list;
+}
+
+/**
  * True when a saved detection has at least one playable clip / non-zero bytes.
  * @param {any} session
  */
@@ -233,7 +244,7 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
       name:
         hass?.states?.[cameraId]?.attributes?.friendly_name ||
         cameraId.replace(/^camera\./, ""),
-      items: ordered.filter(clipIsPlayable).map((clip) => {
+      items: preferVideoClips(ordered.filter(clipIsPlayable)).map((clip) => {
         const bounds = clipTimeBounds(clip);
         const path = String(clip.url || "");
         return {
@@ -247,6 +258,8 @@ export function playbackTracksFromSession(hass, session, cameraIds = null) {
           startedMs: bounds.start,
           durationMs: bounds.durationMs,
           endMs: bounds.end,
+          fallback_reason: clip.fallback_reason || "",
+          filePath: clip.path || "",
         };
       }),
     };

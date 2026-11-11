@@ -7,8 +7,10 @@ import {
   playableCameraIdsFromSession,
   playbackTracksFromSession,
   playbackWindow,
+  preferVideoClips,
   resolvePlaybackCameraIds,
 } from "../src/detection-playback.js";
+import { mediaApiPathFromClip } from "../src/recordings-api.js";
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -136,5 +138,55 @@ assert(
   resolvePlaybackCameraIds(emptyVideos, ["camera.front"], 4).cameraIds.length === 0,
   "no fallback when nothing playable"
 );
+
+const mixed = preferVideoClips([
+  { kind: "snapshot", size: 10, seq: 1 },
+  { kind: "video", size: 100, seq: 1 },
+  { kind: "snapshot", size: 12, seq: 2 },
+]);
+assert(mixed.length === 1 && mixed[0].kind === "video", "prefer video over snapshots");
+
+assert(
+  mediaApiPathFromClip({
+    path: "/media/local/cctv_dashboard/recordings/sess_cam_001_x.mp4",
+    url: "/api/cctv_dashboard/media/sess_cam_001_x.mp4",
+  }) === "/api/cctv_dashboard/media/sess_cam_001_x.mp4",
+  "sign path uses media API url"
+);
+assert(
+  mediaApiPathFromClip({
+    path: "/config/www/cctv_dashboard/recordings/only_fs.mp4",
+  }) === "/api/cctv_dashboard/media/only_fs.mp4",
+  "filesystem path rewritten to media API"
+);
+
+const mixedSession = {
+  clips: [
+    {
+      camera_id: "camera.driveway",
+      url: "/api/cctv_dashboard/media/a.mp4",
+      kind: "video",
+      size: 500,
+      seq: 1,
+      started: "20261110T121455Z",
+      duration: 30,
+      path: "/media/local/cctv_dashboard/recordings/a.mp4",
+    },
+    {
+      camera_id: "camera.driveway",
+      url: "/api/cctv_dashboard/media/a.jpg",
+      kind: "snapshot",
+      size: 20,
+      seq: 1,
+      started: "20261110T121455Z",
+      duration: 10,
+    },
+  ],
+};
+const mixedTracks = playbackTracksFromSession({}, mixedSession, [
+  "camera.driveway",
+]);
+assert(mixedTracks[0].items.length === 1, "track drops snapshot when video exists");
+assert(mixedTracks[0].items[0].kind === "video", "track keeps video");
 
 console.log("detection-playback checks ok");

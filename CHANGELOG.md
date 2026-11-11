@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Detection recording prefers real **mp4** clips: wait for `camera.record` files to land, recover late writes, record cameras sequentially (parallel record was a common snapshot-fallback cause), and sign Play URLs via `/api/cctv_dashboard/media/…` even when clip `path` is a filesystem path
+- Play prefers video chunks over snapshots when both exist for a camera
+
+### Added
+
+- Settings-only **Recording debug** (copyable) + `sensor.cctv_dashboard_recording_debug` with last session clip kinds/sizes/paths/URLs and snapshot fallback reasons — not shown on the main mosaic
+
 ## 0.18.7 — 2026-11-11
 
 ### Fixed
