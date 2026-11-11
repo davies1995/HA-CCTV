@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Hard-revert detection mosaic playback to **pre-PR #46** (`c083bac`): `src=`, `autoplay`, `controls`, simple kick; **remove** trigger-cam border / overlay / highlight helpers entirely
+
 ## 0.18.3 — 2026-11-11
 
 ### Fixed
