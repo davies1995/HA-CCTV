@@ -3,6 +3,7 @@ import { sharedStyles } from "./styles.js";
 import {
   availableCameraActions,
   callCameraService,
+  cameraFromState,
   listCameras,
   openMoreInfo,
 } from "./cameras.js";
@@ -28,6 +29,7 @@ import {
   formatBytes,
   playbackTracksFromSession,
   playbackWindow,
+  resolvePlaybackCameraIds,
   sessionTotalBytes,
 } from "./detection-playback.js";
 import {
@@ -462,7 +464,7 @@ export class CctvView extends LitElement {
     if (boxW < 8 || boxH < 8) return;
 
     // Always pack the same visible mosaic cameras (live or playback).
-    const cameras = this._visibleCameras(this._cameras()).slice(0, 4);
+    const cameras = this._layoutCameras(this._cameras()).slice(0, 4);
     const items = cameras.map((cam) => ({
       id: cam.entityId,
       aspect: this._effectiveAspect(cam.entityId),
@@ -690,6 +692,21 @@ export class CctvView extends LitElement {
     return order
       .map((id) => cameras.find((c) => c.entityId === id))
       .filter(Boolean);
+  }
+
+  /**
+   * While a detection is loaded/playing, mosaic slots follow playback tracks
+   * (selected cams with clips, or fallback cams that have recordings).
+   * @param {ReturnType<typeof listCameras>} cameras
+   */
+  _layoutCameras(cameras) {
+    const tracks = this._playback?.tracks;
+    if (!tracks?.length) return this._visibleCameras(cameras);
+    const byId = new Map(cameras.map((c) => [c.entityId, c]));
+    return tracks.map((track) => {
+      if (byId.has(track.cameraId)) return byId.get(track.cameraId);
+      return cameraFromState(track.cameraId, this.hass?.states?.[track.cameraId]);
+    });
   }
 
   _linksFor(cameraId) {
@@ -978,22 +995,30 @@ export class CctvView extends LitElement {
       this._status = "No playable recording for that detection";
       return false;
     }
-    const visibleIds = this._visibleIds.slice(0, this._maxStreams());
-    if (!visibleIds.length) {
-      this._status = "Select cameras in the mosaic before playing a detection";
-      return false;
-    }
     const labels = detectionLabelsFromTriggers(
       this.hass,
       session.trigger_sensors || []
     );
-    // Only the user's currently visible mosaic cameras — same order/slots as live.
-    const tracks = playbackTracksFromSession(this.hass, session, visibleIds);
+    const maxStreams = this._maxStreams();
+    const visibleIds = this._visibleIds.slice(0, maxStreams);
+    const resolved = resolvePlaybackCameraIds(session, visibleIds, maxStreams);
+    if (!resolved.cameraIds.length) {
+      this._status = visibleIds.length
+        ? "No playable clips for this detection (files missing or empty)"
+        : "No playable clips for this detection — select cameras or wait for recordings";
+      return false;
+    }
+    // Prefer mosaic selection order/slots; fall back to cams that have clips.
+    const tracks = playbackTracksFromSession(
+      this.hass,
+      session,
+      resolved.cameraIds
+    );
     const playable = tracks.some((t) =>
       (t.items || []).some((item) => item.kind === "video" || item.kind === "snapshot")
     );
     if (!playable) {
-      this._status = "No clips for the currently selected mosaic cameras";
+      this._status = "No playable clips for this detection (files missing or empty)";
       return false;
     }
     const window = playbackWindow(session, event);
@@ -1016,9 +1041,33 @@ export class CctvView extends LitElement {
       windowEnd: window.end,
       eventDetail: event,
     };
-    this._status = `Selected ${labels.join(", ")} — Play replaces live mosaic for ${visibleIds.length} cam${visibleIds.length === 1 ? "" : "s"}`;
+    const n = resolved.cameraIds.length;
+    if (resolved.reason === "empty-selection") {
+      this._status = `No mosaic selection — playing ${n} camera${n === 1 ? "" : "s"} with clips`;
+    } else if (resolved.reason === "no-selected-clips") {
+      this._status = `Selected mosaic cams had no clips — playing ${n} camera${n === 1 ? "" : "s"} with recordings`;
+    } else {
+      this._status = `Selected ${labels.join(", ")} — Play replaces live mosaic for ${n} cam${n === 1 ? "" : "s"}`;
+    }
     this._schedulePack();
     return true;
+  }
+
+  /**
+   * Fresh session row from the server (clip sizes / camera ids), else original.
+   * @param {any} session
+   */
+  async _freshPlaybackSession(session) {
+    if (!session?.session_id || !this.hass) return session;
+    try {
+      const sessions = await listRecordings(this.hass);
+      this._sessions = sessions;
+      const fresh = sessions.find((s) => s.session_id === session.session_id);
+      return fresh || session;
+    } catch (err) {
+      console.warn("CCTV: could not refresh recordings before Play", err);
+      return session;
+    }
   }
 
   /**
@@ -1030,11 +1079,12 @@ export class CctvView extends LitElement {
   async _playSavedDetection(session, domEvent = null) {
     domEvent?.stopPropagation?.();
     domEvent?.preventDefault?.();
-    const ok = await this._selectPlaybackSession(session);
+    const fresh = await this._freshPlaybackSession(session);
+    const ok = await this._selectPlaybackSession(fresh);
     if (!ok) return;
     if (
       !this._playback ||
-      this._playback.session?.session_id !== session.session_id ||
+      this._playback.session?.session_id !== fresh.session_id ||
       this._playback.playing
     ) {
       return;
@@ -1333,7 +1383,7 @@ export class CctvView extends LitElement {
 
     const detail = cameras.find((c) => c.entityId === this._detailId) || null;
     const visible = this.panelMode
-      ? this._visibleCameras(cameras)
+      ? this._layoutCameras(cameras)
       : cameras;
 
     const cameraNames = this._stableCameraNames(cameras);
