@@ -53,6 +53,7 @@ import {
   saveCameraPrefs,
   saveRecordingSettings,
   saveSensorLinks,
+  saveUserNotifyPreference,
   signPlaybackTracks,
   signRecordingUrl,
 } from "./recordings-api.js";
@@ -103,6 +104,8 @@ export class CctvView extends LitElement {
     _recordOnDetection: { state: true },
     /** @type {string[]} detection kinds that save video clips */
     _recordDetectionKinds: { state: true },
+    /** Per-user: notify this HA account when a detection is recorded */
+    _notifyOnDetection: { state: true },
     /** @type {Array<any>} */
     _sessions: { state: true },
     _recordDir: { state: true },
@@ -147,6 +150,7 @@ export class CctvView extends LitElement {
     this._retentionDays = 1;
     this._recordOnDetection = true;
     this._recordDetectionKinds = DETECTION_KINDS.map((k) => k.id);
+    this._notifyOnDetection = false;
     this._sessions = [];
     this._recordDir = "";
     this._loadedForUser = null;
@@ -595,6 +599,7 @@ export class CctvView extends LitElement {
       this._recordDetectionKinds = this._normalizeRecordKinds(
         shared.record_detection_kinds
       );
+      this._notifyOnDetection = Boolean(shared.notify_on_detection);
       this._recordDir = shared.record_dir || "";
       this._applySharedCameraPrefs(shared);
     } else if (this.config?.retention_days) {
@@ -626,6 +631,7 @@ export class CctvView extends LitElement {
       this._recordDetectionKinds = this._normalizeRecordKinds(
         settings.record_detection_kinds
       );
+      this._notifyOnDetection = Boolean(settings.notify_on_detection);
       this._recordDir = settings.record_dir || "";
       if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
       // Don't clobber unsaved quality/aspect drafts while editing.
@@ -985,6 +991,22 @@ export class CctvView extends LitElement {
         : "Detection recording paused";
     } catch (err) {
       this._status = err?.message || "Could not save recording setting";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _toggleNotifyOnDetection(enabled) {
+    this._notifyOnDetection = enabled;
+    this._saving = true;
+    try {
+      await saveUserNotifyPreference(this.hass, enabled);
+      this._status = enabled
+        ? "You will be notified when a detection is recorded (this account only)"
+        : "Detection notifications disabled for your account";
+    } catch (err) {
+      this._status = err?.message || "Could not save notification preference";
+      await this._loadRecordingUi();
     } finally {
       this._saving = false;
     }
@@ -1636,6 +1658,19 @@ export class CctvView extends LitElement {
             />
             <span class="picker-name">Record on detection</span>
             <span class="picker-id">Default retention is 1 day (24 hours).</span>
+          </label>
+          <label class="picker-item settings-toggle">
+            <input
+              type="checkbox"
+              .checked=${this._notifyOnDetection}
+              ?disabled=${this._saving}
+              @change=${(e) => this._toggleNotifyOnDetection(e.target.checked)}
+            />
+            <span class="picker-name">Notify me when recorded</span>
+            <span class="picker-id">
+              Per-user. Sends type + duration to your Companion app (or HA notification).
+              Only fires when a clip with media was saved.
+            </span>
           </label>
         </div>
         <div class="kind-filter" role="group" aria-label="Detection types that save video">

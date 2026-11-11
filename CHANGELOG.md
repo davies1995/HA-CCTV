@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Per-user **Notify me when recorded** setting: Companion `notify.mobile_app_*` (fallback persistent notification) with detection type + duration when a clip with media is saved
+
 ## 0.16.0 — 2026-11-11
 
 ### Fixed

@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_settings)
     websocket_api.async_register_command(hass, ws_set_settings)
+    websocket_api.async_register_command(hass, ws_set_user_notify)
     websocket_api.async_register_command(hass, ws_set_sensor_links)
     websocket_api.async_register_command(hass, ws_set_force_aspect)
     websocket_api.async_register_command(hass, ws_set_camera_prefs)
@@ -55,6 +56,9 @@ async def ws_get_settings(
     data["active_session"] = bool(
         manager and manager._session and manager._session.active
     )
+    # Per-user preference only — never expose other users' notify opt-ins.
+    user_id = getattr(connection.user, "id", None) if connection.user else None
+    data["notify_on_detection"] = store.notify_enabled_for(user_id)
     connection.send_result(msg["id"], data)
 
 
@@ -112,6 +116,38 @@ async def ws_set_settings(
         hass.config_entries.async_update_entry(entry, options=new_options)
 
     connection.send_result(msg["id"], data)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cctv_dashboard/set_user_notify",
+        vol.Required("notify_on_detection"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_set_user_notify(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Per-user: enable/disable detection-recorded notifications for this HA user only."""
+    store = _store(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "CCTV store not ready")
+        return
+    user = connection.user
+    if not user or not getattr(user, "id", None):
+        connection.send_error(msg["id"], "unauthorized", "User required")
+        return
+    enabled = bool(msg["notify_on_detection"])
+    await store.async_save({"notify_on_detection": {str(user.id): enabled}})
+    connection.send_result(
+        msg["id"],
+        {
+            "notify_on_detection": enabled,
+            "user_id": str(user.id),
+        },
+    )
 
 
 @websocket_api.websocket_command(
