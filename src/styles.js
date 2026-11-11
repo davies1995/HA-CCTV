@@ -20,6 +20,15 @@ export const sharedStyles = css`
       max-height: calc(100dvh - var(--app-header-height, 56px));
       overflow: hidden;
     }
+
+    /* TV mode: page scrolls; mosaic stays above the fold on a 16:9 stage. */
+    :host([panel-mode][tv-mode]) {
+      height: auto;
+      max-height: none;
+      min-height: calc(100dvh - var(--app-header-height, 56px));
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
   }
 
   .wrap {
@@ -71,6 +80,59 @@ export const sharedStyles = css`
 
     .panel-wrap > cctv-detection-timeline .timeline {
       margin-top: 0;
+    }
+
+    /* TV / kiosk: mosaic stage is fixed 16:9 above the fold; rest scrolls. */
+    .panel-wrap.tv-mode {
+      height: auto;
+      max-height: none;
+      min-height: 0;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      padding-top: 0.5rem;
+      padding-bottom: 1.25rem;
+    }
+
+    .panel-wrap.tv-mode > .top.top-tv {
+      margin-bottom: 0.45rem;
+    }
+
+    .panel-wrap.tv-mode > .top.top-tv h1 {
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .panel-wrap.tv-mode .tv-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--cctv-border);
+      color: var(--cctv-muted);
+      font-weight: 600;
+    }
+
+    .panel-wrap.tv-mode > .layout.layout-pack-tv {
+      flex: 0 0 auto;
+      width: var(--cctv-tv-stage-w, 100%);
+      height: var(--cctv-tv-stage-h, calc(100dvh - var(--cctv-tv-chrome, 96px)));
+      max-width: 100%;
+      max-height: calc(100dvh - var(--cctv-tv-chrome, 96px));
+      margin: 0 auto;
+      align-self: center;
+    }
+
+    .panel-wrap.tv-mode > cctv-detection-timeline,
+    .panel-wrap.tv-mode > .recordings {
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+      margin-top: 1rem;
     }
   }
 
@@ -487,6 +549,11 @@ export const sharedStyles = css`
     .panel-wrap .layout-pack cctv-stream-player {
       min-height: 0;
       height: 100%;
+    }
+
+    /* 1–2 cameras in TV mode: keep captions thinner so tiles use more of the stage. */
+    .panel-wrap.tv-mode .layout-pack-maximize .pack-caption {
+      padding: 0.3rem 0.55rem 0.35rem;
     }
   }
 

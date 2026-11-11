@@ -5,6 +5,7 @@
 ### Added
 
 - Per-user **Notify me when recorded** setting: Companion `notify.mobile_app_*` (fallback persistent notification) with detection type + duration when a clip with media is saved
+- **TV mode** (per-device via browser localStorage): 16:9 mosaic above the fold for kiosk/TV, up to 4 cams fill the stage, 1–2 cams maximize; timeline + Saved detections scroll below
 
 ## 0.16.0 — 2026-11-11
 
