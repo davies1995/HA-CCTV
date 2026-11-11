@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Setup crash on current Home Assistant Core: import `slugify` from `homeassistant.util` (with local fallback) instead of the removed `homeassistant.util.slugify` module path
+
 ## 0.17.0 — 2026-11-11
 
 ### Added
