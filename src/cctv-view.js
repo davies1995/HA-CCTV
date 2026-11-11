@@ -527,7 +527,9 @@ export class CctvView extends LitElement {
     ) {
       this._schedulePack();
       this.updateComplete.then(() => {
-        if (this._tvMode) this._refreshTvStage();
+        // Restamping the TV stage while playing remounts mosaic tiles and races
+        // _kickPlaybackVideos (toast: no video elements found). Freeze geometry.
+        if (this._tvMode && !this._playback?.playing) this._refreshTvStage();
         this._bindPackObserver();
       });
     }
@@ -582,7 +584,9 @@ export class CctvView extends LitElement {
       if (Object.keys(this._packStyles).length) this._packStyles = {};
       return;
     }
-    if (this._tvMode) this._refreshTvStage();
+    // Freeze TV stage size during detection playback so pack/resize does not
+    // remount <video class="playback-media"> under the kick.
+    if (this._tvMode && !this._playback?.playing) this._refreshTvStage();
     const el = this.renderRoot?.querySelector?.(".layout-pack");
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -1390,9 +1394,12 @@ export class CctvView extends LitElement {
     this._resetLiveStreamSlots();
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
+    // Force a fresh paint of mosaic playback tiles. A bare updateComplete can
+    // resolve a stale cycle (common when TV pack/stage also schedules updates)
+    // and kick before <video class="playback-media"> exists.
+    this.requestUpdate();
     await this.updateComplete;
-    // Wait a frame so <video> nodes exist after the live→playback swap.
-    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    await this._waitForPlaybackMedia();
     await this._kickPlaybackVideos();
   }
 
@@ -1431,11 +1438,68 @@ export class CctvView extends LitElement {
     });
   }
 
-  async _kickPlaybackVideos() {
+  /**
+   * Mosaic playback media currently in the render root.
+   * @returns {{ videos: HTMLVideoElement[], snapshots: Element[], empty: Element[] }}
+   */
+  _playbackMediaEls() {
     const root = this.renderRoot;
-    if (!root || !this._playback?.playing) return;
-    const videos = [...root.querySelectorAll("video.playback-media")];
+    if (!root?.querySelectorAll) {
+      return { videos: [], snapshots: [], empty: [] };
+    }
+    return {
+      videos: [...root.querySelectorAll("video.playback-media")],
+      snapshots: [...root.querySelectorAll("img.playback-media")],
+      empty: [...root.querySelectorAll(".playback-empty")],
+    };
+  }
+
+  _playbackHasVideoClips() {
+    return (this._playback?.tracks || []).some((track) =>
+      (track.items || []).some((item) => item.kind === "video")
+    );
+  }
+
+  /**
+   * Wait until mosaic playback tiles mount (video, snapshot, or empty).
+   * @param {{ timeoutMs?: number }} [opts]
+   * @returns {Promise<{ videos: HTMLVideoElement[], snapshots: Element[], empty: Element[] }>}
+   */
+  async _waitForPlaybackMedia(opts = {}) {
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 2500;
+    const deadline = Date.now() + timeoutMs;
+    let attempt = 0;
+    while (this._playback?.playing && Date.now() < deadline) {
+      const media = this._playbackMediaEls();
+      if (media.videos.length || media.snapshots.length || media.empty.length) {
+        return media;
+      }
+      attempt += 1;
+      if (attempt % 3 === 0) {
+        this.requestUpdate();
+        await this.updateComplete;
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    return this._playbackMediaEls();
+  }
+
+  async _kickPlaybackVideos() {
+    if (!this._playback?.playing) return;
+    let { videos } = this._playbackMediaEls();
     if (!videos.length) {
+      ({ videos } = await this._waitForPlaybackMedia({ timeoutMs: 1500 }));
+    }
+    if (!videos.length) {
+      const media = this._playbackMediaEls();
+      if (media.snapshots.length && !this._playbackHasVideoClips()) {
+        this._status = `Playing ${this._playback.labels.join(", ")} (snapshots)`;
+        return;
+      }
+      if (media.empty.length && !media.snapshots.length && !this._playbackHasVideoClips()) {
+        this._status = "No recording tiles for the selected cameras";
+        return;
+      }
       this._status = "Playback ready but no video elements found";
       return;
     }

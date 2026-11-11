@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Detection **Play** no longer races TV mosaic stage/pack remounts: freeze TV stage geometry while playing, wait for `video.playback-media` (or snapshot tiles) before kick — fixes toast “Playback ready but no video elements found”
+
 ## 0.18.6 — 2026-11-11
 
 ### Changed
