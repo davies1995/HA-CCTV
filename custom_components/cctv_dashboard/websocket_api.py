@@ -56,6 +56,14 @@ async def ws_get_settings(
     data["active_session"] = bool(
         manager and manager._session and manager._session.active
     )
+    # Settings-only diagnostics (also mirrored on sensor.cctv_dashboard_recording_debug).
+    if manager:
+        debug = manager.recording_debug_payload()
+        data["recording_debug"] = debug.get("text") or ""
+        data["recording_debug_summary"] = debug.get("summary") or ""
+    else:
+        data["recording_debug"] = ""
+        data["recording_debug_summary"] = ""
     # Per-user preference only — never expose other users' notify opt-ins.
     user_id = getattr(connection.user, "id", None) if connection.user else None
     data["notify_on_detection"] = store.notify_enabled_for(user_id)

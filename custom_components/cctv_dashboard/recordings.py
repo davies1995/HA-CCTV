@@ -161,10 +161,16 @@ class RecordingSession:
     active: bool = True
     ended: datetime | None = None
     mode: str = "record"  # record | snapshot
+    # Per-camera last camera.record / snapshot outcome for diagnostics.
+    capture_notes: list[dict[str, Any]] = field(default_factory=list)
 
 
 class RecordingManager:
     """Watch linked sensors; on trigger record all cameras until clear."""
+
+    # camera.record often returns before ffmpeg finishes writing — poll briefly.
+    _RECORD_FILE_WAIT_SEC = 20.0
+    _RECORD_FILE_POLL_SEC = 0.5
 
     def __init__(self, hass: HomeAssistant, store: PanelStore) -> None:
         self.hass = hass
@@ -185,6 +191,9 @@ class RecordingManager:
         self._open_detections: dict[str, dict[str, Any]] = {}
         # path -> (size, mtime) so list_sessions does not re-stat every poll
         self._size_cache: dict[str, tuple[int, float]] = {}
+        # Last ended session diagnostics (settings UI + sensor attribute).
+        self._last_recording_debug: str = ""
+        self._last_recording_debug_summary: str = "No recording session yet"
 
     def _resolve_record_dir(self) -> Path:
         media_dirs = getattr(self.hass.config, "media_dirs", None) or {}
@@ -211,6 +220,7 @@ class RecordingManager:
         self._rebind_listeners()
         self._cleanup_task = self.hass.async_create_task(self._cleanup_loop())
         await self.async_enforce_retention()
+        self._publish_recording_debug_entity()
         _LOGGER.info(
             "CCTV recordings ready at %s (retention=%sd, detections=%s)",
             self.record_dir,
@@ -441,6 +451,7 @@ class RecordingManager:
                     pass
             self._chunk_task = None
             session.ended = dt_util.utcnow()
+            self._refresh_session_mode(session)
             playable = [clip for clip in session.clips if _clip_has_media(clip)]
             if playable:
                 meta = {
@@ -451,15 +462,18 @@ class RecordingManager:
                     "cameras": session.cameras,
                     "clips": playable,
                     "mode": session.mode,
+                    "capture_notes": list(session.capture_notes),
                 }
                 self._sessions_meta.insert(0, meta)
                 self._sessions_meta = self._sessions_meta[:500]
                 await self.hass.async_add_executor_job(self._save_index_sync)
                 _LOGGER.info(
-                    "Detection recording session %s ended (%s playable clip(s))",
+                    "Detection recording session %s ended (%s playable clip(s), mode=%s)",
                     session.session_id,
                     len(playable),
+                    session.mode,
                 )
+                self._set_recording_debug(session, meta, discarded=False)
                 # Only notify when real media was saved (never empty stubs).
                 await self._notify_detection_recorded(session, meta)
             else:
@@ -469,6 +483,20 @@ class RecordingManager:
                 _LOGGER.info(
                     "Detection recording session %s discarded — no playable media",
                     session.session_id,
+                )
+                self._set_recording_debug(
+                    session,
+                    {
+                        "session_id": session.session_id,
+                        "started": session.started.isoformat(),
+                        "ended": session.ended.isoformat() if session.ended else None,
+                        "trigger_sensors": session.trigger_sensors,
+                        "cameras": session.cameras,
+                        "clips": list(session.clips),
+                        "mode": session.mode,
+                        "capture_notes": list(session.capture_notes),
+                    },
+                    discarded=True,
                 )
             self._session = None
         finally:
@@ -600,19 +628,42 @@ class RecordingManager:
         except Exception:  # noqa: BLE001 — keep watcher alive
             _LOGGER.exception("Recording chunk loop failed")
 
+    async def _wait_for_media_file(self, path: Path, timeout: float | None = None) -> int:
+        """Poll until path exists with size > 0. Returns size or 0 on timeout."""
+        limit = self._RECORD_FILE_WAIT_SEC if timeout is None else float(timeout)
+        deadline = asyncio.get_running_loop().time() + max(0.0, limit)
+        while True:
+            def _stat() -> int:
+                if not path.is_file():
+                    return 0
+                try:
+                    return int(path.stat().st_size)
+                except OSError:
+                    return 0
+
+            size = await self.hass.async_add_executor_job(_stat)
+            if size > 0:
+                return size
+            if asyncio.get_running_loop().time() >= deadline:
+                return 0
+            await asyncio.sleep(self._RECORD_FILE_POLL_SEC)
+
+    def _refresh_session_mode(self, session: RecordingSession) -> None:
+        """Session mode follows whether any real mp4 was indexed."""
+        if any(clip.get("kind") == "video" for clip in session.clips):
+            session.mode = "record"
+        elif session.clips:
+            session.mode = "snapshot"
+
     async def _capture_chunk(self, session: RecordingSession, seq: int) -> None:
         stamp = dt_util.utcnow().strftime("%Y%m%dT%H%M%SZ")
-        # Parallel per-camera capture; each call blocks until that clip finishes
-        # so we can verify the file (or fall back to snapshot) before indexing.
-        results = await asyncio.gather(
-            *[
-                self._record_or_snapshot(session, camera_id, stamp, seq)
-                for camera_id in session.cameras
-            ]
-        )
-        for clip in results:
+        # Sequential per-camera capture: many camera integrations fail or stall
+        # when multiple camera.record calls run in parallel on the same host.
+        for camera_id in session.cameras:
+            clip = await self._record_or_snapshot(session, camera_id, stamp, seq)
             if clip:
                 session.clips.append(clip)
+        self._refresh_session_mode(session)
 
     async def _record_or_snapshot(
         self,
@@ -623,6 +674,7 @@ class RecordingManager:
     ) -> dict[str, Any] | None:
         cam_safe = _safe(camera_id.replace("camera.", ""))
         filename = self.record_dir / f"{session.session_id}_{cam_safe}_{seq:03d}_{stamp}.mp4"
+        record_error: str | None = None
         try:
             await self.hass.services.async_call(
                 "camera",
@@ -635,15 +687,22 @@ class RecordingManager:
                 },
                 blocking=True,
             )
-            # Non-blocking used to index clips before bytes landed → size 0 →
-            # frontend Play filtered them out ("No clips for … selected …").
-            if not await self.hass.async_add_executor_job(filename.is_file):
-                raise RuntimeError("record finished but file missing")
-            size = await self.hass.async_add_executor_job(
-                lambda: filename.stat().st_size
-            )
+            # camera.record often returns before bytes finish landing on disk.
+            size = await self._wait_for_media_file(filename)
             if size <= 0:
-                raise RuntimeError("record finished with empty file")
+                raise RuntimeError(
+                    f"record finished but file missing/empty after "
+                    f"{self._RECORD_FILE_WAIT_SEC:.0f}s ({filename.name})"
+                )
+            note = {
+                "camera_id": camera_id,
+                "seq": seq,
+                "result": "video",
+                "size": int(size),
+                "path": str(filename),
+                "url": clip_media_url(filename.name),
+            }
+            session.capture_notes.append(note)
             return {
                 "camera_id": camera_id,
                 "path": str(filename),
@@ -655,12 +714,42 @@ class RecordingManager:
                 "size": int(size),
             }
         except Exception as err:  # noqa: BLE001
+            record_error = f"{type(err).__name__}: {err}"
+            # Race: service raised/returned early but mp4 still landed — prefer it.
+            recovered = await self._wait_for_media_file(filename, timeout=3.0)
+            if recovered > 0:
+                _LOGGER.info(
+                    "Recovered mp4 for %s after record error (%s) size=%s",
+                    camera_id,
+                    record_error,
+                    recovered,
+                )
+                note = {
+                    "camera_id": camera_id,
+                    "seq": seq,
+                    "result": "video_recovered",
+                    "size": int(recovered),
+                    "path": str(filename),
+                    "url": clip_media_url(filename.name),
+                    "record_error": record_error,
+                }
+                session.capture_notes.append(note)
+                return {
+                    "camera_id": camera_id,
+                    "path": str(filename),
+                    "url": clip_media_url(filename.name),
+                    "kind": "video",
+                    "seq": seq,
+                    "started": stamp,
+                    "duration": RECORD_CHUNK_SECONDS,
+                    "size": int(recovered),
+                    "record_error": record_error,
+                }
             _LOGGER.warning(
                 "camera.record failed for %s (%s); falling back to snapshot",
                 camera_id,
-                err,
+                record_error,
             )
-            session.mode = "snapshot"
             snap = self.record_dir / f"{session.session_id}_{cam_safe}_{seq:03d}_{stamp}.jpg"
             try:
                 await self.hass.services.async_call(
@@ -669,13 +758,19 @@ class RecordingManager:
                     {"entity_id": camera_id, "filename": str(snap)},
                     blocking=True,
                 )
-                if not await self.hass.async_add_executor_job(snap.is_file):
-                    raise RuntimeError("snapshot finished but file missing")
-                snap_size = await self.hass.async_add_executor_job(
-                    lambda: snap.stat().st_size
-                )
+                snap_size = await self._wait_for_media_file(snap, timeout=8.0)
                 if snap_size <= 0:
-                    raise RuntimeError("snapshot finished with empty file")
+                    raise RuntimeError("snapshot finished but file missing/empty")
+                note = {
+                    "camera_id": camera_id,
+                    "seq": seq,
+                    "result": "snapshot",
+                    "size": int(snap_size),
+                    "path": str(snap),
+                    "url": clip_media_url(snap.name),
+                    "fallback_reason": record_error or "camera.record failed",
+                }
+                session.capture_notes.append(note)
                 return {
                     "camera_id": camera_id,
                     "path": str(snap),
@@ -685,9 +780,19 @@ class RecordingManager:
                     "started": stamp,
                     "duration": SNAPSHOT_INTERVAL_SECONDS,
                     "size": int(snap_size),
+                    "fallback_reason": record_error or "camera.record failed",
                 }
-            except Exception:  # noqa: BLE001
+            except Exception as snap_err:  # noqa: BLE001
                 _LOGGER.exception("Snapshot fallback failed for %s", camera_id)
+                session.capture_notes.append(
+                    {
+                        "camera_id": camera_id,
+                        "seq": seq,
+                        "result": "failed",
+                        "fallback_reason": record_error or "camera.record failed",
+                        "snapshot_error": f"{type(snap_err).__name__}: {snap_err}",
+                    }
+                )
                 return None
 
     def _load_index_sync(self) -> list[dict[str, Any]]:
@@ -866,6 +971,110 @@ class RecordingManager:
                 days,
             )
 
+    def recording_debug_payload(self) -> dict[str, str]:
+        """Settings/sensor diagnostics for the last recording session."""
+        return {
+            "summary": self._last_recording_debug_summary,
+            "text": self._last_recording_debug
+            or "No recording session debug yet. Trigger a detection to populate.",
+        }
+
+    def _set_recording_debug(
+        self,
+        session: RecordingSession,
+        meta: dict[str, Any],
+        *,
+        discarded: bool,
+    ) -> None:
+        """Build a copyable debug dump + short HA entity state."""
+        clips = list(meta.get("clips") or [])
+        notes = list(meta.get("capture_notes") or session.capture_notes or [])
+        video_n = sum(1 for c in clips if c.get("kind") == "video")
+        snap_n = sum(1 for c in clips if c.get("kind") == "snapshot")
+        fallbacks = [
+            n
+            for n in notes
+            if n.get("result") in {"snapshot", "failed"} or n.get("fallback_reason")
+        ]
+        summary = (
+            f"{session.session_id}: mode={meta.get('mode')} "
+            f"video={video_n} snapshot={snap_n}"
+            + (" discarded" if discarded else "")
+        )
+        if len(summary) > 250:
+            summary = summary[:247] + "..."
+        lines = [
+            f"session_id: {session.session_id}",
+            f"mode: {meta.get('mode')}",
+            f"discarded: {discarded}",
+            f"started: {meta.get('started')}",
+            f"ended: {meta.get('ended')}",
+            f"triggers: {', '.join(session.trigger_sensors) or '(none)'}",
+            f"cameras: {', '.join(session.cameras) or '(none)'}",
+            f"clips: {len(clips)} (video={video_n}, snapshot={snap_n})",
+            "--- clips ---",
+        ]
+        for clip in clips:
+            lines.append(
+                " | ".join(
+                    [
+                        f"cam={clip.get('camera_id')}",
+                        f"kind={clip.get('kind')}",
+                        f"seq={clip.get('seq')}",
+                        f"size={clip.get('size')}",
+                        f"path={clip.get('path')}",
+                        f"url={clip.get('url')}",
+                        f"fallback={clip.get('fallback_reason') or ''}",
+                    ]
+                )
+            )
+        lines.append("--- capture_notes ---")
+        if notes:
+            for note in notes:
+                lines.append(
+                    " | ".join(
+                        [
+                            f"cam={note.get('camera_id')}",
+                            f"seq={note.get('seq')}",
+                            f"result={note.get('result')}",
+                            f"size={note.get('size')}",
+                            f"path={note.get('path')}",
+                            f"url={note.get('url')}",
+                            f"fallback_reason={note.get('fallback_reason') or ''}",
+                            f"record_error={note.get('record_error') or ''}",
+                            f"snapshot_error={note.get('snapshot_error') or ''}",
+                        ]
+                    )
+                )
+        else:
+            lines.append("(none)")
+        if fallbacks:
+            lines.append("--- why snapshot fallback ---")
+            for note in fallbacks:
+                lines.append(
+                    f"{note.get('camera_id')} seq={note.get('seq')}: "
+                    f"{note.get('fallback_reason') or note.get('record_error') or note.get('result')}"
+                )
+        self._last_recording_debug_summary = summary
+        self._last_recording_debug = "\n".join(lines)
+        self._publish_recording_debug_entity()
+
+    def _publish_recording_debug_entity(self) -> None:
+        """Expose diagnostics as sensor.cctv_dashboard_recording_debug (not on dashboard UI)."""
+        try:
+            self.hass.states.async_set(
+                f"sensor.{DOMAIN}_recording_debug",
+                self._last_recording_debug_summary[:255],
+                {
+                    "friendly_name": "CCTV recording debug",
+                    "debug_text": self._last_recording_debug,
+                    "icon": "mdi:bug",
+                    "attribution": "CCTV Dashboard diagnostics",
+                },
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Could not publish recording debug entity", exc_info=True)
+
     def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
         active = None
         if self._session and (self._session.active or self._ending):
@@ -877,6 +1086,7 @@ class RecordingManager:
                 "cameras": list(self._session.cameras),
                 "clips": list(self._session.clips),
                 "mode": self._session.mode,
+                "capture_notes": list(self._session.capture_notes),
                 "active": True,
             }
         items = []

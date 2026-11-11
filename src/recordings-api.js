@@ -225,6 +225,41 @@ export function recordingPath(url) {
 }
 
 /**
+ * auth/sign_path must receive the HTTP media route — never a filesystem path.
+ * Clip objects often carry `path` as an on-disk absolute path; prefer `url`.
+ * @param {{ url?: string, path?: string, filePath?: string } | null | undefined} item
+ */
+export function mediaApiPathFromClip(item) {
+  const api = "/api/cctv_dashboard/media/";
+  const legacy = "/cctv_dashboard_recordings/";
+  const candidates = [item?.url, item?.path, item?.filePath];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    let value = String(raw);
+    try {
+      if (/^https?:\/\//i.test(value)) value = new URL(value).pathname;
+    } catch {
+      /* ignore */
+    }
+    value = value.split("?")[0].split("#")[0];
+    if (value.includes(api) || value.includes(legacy)) {
+      return recordingPath(value);
+    }
+  }
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const name = String(raw)
+      .split("?")[0]
+      .split("/")
+      .pop();
+    if (name && /\.(mp4|m4v|webm|jpg|jpeg|png|webp)$/i.test(name)) {
+      return `${api}${name}`;
+    }
+  }
+  return recordingPath(item?.url || item?.path || "");
+}
+
+/**
  * Sign a recording path so <video>/<img> can load it (no Authorization header).
  * Unsigned API/static media returns 401 HTML → browser MEDIA_ERR_SRC_NOT_SUPPORTED.
  * @param {any} hass
@@ -269,8 +304,11 @@ export async function signPlaybackTracks(hass, tracks) {
       nextItems.push(item);
       jobs.push(
         (async () => {
-          const raw = item.path || item.url;
-          item.path = recordingPath(raw);
+          // Keep on-disk path separately; sign the HTTP media API route.
+          if (item.filePath == null && item.path && !String(item.path).includes("/api/")) {
+            item.filePath = item.path;
+          }
+          item.path = mediaApiPathFromClip(item);
           item.url = await signRecordingUrl(hass, item.path);
         })()
       );

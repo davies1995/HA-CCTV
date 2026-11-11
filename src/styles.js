@@ -973,6 +973,31 @@ export const sharedStyles = css`
     font-size: 0.8em;
   }
 
+  .settings-debug {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--cctv-border);
+  }
+
+  .settings-debug .picker-head {
+    margin-bottom: 0.35rem;
+  }
+
+  .settings-debug-text {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.5rem;
+    font: 0.75rem/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--primary-text-color, #e8eef5);
+    background: var(--primary-background-color, #0f1419);
+    border: 1px solid var(--cctv-border);
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    resize: vertical;
+    white-space: pre;
+  }
+
   .recording-toolbar {
     display: flex;
     flex-wrap: wrap;

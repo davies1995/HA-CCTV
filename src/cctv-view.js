@@ -55,6 +55,7 @@ import {
   saveSensorLinks,
   saveUserNotifyPreference,
   signPlaybackTracks,
+  mediaApiPathFromClip,
   signRecordingUrl,
 } from "./recordings-api.js";
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
@@ -117,6 +118,9 @@ export class CctvView extends LitElement {
     /** @type {Array<any>} */
     _sessions: { state: true },
     _recordDir: { state: true },
+    /** Settings-only copyable recording diagnostics (not on main dashboard). */
+    _recordingDebug: { state: true },
+    _recordingDebugSummary: { state: true },
     _isDesktop: { state: true },
     /** Per-device TV / kiosk mosaic layout (localStorage). */
     _tvMode: { state: true },
@@ -165,6 +169,8 @@ export class CctvView extends LitElement {
     this._notifyOnDetection = false;
     this._sessions = [];
     this._recordDir = "";
+    this._recordingDebug = "";
+    this._recordingDebugSummary = "";
     this._loadedForUser = null;
     this._isDesktop = false;
     this._tvMode = false;
@@ -729,6 +735,8 @@ export class CctvView extends LitElement {
       );
       this._notifyOnDetection = Boolean(shared.notify_on_detection);
       this._recordDir = shared.record_dir || "";
+      this._recordingDebug = String(shared.recording_debug || "");
+      this._recordingDebugSummary = String(shared.recording_debug_summary || "");
       this._applySharedCameraPrefs(shared);
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
@@ -761,6 +769,8 @@ export class CctvView extends LitElement {
       );
       this._notifyOnDetection = Boolean(settings.notify_on_detection);
       this._recordDir = settings.record_dir || "";
+      this._recordingDebug = String(settings.recording_debug || "");
+      this._recordingDebugSummary = String(settings.recording_debug_summary || "");
       if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
       // Don't clobber unsaved quality/aspect drafts while editing.
       if (!this._prefsDirty) this._applySharedCameraPrefs(settings);
@@ -769,6 +779,22 @@ export class CctvView extends LitElement {
       this._recordOnDetection = this.config.record_on_detection !== false;
     }
     this._sessions = await listRecordings(this.hass);
+  }
+
+  async _copyRecordingDebug() {
+    const text =
+      this._recordingDebug ||
+      "No recording session debug yet. Trigger a detection to populate.";
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        this._status = "Recording debug copied";
+        return;
+      }
+    } catch (err) {
+      console.warn("CCTV: clipboard copy failed", err);
+    }
+    this._status = "Could not copy — select the debug text manually";
   }
 
   /**
@@ -1637,7 +1663,8 @@ export class CctvView extends LitElement {
       return;
     }
     try {
-      item.url = await signRecordingUrl(this.hass, item.path || item.url);
+      item.path = mediaApiPathFromClip(item);
+      item.url = await signRecordingUrl(this.hass, item.path);
       video.muted = true;
       video.playsInline = true;
       video.src = item.url;
@@ -1930,6 +1957,30 @@ export class CctvView extends LitElement {
           otherwise snapshots are saved instead. Also configurable under
           Settings → Devices &amp; services → CCTV Dashboard → Configure.
         </p>
+        <div class="settings-debug" aria-label="Recording debug">
+          <div class="picker-head">
+            <strong>Recording debug</strong>
+            <button class="btn" type="button" @click=${this._copyRecordingDebug}>
+              Copy
+            </button>
+          </div>
+          <span class="hint">
+            Settings-only. Last session clip kinds/sizes/paths/URLs and why
+            <code>camera.record</code> fell back to snapshot. Also available as
+            <code>sensor.cctv_dashboard_recording_debug</code> (attribute
+            <code>debug_text</code>) — not shown on the main mosaic.
+          </span>
+          ${this._recordingDebugSummary
+            ? html`<p class="hint"><code>${this._recordingDebugSummary}</code></p>`
+            : nothing}
+          <textarea
+            class="settings-debug-text"
+            readonly
+            rows="12"
+            .value=${this._recordingDebug ||
+            "No recording session debug yet. Trigger a detection to populate."}
+          ></textarea>
+        </div>
       </section>
     `;
   }
