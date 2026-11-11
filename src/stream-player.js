@@ -196,6 +196,7 @@ export class CctvStreamPlayer extends LitElement {
     super.connectedCallback();
     this._bindObserver();
     this._bindHostResize();
+    this._bindDocumentVisibility();
     if (this.active) this._reconcilePlayback();
     else this._unloadCompletely();
   }
@@ -204,7 +205,26 @@ export class CctvStreamPlayer extends LitElement {
     super.disconnectedCallback();
     this._unbindObserver();
     this._unbindHostResize();
+    this._unbindDocumentVisibility();
     this._unloadCompletely();
+  }
+
+  _bindDocumentVisibility() {
+    this._unbindDocumentVisibility();
+    if (typeof document === "undefined") return;
+    this._onDocVisibility = () => {
+      // document.hidden gated live; when the tab/WebView returns, re-request slots.
+      if (!this.active) return;
+      this._reconcilePlayback();
+    };
+    document.addEventListener("visibilitychange", this._onDocVisibility);
+  }
+
+  _unbindDocumentVisibility() {
+    if (this._onDocVisibility && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this._onDocVisibility);
+    }
+    this._onDocVisibility = null;
   }
 
   /**
@@ -603,7 +623,17 @@ export class CctvStreamPlayer extends LitElement {
       this.context
     );
     this._syncStableStreamCamera(resolved);
-    this._slotId = this._streamCamera?.entityId || this.camera.entityId;
+    const nextSlotId = this._streamCamera?.entityId || this.camera.entityId;
+    // Quality/substream resolution can change entity id after hass loads.
+    // Releasing the previous id prevents ghost holders that fill the max-stream
+    // budget and leave every mosaic tile stuck on a "queued" still.
+    if (this._slotId && nextSlotId && this._slotId !== nextSlotId) {
+      streamSlots.release(this._slotId);
+      this._slotHeld = false;
+      this._queued = false;
+      this._playKey = "";
+    }
+    this._slotId = nextSlotId;
 
     const want = this._wantsLive();
     const playKey = [

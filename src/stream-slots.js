@@ -86,19 +86,15 @@ class StreamSlotManager {
     this._drain();
   }
 
-  /** Drop every holder/queue entry (panel suspend / hard reset). */
+  /**
+   * Drop every holder/queue entry (panel suspend / remount live after Play).
+   * Does not invoke onRevoke — callers unload players separately. Calling
+   * onRevoke here re-requested slots and left ghost holders that stuck tiles
+   * in "queued" poster mode.
+   */
   releaseAll() {
-    const ids = [...this.holders.keys()];
+    this.holders.clear();
     this.queue = [];
-    for (const id of ids) {
-      const holder = this.holders.get(id);
-      this.holders.delete(id);
-      try {
-        holder?.onRevoke?.();
-      } catch (err) {
-        console.warn("CCTV stream slot revoke failed", err);
-      }
-    }
   }
 
   _lowestHolder() {
