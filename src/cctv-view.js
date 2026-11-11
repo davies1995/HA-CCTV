@@ -59,6 +59,13 @@ import {
 } from "./recordings-api.js";
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
+import {
+  estimateTvChromePx,
+  loadTvMode,
+  saveTvMode,
+  tvPackGap,
+  tvStageFromViewport,
+} from "./tv-mode.js";
 import "./stream-player.js";
 import "./detection-timeline.js";
 
@@ -110,10 +117,14 @@ export class CctvView extends LitElement {
     _sessions: { state: true },
     _recordDir: { state: true },
     _isDesktop: { state: true },
+    /** Per-device TV / kiosk mosaic layout (localStorage). */
+    _tvMode: { state: true },
     /** @type {Record<string, number>} */
     _aspectById: { state: true },
     /** @type {Record<string, string>} */
     _packStyles: { state: true },
+    /** Pixel size of the TV mosaic stage when TV mode is on. */
+    _tvStage: { state: true },
     /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[], windowStart: number, windowEnd: number } | null} */
     _playback: { state: true },
     /**
@@ -155,8 +166,10 @@ export class CctvView extends LitElement {
     this._recordDir = "";
     this._loadedForUser = null;
     this._isDesktop = false;
+    this._tvMode = false;
     this._aspectById = {};
     this._packStyles = {};
+    this._tvStage = { width: 0, height: 0 };
     this._playback = null;
     this._panelActive = true;
     /** @type {Map<string, string>} */
@@ -230,17 +243,21 @@ export class CctvView extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this._tvMode = loadTvMode();
+    this._syncTvModeAttr();
     if (typeof window !== "undefined" && window.matchMedia) {
       this._mq = window.matchMedia("(min-width: 801px)");
       this._onMq = () => {
         if (!this._panelActive) return;
         this._isDesktop = this._mq.matches;
+        this._refreshTvStage();
         this._schedulePack();
       };
       this._isDesktop = this._mq.matches;
       if (this._mq.addEventListener) this._mq.addEventListener("change", this._onMq);
       else this._mq.addListener(this._onMq);
     }
+    this._bindTvViewport();
     this._bindPanelVisibility();
     // Re-entering / first mount: only go live when this panel is the current route.
     if (
@@ -251,6 +268,7 @@ export class CctvView extends LitElement {
     } else {
       this._setPanelActive(false);
     }
+    this._refreshTvStage();
   }
 
   disconnectedCallback() {
@@ -259,12 +277,63 @@ export class CctvView extends LitElement {
       this._panelActive = false;
       this._suspendResources();
     }
+    this._unbindTvViewport();
     this._unbindPanelVisibility();
     if (this._mq && this._onMq) {
       if (this._mq.removeEventListener) this._mq.removeEventListener("change", this._onMq);
       else this._mq.removeListener(this._onMq);
     }
     this._tearDownObservers();
+  }
+
+  _syncTvModeAttr() {
+    const on = Boolean(this.panelMode && this._tvMode);
+    this.toggleAttribute("tv-mode", on);
+  }
+
+  _bindTvViewport() {
+    if (typeof window === "undefined") return;
+    this._unbindTvViewport();
+    this._onTvResize = () => {
+      if (!this._panelActive) return;
+      this._refreshTvStage();
+      this._schedulePack();
+    };
+    window.addEventListener("resize", this._onTvResize);
+  }
+
+  _unbindTvViewport() {
+    if (typeof window === "undefined" || !this._onTvResize) return;
+    window.removeEventListener("resize", this._onTvResize);
+    this._onTvResize = null;
+  }
+
+  /** Size the above-the-fold 16:9 mosaic stage for TV / kiosk displays. */
+  _refreshTvStage() {
+    if (!this._tvMode || !this.panelMode) {
+      if (this._tvStage?.width || this._tvStage?.height) {
+        this._tvStage = { width: 0, height: 0 };
+      }
+      return;
+    }
+    const chrome = estimateTvChromePx();
+    const { stage } = tvStageFromViewport(
+      typeof window !== "undefined" ? window : null,
+      chrome
+    );
+    const next = {
+      width: Math.round(stage.width),
+      height: Math.round(stage.height),
+    };
+    if (
+      next.width !== this._tvStage?.width ||
+      next.height !== this._tvStage?.height
+    ) {
+      this._tvStage = next;
+    }
+    this.style.setProperty("--cctv-tv-stage-w", `${next.width}px`);
+    this.style.setProperty("--cctv-tv-stage-h", `${next.height}px`);
+    this.style.setProperty("--cctv-tv-chrome", `${chrome}px`);
   }
 
   /**
@@ -408,6 +477,10 @@ export class CctvView extends LitElement {
     if (this.panelMode && this._panelActive && (changed.has("hass") || changed.has("panelMode") || changed.has("_panelActive"))) {
       this._ensureSelectionLoaded();
     }
+    if (changed.has("_tvMode") || changed.has("panelMode")) {
+      this._syncTvModeAttr();
+      this._refreshTvStage();
+    }
     if (
       this.panelMode &&
       this._panelActive &&
@@ -419,6 +492,8 @@ export class CctvView extends LitElement {
         changed.has("_aspectById") ||
         changed.has("_forceAspect") ||
         changed.has("_playback") ||
+        changed.has("_tvMode") ||
+        changed.has("_tvStage") ||
         changed.has("_panelActive"))
     ) {
       this._schedulePack();
@@ -468,8 +543,13 @@ export class CctvView extends LitElement {
     const el = this.renderRoot?.querySelector?.(".layout-pack");
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const boxW = Math.max(0, rect.width);
-    const boxH = Math.max(0, rect.height);
+    let boxW = Math.max(0, rect.width);
+    let boxH = Math.max(0, rect.height);
+    // TV mode: prefer the computed 16:9 stage so packing matches above-the-fold fit.
+    if (this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8) {
+      boxW = this._tvStage.width;
+      boxH = this._tvStage.height;
+    }
     if (boxW < 8 || boxH < 8) return;
 
     // Always pack the same visible mosaic cameras (live or playback).
@@ -478,7 +558,8 @@ export class CctvView extends LitElement {
       id: cam.entityId,
       aspect: this._effectiveAspect(cam.entityId),
     }));
-    const cells = packAspectMosaic(items, boxW, boxH, 10);
+    const gap = this._tvMode ? tvPackGap(items.length) : 10;
+    const cells = packAspectMosaic(items, boxW, boxH, gap);
     const nextStyles = cellsToPercentStyles(cells, boxW, boxH);
     if (!this._packStylesEqual(this._packStyles, nextStyles)) {
       this._packStyles = nextStyles;
@@ -1012,6 +1093,23 @@ export class CctvView extends LitElement {
     }
   }
 
+  _toggleTvMode(enabled) {
+    this._tvMode = Boolean(enabled);
+    saveTvMode(this._tvMode);
+    this._syncTvModeAttr();
+    // Keep the first viewport focused on the mosaic when enabling TV mode.
+    if (this._tvMode) {
+      this._pickerOpen = false;
+      this._settingsOpen = false;
+    }
+    this._refreshTvStage();
+    this._status = this._tvMode
+      ? "TV mode on — 16:9 mosaic fills this display (saved on this device)"
+      : "TV mode off";
+    this._schedulePack();
+    this.updateComplete.then(() => this._bindPackObserver());
+  }
+
   async _toggleRecordKind(kindId, enabled) {
     const id = String(kindId || "");
     const next = new Set(this._recordDetectionKinds || []);
@@ -1518,12 +1616,21 @@ export class CctvView extends LitElement {
     const playing = Boolean(this._playback?.playing);
     const streamsActive = this._panelActive;
 
+    const wrapClass = [
+      this.panelMode ? "panel-wrap wrap" : "wrap",
+      this.panelMode && this._tvMode ? "tv-mode" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     return html`
-      <div class=${this.panelMode ? "panel-wrap wrap" : "wrap"}>
-        <div class="top">
+      <div class=${wrapClass}>
+        <div class="top ${this._tvMode ? "top-tv" : ""}">
           <div>
-            ${this.panelMode ? html`<p class="eyebrow">Home Assistant</p>` : nothing}
-            <h1>${title}</h1>
+            ${this.panelMode && !this._tvMode
+              ? html`<p class="eyebrow">Home Assistant</p>`
+              : nothing}
+            <h1>${title}${this._tvMode ? html`<span class="tv-badge">TV</span>` : nothing}</h1>
           </div>
           <div class="top-actions">
             ${this.panelMode
@@ -1670,6 +1777,20 @@ export class CctvView extends LitElement {
             <span class="picker-id">
               Per-user. Sends type + duration to your Companion app (or HA notification).
               Only fires when a clip with media was saved.
+            </span>
+          </label>
+          <label class="picker-item settings-toggle">
+            <input
+              type="checkbox"
+              .checked=${this._tvMode}
+              ?disabled=${this._saving}
+              @change=${(e) => this._toggleTvMode(e.target.checked)}
+            />
+            <span class="picker-name">TV mode</span>
+            <span class="picker-id">
+              Per-device (this browser / kiosk). Fits a 16:9 mosaic above the fold
+              (accounts for HA / kiosk chrome); up to 4 cams fill the stage; 1–2 cams
+              maximize. Timeline and Saved detections scroll below.
             </span>
           </label>
         </div>
@@ -1869,10 +1990,18 @@ export class CctvView extends LitElement {
       `;
     }
 
+    const tvStage =
+      this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8
+        ? `width:${this._tvStage.width}px;height:${this._tvStage.height}px;max-width:100%;`
+        : nothing;
+    const countClass =
+      this._tvMode && list.length <= 2 ? "layout-pack-maximize" : "";
+
     return html`
       <div
-        class="layout layout-pack"
+        class="layout layout-pack ${this._tvMode ? "layout-pack-tv" : ""} ${countClass}"
         role="list"
+        style=${tvStage}
         @cctv-media-aspect=${this._onMediaAspect}
       >
         ${list.map((cam) => this._renderLayoutTile(cam, true, streamsActive))}
