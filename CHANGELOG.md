@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.18.10 — 2026-11-11
+
+### Fixed
+
+- High-res → fluent sibling remap now uses **entity-registry device grouping** (with fuzzy token fallback) so Reolink names like `garden_*_fluent` / `reolink_*_fluent` remap correctly; clips set `recorded_via` / `via_reason`, and high-res + fluent selected together share one `camera.record` call
+
 ## 0.18.9 — 2026-11-11
 
 ### Fixed
