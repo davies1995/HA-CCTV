@@ -1,4 +1,5 @@
 import { LitElement, html, nothing } from "lit";
+import { keyed } from "lit/directives/keyed.js";
 import { sharedStyles } from "./styles.js";
 import {
   availableCameraActions,
@@ -131,13 +132,15 @@ export class CctvView extends LitElement {
     _packStyles: { state: true },
     /** Pixel size of the TV mosaic stage when TV mode is on. */
     _tvStage: { state: true },
-    /** @type {{ session: any, labels: string[], playing: boolean, tracks: any[], windowStart: number, windowEnd: number } | null} */
+    /** @type {{ session: any, labels: string[], playing: boolean, paused?: boolean, tracks: any[], windowStart: number, windowEnd: number } | null} */
     _playback: { state: true },
     /**
      * Panel/resources active. HA may keep the panel mounted for minutes after
      * navigate-away (suspendWhenHidden); we flip this false immediately.
      */
     _panelActive: { state: true },
+    /** Bumped on Back to live / suspend so mosaic stream players remount. */
+    _liveMountGen: { state: true },
   };
 
   static styles = sharedStyles;
@@ -180,6 +183,8 @@ export class CctvView extends LitElement {
     this._tvStage = { width: 0, height: 0 };
     this._playback = null;
     this._panelActive = true;
+    /** Bumped to force remount of live <cctv-stream-player> after Back to live. */
+    this._liveMountGen = 0;
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
     this._packObserver = null;
@@ -465,7 +470,7 @@ export class CctvView extends LitElement {
   /** Unload streams/playback/timers/observers while panel is away. */
   _suspendResources() {
     this._loadToken += 1;
-    this._teardownPlaybackMedia();
+    this._teardownPlaybackMedia({ clearSrc: true });
     this._playback = null;
     this._playbackIndex = new Map();
     this._playbackSeek = new Map();
@@ -473,6 +478,7 @@ export class CctvView extends LitElement {
     this._tearDownObservers();
     // Stop media before Lit removes the nodes (HA may keep this panel mounted).
     this._resetLiveStreamSlots();
+    this._liveMountGen += 1;
     if (this.panelMode) {
       this._status = "Suspended — streams unloaded";
     }
@@ -931,6 +937,8 @@ export class CctvView extends LitElement {
     if (this._detailId && !next.includes(this._detailId)) {
       this._detailId = null;
     }
+    // Selection change while event playback is up — free clips and remount live.
+    if (this._playback) this._returnToLive();
     await this._persistSelection(next);
   }
 
@@ -1241,7 +1249,7 @@ export class CctvView extends LitElement {
       const ok = await deleteRecording(this.hass, sessionId);
       this._sessions = await listRecordings(this.hass);
       if (this._playback?.session?.session_id === sessionId) {
-        this._stopPlayback();
+        this._returnToLive();
       }
       this._status = ok
         ? "Saved detection deleted for all users"
@@ -1271,7 +1279,7 @@ export class CctvView extends LitElement {
       const result = await clearAllDetections(this.hass);
       this._sessions = await listRecordings(this.hass);
       this._refreshTimeline();
-      if (this._playback) this._stopPlayback();
+      if (this._playback) this._returnToLive();
       const sessions = Number(result?.sessions_cleared) || 0;
       const events = Number(result?.events_cleared) || 0;
       this._status = `Cleared ${sessions} recording${sessions === 1 ? "" : "s"} and ${events} timeline event${events === 1 ? "" : "s"} for all users`;
@@ -1331,7 +1339,10 @@ export class CctvView extends LitElement {
     this._playback = {
       session,
       labels,
+      /** Mosaic shows clip tiles when true (live stream players when false). */
       playing: false,
+      /** When playing, pause freezes clip elements without restoring live. */
+      paused: false,
       tracks,
       windowStart: window.start,
       windowEnd: window.end,
@@ -1426,7 +1437,7 @@ export class CctvView extends LitElement {
     }
     // Drop live slots before swapping mosaic media to recordings.
     this._resetLiveStreamSlots();
-    this._playback = { ...this._playback, playing: true };
+    this._playback = { ...this._playback, playing: true, paused: false };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     // Force a fresh paint of mosaic playback tiles. A bare updateComplete can
     // resolve a stale cycle (common when TV pack/stage also schedules updates)
@@ -1437,35 +1448,148 @@ export class CctvView extends LitElement {
     await this._kickPlaybackVideos();
   }
 
-  _stopPlayback() {
-    this._teardownPlaybackMedia();
+  /**
+   * Play / Pause toggle while event clips are on the mosaic.
+   * Pause freezes videos in place — does not restore live.
+   */
+  async _togglePlaybackPause() {
+    if (!this._playback) return;
+    if (!this._playback.playing) {
+      await this._startPlayback();
+      return;
+    }
+    if (this._playback.paused) {
+      await this._resumePlayback();
+      return;
+    }
+    this._pausePlaybackClips();
+  }
+
+  /** Freeze clip videos; keep playback tiles mounted. */
+  _pausePlaybackClips() {
+    if (!this._playback?.playing) return;
+    const root = this.renderRoot;
+    root?.querySelectorAll?.("video.playback-media").forEach((video) => {
+      try {
+        video.pause?.();
+      } catch {
+        /* ignore */
+      }
+    });
+    this._playback = { ...this._playback, paused: true };
+    this._status = `Paused ${this._playback.labels.join(", ")}`;
+  }
+
+  async _resumePlayback() {
+    if (!this._playback?.playing) {
+      await this._startPlayback();
+      return;
+    }
+    this._playback = { ...this._playback, paused: false };
+    this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
+    // Resume in place — do not reseek/reload (that would jump to clip start).
+    const { videos } = this._playbackMediaEls();
+    if (!videos.length) {
+      await this._kickPlaybackVideos();
+      return;
+    }
+    await Promise.all(
+      videos.map(async (video) => {
+        try {
+          video.muted = true;
+          video.playsInline = true;
+          await video.play();
+        } catch (err) {
+          console.warn("CCTV resume play() failed", err);
+        }
+      })
+    );
+  }
+
+  /**
+   * Replay the same event/session from the window start on the same cams.
+   */
+  async _restartPlayback() {
+    if (!this._playback?.tracks?.length) return;
+    const windowStart = Number(this._playback.windowStart);
+    this._playbackDone = new Map();
+    this._playbackIndex = new Map();
+    this._playbackSeek = new Map();
+    for (const track of this._playback.tracks) {
+      const pos = clipPositionAtTime(track, windowStart);
+      this._playbackIndex.set(track.cameraId, pos.index);
+      this._playbackSeek.set(track.cameraId, pos.seekSec);
+      this._playbackDone.set(track.cameraId, !track.items.length);
+    }
+    // Stay on clip tiles; clear src so kick reloads first chunks cleanly.
+    this._teardownPlaybackMedia({ clearSrc: true });
+    this._playback = { ...this._playback, playing: true, paused: false };
+    this._status = `Restarting ${this._playback.labels.join(", ")}…`;
+    this.requestUpdate();
+    await this.updateComplete;
+    await this._waitForPlaybackMedia();
+    await this._kickPlaybackVideos();
+  }
+
+  /**
+   * Unload event playback and restore live mosaic (former reliable Stop path).
+   * Bumps live mount generation so stream players remount — avoids stuck
+   * "No preview" when existing live players were hard-unloaded in place.
+   */
+  _returnToLive() {
+    this._teardownPlaybackMedia({ clearSrc: true });
     this._playback = null;
     this._playbackIndex = new Map();
     this._playbackSeek = new Map();
     this._playbackDone = new Map();
-    // Ensure remounted live players are not blocked by stale slot holders.
-    this._resetLiveStreamSlots();
+    try {
+      streamSlots.releaseAll();
+    } catch (err) {
+      console.warn("CCTV: stream slot reset failed", err);
+    }
+    this._unloadStreamPlayers();
+    this._liveMountGen += 1;
     this._status = "Live mosaic";
     this._schedulePack();
+    this.updateComplete.then(() => {
+      this._wakeLiveStreamPlayers();
+      if (this._tvMode) this._refreshTvStage();
+    });
   }
 
-  _pausePlaybackToLive() {
-    if (!this._playback) return;
-    this._teardownPlaybackMedia();
-    this._playback = { ...this._playback, playing: false };
-    this._resetLiveStreamSlots();
-    this._status = "Stopped — back to live mosaic";
-    this._schedulePack();
+  /** @deprecated Use _returnToLive — kept for any leftover call sites. */
+  _stopPlayback() {
+    this._returnToLive();
   }
 
-  _teardownPlaybackMedia() {
+  _wakeLiveStreamPlayers() {
+    const root = this.renderRoot;
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll("cctv-stream-player").forEach((el) => {
+      try {
+        el.active = true;
+        el._idleReason = "";
+        el._reconcilePlayback?.();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /**
+   * @param {{ clearSrc?: boolean }} [opts]
+   */
+  _teardownPlaybackMedia(opts = {}) {
+    const clearSrc = opts.clearSrc !== false;
     const root = this.renderRoot;
     if (!root) return;
     root.querySelectorAll("video.playback-media").forEach((video) => {
       try {
         video.pause?.();
-        video.removeAttribute("src");
-        video.load?.();
+        if (clearSrc) {
+          video.removeAttribute("src");
+          video.load?.();
+        }
       } catch {
         /* ignore */
       }
@@ -1519,7 +1643,7 @@ export class CctvView extends LitElement {
   }
 
   async _kickPlaybackVideos() {
-    if (!this._playback?.playing) return;
+    if (!this._playback?.playing || this._playback?.paused) return;
     let { videos } = this._playbackMediaEls();
     if (!videos.length) {
       ({ videos } = await this._waitForPlaybackMedia({ timeoutMs: 1500 }));
@@ -1632,7 +1756,7 @@ export class CctvView extends LitElement {
   }
 
   _onPlaybackEnded(cameraId) {
-    if (!this._playback?.playing) return;
+    if (!this._playback?.playing || this._playback?.paused) return;
     const track = this._playback.tracks.find((t) => t.cameraId === cameraId);
     if (!track) return;
     const idx = this._playbackIndex.get(cameraId) || 0;
@@ -1692,7 +1816,11 @@ export class CctvView extends LitElement {
       if (t.items.every((item) => item.kind === "snapshot")) return true;
       return this._playbackDone.get(t.cameraId);
     });
-    if (allDone) this._pausePlaybackToLive();
+    if (allDone && this._playback?.playing) {
+      // Freeze on last frame — do not tear down to live (use Back to live).
+      this._pausePlaybackClips();
+      this._status = `Finished ${this._playback.labels.join(", ")} — Restart or Back to live`;
+    }
   }
 
   _trackForCamera(cameraId) {
@@ -1756,6 +1884,7 @@ export class CctvView extends LitElement {
 
     const cameraNames = this._stableCameraNames(cameras);
     const playing = Boolean(this._playback?.playing);
+    const playbackPaused = Boolean(playing && this._playback?.paused);
     const streamsActive = this._panelActive;
 
     const wrapClass = [
@@ -1799,8 +1928,8 @@ export class CctvView extends LitElement {
             <span class="status">
               ${this._status ||
               (this.panelMode
-                ? `${visible.length}/${maxStreams} selected · ${playing ? "playback" : `${streamSlots.activeCount()} live`}`
-                : `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · ${streamSlots.activeCount()}/${maxStreams} live`)}
+                ? `${visible.length}/${maxStreams} selected · ${playing ? (playbackPaused ? "paused" : "playback") : `${streamSlots.activeCount()} live`}`
+                : `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · ${streamSlots.activeCount()} live`)}
               ${this._saving ? " · saving…" : ""}
             </span>
           </div>
@@ -1847,25 +1976,30 @@ export class CctvView extends LitElement {
     const when = pb.session?.started
       ? new Date(pb.session.started).toLocaleString()
       : "—";
+    const showPause = pb.playing && !pb.paused;
+    const playPauseLabel = showPause ? "Pause" : "Play";
     return html`
       <div class="playback-bar" role="region" aria-label="Detection playback">
         <div class="playback-bar-meta">
           <strong>${pb.labels.join(", ")}</strong>
-          <span class="hint">${when} · ${formatBytes(sessionTotalBytes(pb.session))}</span>
+          <span class="hint">${when} · ${formatBytes(sessionTotalBytes(pb.session))}${pb.playing && pb.paused ? " · paused" : ""}</span>
         </div>
         <div class="playback-bar-actions">
+          <button
+            class="btn primary"
+            type="button"
+            @click=${this._togglePlaybackPause}
+          >
+            ${playPauseLabel}
+          </button>
           ${pb.playing
             ? html`
-                <button class="btn primary" type="button" @click=${this._pausePlaybackToLive}>
-                  Stop
+                <button class="btn" type="button" @click=${this._restartPlayback}>
+                  Restart
                 </button>
               `
-            : html`
-                <button class="btn primary" type="button" @click=${this._startPlayback}>
-                  Play
-                </button>
-              `}
-          <button class="btn" type="button" @click=${this._stopPlayback}>
+            : nothing}
+          <button class="btn" type="button" @click=${this._returnToLive}>
             Back to live
           </button>
         </div>
@@ -2184,6 +2318,7 @@ export class CctvView extends LitElement {
     const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
     const positioned = Boolean(packed && packStyle);
     const playing = Boolean(this._playback?.playing);
+    const paused = Boolean(playing && this._playback?.paused);
     const track = playing ? this._trackForCamera(cam.entityId) : null;
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
@@ -2226,7 +2361,7 @@ export class CctvView extends LitElement {
                       class="playback-media"
                       data-camera=${cam.entityId}
                       src=${item.url}
-                      autoplay
+                      ?autoplay=${!paused}
                       muted
                       playsinline
                       webkit-playsinline
@@ -2243,20 +2378,23 @@ export class CctvView extends LitElement {
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
                     ></video>
                   `
-            : html`
-                <cctv-stream-player
-                  large
-                  mosaic
-                  eager
-                  .active=${streamsActive}
-                  .hass=${this.hass}
-                  .camera=${cam}
-                  .config=${this.config}
-                  .quality=${quality}
-                  context="mosaic"
-                  muted
-                ></cctv-stream-player>
-              `}
+            : keyed(
+                `${this._liveMountGen}:${cam.entityId}`,
+                html`
+                  <cctv-stream-player
+                    large
+                    mosaic
+                    eager
+                    .active=${streamsActive}
+                    .hass=${this.hass}
+                    .camera=${cam}
+                    .config=${this.config}
+                    .quality=${quality}
+                    context="mosaic"
+                    muted
+                  ></cctv-stream-player>
+                `
+              )}
           ${triggerMeta
             ? html`<div
                 class="trigger-cam-overlay kind-${triggerMeta.kindId}"
@@ -2269,7 +2407,7 @@ export class CctvView extends LitElement {
           ? html`
               <div class="tile-body ${packed ? "pack-caption" : ""}">
                 <p class="tile-title">${cam.name}</p>
-                <p class="tile-meta">Playback</p>
+                <p class="tile-meta">${paused ? "Paused" : "Playback"}</p>
               </div>
             `
           : html`
