@@ -6,6 +6,7 @@
 
 - **Whole-app restore** to pre-PR **#46** (`c083bac`, parent of trigger-highlight): detection playback and the rest of the tree match that baseline again (no trigger highlight)
 - Re-applied **TV mode** (#45) and **full-width 16:9** mosaic stage (#50) only — detection playback code paths untouched by those TV commits
+- Kept **#48** slugify import fix (`from homeassistant.util import slugify`) so HA setup does not crash — not playback-related
 
 ## 0.18.5 — 2026-11-11
 

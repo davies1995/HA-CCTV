@@ -16,7 +16,6 @@ from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
-from homeassistant.util.slugify import slugify as ha_slugify
 
 from .const import (
     DEFAULT_RECORD_DETECTION_KINDS,
@@ -35,6 +34,23 @@ _LOGGER = logging.getLogger(__name__)
 
 ON_STATES = {STATE_ON, "true", "detected", "active", "home", "1"}
 SAFE_NAME = re.compile(r"[^a-zA-Z0-9._-]+")
+
+# HA exposes slugify on homeassistant.util (not homeassistant.util.slugify).
+# Keep a local fallback so setup never fails if the util API moves again.
+try:
+    from homeassistant.util import slugify as ha_slugify
+except ImportError:  # pragma: no cover - older / atypical HA layouts
+    try:
+        from homeassistant.util.slugify import slugify as ha_slugify  # type: ignore
+    except ImportError:
+
+        def ha_slugify(text: str | None, *, separator: str = "_") -> str:
+            if text is None or text == "":
+                return ""
+            sep = separator or "_"
+            slug = re.sub(r"[^a-zA-Z0-9]+", sep, str(text).strip().lower())
+            slug = slug.strip(sep)
+            return slug or "unknown"
 
 
 def clip_media_url(filename: str) -> str:
