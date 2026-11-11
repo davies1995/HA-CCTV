@@ -32,6 +32,7 @@ import {
   resolvePlaybackCameraIds,
   sessionIsPlayable,
   sessionTotalBytes,
+  triggerHighlightsForPlayback,
 } from "./detection-playback.js";
 import {
   cellsToPercentStyles,
@@ -1262,6 +1263,13 @@ export class CctvView extends LitElement {
       windowStart: window.start,
       windowEnd: window.end,
       eventDetail: event,
+      /** @type {Record<string, { kindId: string, color: string }>} */
+      triggerHighlights: triggerHighlightsForPlayback(
+        this.hass,
+        session,
+        this._sensorLinks,
+        event
+      ),
     };
     const n = resolved.cameraIds.length;
     if (resolved.reason === "empty-selection") {
@@ -2019,16 +2027,30 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
+    // Highlight the camera(s) that triggered this detection (event-type color).
+    const triggerMeta =
+      playing && this._playback?.triggerHighlights
+        ? this._playback.triggerHighlights[cam.entityId]
+        : null;
+    const triggerClass = triggerMeta
+      ? `trigger-cam kind-${triggerMeta.kindId}`
+      : "";
+    const triggerStyle = triggerMeta
+      ? `--cctv-trigger-color:${triggerMeta.color};`
+      : "";
     // Mobile / unpacked tiles: seed a definite box from the shared override.
     const mediaStyle =
       !positioned && forcedRatio
         ? `aspect-ratio:${forcedRatio}; width:100%;`
         : nothing;
+    const tileStyle = [positioned ? packStyle : "", triggerStyle]
+      .filter(Boolean)
+      .join(";");
     return html`
       <article
-        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
+        class="tile layout-tile ${positioned ? "pack-tile" : ""} ${triggerClass}"
         role="listitem"
-        style=${positioned ? packStyle : nothing}
+        style=${tileStyle || nothing}
       >
         <div class="tile-media" style=${mediaStyle}>
           ${playing

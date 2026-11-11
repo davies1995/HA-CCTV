@@ -3,6 +3,100 @@
 import { classifyDetectionSensor } from "./detection-sensors.js";
 import { recordingMediaUrl } from "./recordings-api.js";
 
+/** Border colors — keep in sync with styles.js `.kind-*` / timeline marks. */
+export const DETECTION_KIND_COLORS = {
+  person: "#5eb1ff",
+  car: "#f0b45a",
+  animal: "#7dcf8a",
+  package: "#c9a0ff",
+  bicycle: "#67d5c8",
+  motion: "#e6d36a",
+  other: "#8b9aab",
+};
+
+/**
+ * @param {string} kindId
+ */
+export function detectionKindColor(kindId) {
+  const id = String(kindId || "").toLowerCase();
+  return DETECTION_KIND_COLORS[id] || DETECTION_KIND_COLORS.other;
+}
+
+/**
+ * Cameras linked to any of the given trigger sensors (site-wide sensor_links).
+ * @param {Record<string, string[]> | null | undefined} sensorLinks
+ * @param {string[]} triggerSensors
+ * @returns {string[]}
+ */
+export function camerasForTriggerSensors(sensorLinks, triggerSensors) {
+  const triggers = new Set(
+    (triggerSensors || []).map(String).filter(Boolean)
+  );
+  if (!triggers.size) return [];
+  const out = [];
+  for (const [cameraId, sensors] of Object.entries(sensorLinks || {})) {
+    if (!String(cameraId).startsWith("camera.")) continue;
+    if ((sensors || []).some((sid) => triggers.has(String(sid)))) {
+      out.push(cameraId);
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-camera highlight while playing back a detection: which mosaic tiles are
+ * the trigger cams, and which event-type color to use for their border.
+ *
+ * @param {any} hass
+ * @param {any} session
+ * @param {Record<string, string[]> | null | undefined} sensorLinks
+ * @param {{ kind?: { id?: string }, cameras?: string[], sensors?: Array<{ entityId?: string }> } | null} [eventDetail]
+ * @returns {Record<string, { kindId: string, color: string }>}
+ */
+export function triggerHighlightsForPlayback(
+  hass,
+  session,
+  sensorLinks,
+  eventDetail = null
+) {
+  /** @type {Record<string, { kindId: string, color: string }>} */
+  const byCamera = {};
+
+  const assign = (cameraId, kindId) => {
+    const cam = String(cameraId || "");
+    if (!cam.startsWith("camera.") || byCamera[cam]) return;
+    const id = String(kindId || "other").toLowerCase();
+    byCamera[cam] = { kindId: id, color: detectionKindColor(id) };
+  };
+
+  // Timeline Play carries kind + linked cameras when available.
+  const eventKindId = eventDetail?.kind?.id;
+  if (eventKindId && Array.isArray(eventDetail?.cameras)) {
+    for (const cameraId of eventDetail.cameras) {
+      assign(cameraId, eventKindId);
+    }
+  }
+
+  const triggerSensors = [
+    ...(session?.trigger_sensors || []),
+    ...((eventDetail?.sensors || [])
+      .map((s) => s?.entityId)
+      .filter(Boolean)),
+  ];
+
+  for (const sensorId of triggerSensors) {
+    const kind = classifyDetectionSensor(
+      sensorId,
+      hass?.states?.[sensorId]
+    );
+    for (const cameraId of camerasForTriggerSensors(sensorLinks, [sensorId])) {
+      assign(cameraId, kind.id);
+    }
+  }
+
+  return byCamera;
+}
+
 /**
  * @param {number} bytes
  */

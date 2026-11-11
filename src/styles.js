@@ -498,6 +498,39 @@ export const sharedStyles = css`
     align-self: stretch;
   }
 
+  /*
+   * During detection playback: border the camera that triggered the event in
+   * the matching type color so attention lands there first.
+   */
+  .layout-tile.trigger-cam {
+    z-index: 3;
+    box-shadow:
+      inset 0 0 0 3px var(--cctv-trigger-color, var(--cctv-accent)),
+      0 0 0 1px rgba(0, 0, 0, 0.45);
+  }
+
+  .layout-tile.trigger-cam.kind-person {
+    --cctv-trigger-color: #5eb1ff;
+  }
+  .layout-tile.trigger-cam.kind-car {
+    --cctv-trigger-color: #f0b45a;
+  }
+  .layout-tile.trigger-cam.kind-animal {
+    --cctv-trigger-color: #7dcf8a;
+  }
+  .layout-tile.trigger-cam.kind-package {
+    --cctv-trigger-color: #c9a0ff;
+  }
+  .layout-tile.trigger-cam.kind-bicycle {
+    --cctv-trigger-color: #67d5c8;
+  }
+  .layout-tile.trigger-cam.kind-motion {
+    --cctv-trigger-color: #e6d36a;
+  }
+  .layout-tile.trigger-cam.kind-other {
+    --cctv-trigger-color: #8b9aab;
+  }
+
   .layout-1 .layout-tile cctv-stream-player {
     min-height: min(65vh, 640px);
   }
