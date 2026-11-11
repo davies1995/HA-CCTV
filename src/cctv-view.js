@@ -188,9 +188,6 @@ export class CctvView extends LitElement {
     this._playbackDone = new Map();
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
-    /** @type {string[]} */
-    this._cameraIdsCache = [];
-    this._cameraIdsKey = "";
     this._lastHassSig = "";
     this._onDocVisibility = null;
     this._onLocationChange = null;
@@ -1393,12 +1390,9 @@ export class CctvView extends LitElement {
     this._resetLiveStreamSlots();
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
-    // Force a fresh render of the mosaic <video> tiles, then wait until they
-    // exist. A bare updateComplete+rAF can resolve against a stale cycle and
-    // kick before Lit mounts video.playback-media (toast: no video elements).
-    this.requestUpdate();
     await this.updateComplete;
-    await this._waitForPlaybackVideos();
+    // Wait a frame so <video> nodes exist after the live→playback swap.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
     await this._kickPlaybackVideos();
   }
 
@@ -1437,81 +1431,11 @@ export class CctvView extends LitElement {
     });
   }
 
-  /**
-   * Mosaic playback <video> nodes (shadow or light root).
-   * @returns {HTMLVideoElement[]}
-   */
-  _playbackVideoEls() {
-    /** @type {ParentNode[]} */
-    const roots = [];
-    if (this.renderRoot) roots.push(this.renderRoot);
-    if (this.shadowRoot && this.shadowRoot !== this.renderRoot) {
-      roots.push(this.shadowRoot);
-    }
-    roots.push(this);
-    /** @type {HTMLVideoElement[]} */
-    const out = [];
-    const seen = new Set();
-    for (const root of roots) {
-      const list = root.querySelectorAll?.("video.playback-media");
-      if (!list) continue;
-      for (const video of list) {
-        if (seen.has(video)) continue;
-        seen.add(video);
-        out.push(/** @type {HTMLVideoElement} */ (video));
-      }
-    }
-    return out;
-  }
-
-  _playbackHasVideoClips() {
-    return (this._playback?.tracks || []).some((track) =>
-      (track.items || []).some((item) => item.kind === "video")
-    );
-  }
-
-  /**
-   * Wait until mosaic playback videos are in the DOM (or snapshot-only / timeout).
-   * @param {{ timeoutMs?: number }} [opts]
-   * @returns {Promise<HTMLVideoElement[]>}
-   */
-  async _waitForPlaybackVideos(opts = {}) {
-    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 2500;
-    const deadline = Date.now() + timeoutMs;
-    let attempt = 0;
-    while (this._playback?.playing && Date.now() < deadline) {
-      const videos = this._playbackVideoEls();
-      if (videos.length) return videos;
-      // Snapshot-only sessions never mount <video> — not an error.
-      if (
-        !this._playbackHasVideoClips() &&
-        this.renderRoot?.querySelector?.(
-          "img.playback-media, .playback-empty"
-        )
-      ) {
-        return [];
-      }
-      attempt += 1;
-      if (attempt % 3 === 0) {
-        this.requestUpdate();
-        await this.updateComplete;
-      }
-      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-    }
-    return this._playbackVideoEls();
-  }
-
   async _kickPlaybackVideos() {
-    if (!this._playback?.playing) return;
-    let videos = this._playbackVideoEls();
+    const root = this.renderRoot;
+    if (!root || !this._playback?.playing) return;
+    const videos = [...root.querySelectorAll("video.playback-media")];
     if (!videos.length) {
-      videos = await this._waitForPlaybackVideos({ timeoutMs: 1500 });
-    }
-    if (!videos.length) {
-      if (!this._playbackHasVideoClips()) {
-        this._status = `Playing ${this._playback.labels.join(", ")} (snapshots)`;
-        return;
-      }
       this._status = "Playback ready but no video elements found";
       return;
     }
@@ -1604,12 +1528,8 @@ export class CctvView extends LitElement {
 
   _playbackVideoEl(cameraId) {
     const safeId = String(cameraId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const sel = `video.playback-media[data-camera="${safeId}"]`;
-    return (
-      this.renderRoot?.querySelector?.(sel) ||
-      this.shadowRoot?.querySelector?.(sel) ||
-      this.querySelector?.(sel) ||
-      null
+    return this.renderRoot?.querySelector?.(
+      `video.playback-media[data-camera="${safeId}"]`
     );
   }
 
@@ -1697,23 +1617,6 @@ export class CctvView extends LitElement {
       cameras.map((c) => [c.entityId, c.name])
     );
     return this._cameraNamesCache;
-  }
-
-  /**
-   * Stable camera-id list for the timeline so parent re-renders do not look
-   * like a cameras change (which triggered full detection refetches).
-   * @param {Array<{ entityId: string }>} cameras
-   * @returns {string[]}
-   */
-  _stableCameraIds(cameras) {
-    const ids = (cameras || []).map((c) => c.entityId);
-    const key = ids.join(",");
-    if (key === this._cameraIdsKey && this._cameraIdsCache) {
-      return this._cameraIdsCache;
-    }
-    this._cameraIdsKey = key;
-    this._cameraIdsCache = ids;
-    return ids;
   }
 
   render() {
@@ -1826,7 +1729,7 @@ export class CctvView extends LitElement {
           ? html`
               <cctv-detection-timeline
                 .hass=${this.hass}
-                .cameras=${this._stableCameraIds(visible)}
+                .cameras=${visible.map((c) => c.entityId)}
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${cameraNames}
                 .active=${streamsActive}
@@ -1928,7 +1831,7 @@ export class CctvView extends LitElement {
             />
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
-              Per-device (this browser / kiosk). Full-width 16:9 mosaic above the fold
+              Per-device (this browser / kiosk). Fits a 16:9 mosaic above the fold
               (accounts for HA / kiosk chrome); up to 4 cams fill the stage; 1–2 cams
               maximize. Timeline and Saved detections scroll below.
             </span>
