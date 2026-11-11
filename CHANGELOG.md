@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.18.11 — 2026-11-11
+
+### Fixed
+
+- Detection playback **Back to live** remounts live stream players (fixes stuck **No preview** after unloading players in place)
+- Playback resource cleanup on Back to live, leave-page suspend, camera selection change, and Play start
+
+### Changed
+
+- Event playback controls: **Play/Pause** freezes clips in place; **Restart** replays from the event start; **Back to live** restores the live mosaic (replaces Stop tearing down to live)
+
 ## 0.18.10 — 2026-11-11
 
 ### Fixed
