@@ -154,6 +154,12 @@ export class CctvDetectionTimeline extends LitElement {
   /**
    * @param {{ showLoading?: boolean }} [opts]
    */
+  /** Public hook for panel actions (e.g. admin clear-all). */
+  reload() {
+    this._selected = null;
+    return this._refresh({ showLoading: true });
+  }
+
   async _refresh(opts = {}) {
     if (!this.active) return;
     if (typeof document !== "undefined" && document.hidden) return;

@@ -879,8 +879,37 @@ export const sharedStyles = css`
     min-width: 220px;
   }
 
+  .kind-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin: 0.35rem 0 0.75rem;
+  }
+
+  .kind-filter-title {
+    font-size: 0.92rem;
+  }
+
+  .kind-filter-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+  }
+
+  .kind-filter-item {
+    min-width: 7.5rem;
+  }
+
   .settings-panel code {
     font-size: 0.8em;
+  }
+
+  .recording-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .recording-list {
