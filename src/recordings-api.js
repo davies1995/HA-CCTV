@@ -116,6 +116,19 @@ export async function saveRecordingSettings(hass, patch) {
 }
 
 /**
+ * Per-user: enable/disable Companion/HA notifications when a detection is recorded.
+ * @param {any} hass
+ * @param {boolean} enabled
+ */
+export async function saveUserNotifyPreference(hass, enabled) {
+  if (!hass?.callWS) return null;
+  return hass.callWS({
+    type: "cctv_dashboard/set_user_notify",
+    notify_on_detection: Boolean(enabled),
+  });
+}
+
+/**
  * @param {any} hass
  * @param {number} [limit]
  */

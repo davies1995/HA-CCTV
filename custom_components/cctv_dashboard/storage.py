@@ -136,8 +136,23 @@ def _normalize_record_detection_kinds(raw: Any) -> list[str]:
     return cleaned
 
 
+def _normalize_notify_on_detection(raw: Any) -> dict[str, bool]:
+    """Per-user opt-in map: HA user id → True (only opted-in users stored)."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, bool] = {}
+    for user_id, enabled in raw.items():
+        uid = str(user_id or "").strip()
+        if not uid:
+            continue
+        if enabled is True or enabled in {1, "1", "true", "on", "yes"}:
+            out[uid] = True
+    return out
+
+
 def default_data() -> dict[str, Any]:
-    # Site-wide only. Per-user camera mosaic selection stays in frontend user data.
+    # Site-wide settings + per-user maps (notify_on_detection keyed by HA user id).
+    # Per-user camera mosaic selection stays in frontend user data.
     return {
         "sensor_links": {},
         "force_aspect": {},
@@ -145,6 +160,7 @@ def default_data() -> dict[str, Any]:
         "retention_days": DEFAULT_RETENTION_DAYS,
         "record_on_detection": DEFAULT_RECORD_ON_DETECTION,
         "record_detection_kinds": list(DEFAULT_RECORD_DETECTION_KINDS),
+        "notify_on_detection": {},
     }
 
 
@@ -177,6 +193,9 @@ class PanelStore:
                     "record_detection_kinds", DEFAULT_RECORD_DETECTION_KINDS
                 )
             )
+            data["notify_on_detection"] = _normalize_notify_on_detection(
+                loaded.get("notify_on_detection")
+            )
         self.data = data
         return data
 
@@ -203,6 +222,32 @@ class PanelStore:
                 data["record_detection_kinds"] = _normalize_record_detection_kinds(
                     patch["record_detection_kinds"]
                 )
+            if "notify_on_detection" in patch:
+                # Merge per-user keys; callers should only patch the current user id.
+                merged = dict(data.get("notify_on_detection") or {})
+                incoming = patch["notify_on_detection"]
+                if isinstance(incoming, dict):
+                    for user_id, enabled in incoming.items():
+                        uid = str(user_id or "").strip()
+                        if not uid:
+                            continue
+                        if enabled is True or enabled in {1, "1", "true", "on", "yes"}:
+                            merged[uid] = True
+                        else:
+                            merged.pop(uid, None)
+                data["notify_on_detection"] = _normalize_notify_on_detection(merged)
         self.data = data
         await self._store.async_save(data)
         return data
+
+    def notify_enabled_for(self, user_id: str | None) -> bool:
+        if not user_id:
+            return False
+        return bool((self.data.get("notify_on_detection") or {}).get(str(user_id)))
+
+    def opted_in_notify_user_ids(self) -> list[str]:
+        return sorted(
+            uid
+            for uid, enabled in (self.data.get("notify_on_detection") or {}).items()
+            if enabled
+        )

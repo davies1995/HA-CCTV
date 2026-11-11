@@ -16,11 +16,13 @@ from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
+from homeassistant.util.slugify import slugify as ha_slugify
 
 from .const import (
     DEFAULT_RECORD_DETECTION_KINDS,
     DOMAIN,
     MEDIA_API_URL_BASE,
+    PANEL_URL_PATH,
     RECORD_CHUNK_SECONDS,
     RECORD_DETECTION_KIND_IDS,
     RECORD_LOOKBACK_SECONDS,
@@ -100,6 +102,37 @@ def _parse_iso(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _format_duration_label(started: datetime, ended: datetime) -> str:
+    secs = max(0, int((ended - started).total_seconds()))
+    if secs < 60:
+        return f"{secs}s"
+    mins, rem = divmod(secs, 60)
+    if mins < 60:
+        return f"{mins}m {rem}s" if rem else f"{mins}m"
+    hours, rem_m = divmod(mins, 60)
+    return f"{hours}h {rem_m}m" if rem_m else f"{hours}h"
+
+
+def _detection_labels_for_sensors(
+    hass: HomeAssistant, trigger_sensors: list[str]
+) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for sensor_id in trigger_sensors or []:
+        state = hass.states.get(sensor_id)
+        friendly = (
+            state.attributes.get("friendly_name") if state is not None else None
+        )
+        kind = _classify_kind(
+            sensor_id, friendly if isinstance(friendly, str) else None
+        )
+        if kind["id"] in seen:
+            continue
+        seen.add(kind["id"])
+        labels.append(kind["label"])
+    return labels or ["Detection"]
 
 
 @dataclass
@@ -411,6 +444,8 @@ class RecordingManager:
                     session.session_id,
                     len(playable),
                 )
+                # Only notify when real media was saved (never empty stubs).
+                await self._notify_detection_recorded(session, meta)
             else:
                 await self.hass.async_add_executor_job(
                     self._purge_session_files_sync, session.session_id
@@ -428,6 +463,102 @@ class RecordingManager:
             still_on = self._active_record_sensors()
             if still_on and not self._session:
                 await self._start_session(still_on)
+
+    async def _notify_detection_recorded(
+        self, session: RecordingSession, meta: dict[str, Any]
+    ) -> None:
+        """Notify each opted-in HA user (Companion notify + persistent fallback)."""
+        user_ids = self.store.opted_in_notify_user_ids()
+        if not user_ids:
+            return
+        started = session.started
+        ended = session.ended or dt_util.utcnow()
+        duration = _format_duration_label(started, ended)
+        labels = _detection_labels_for_sensors(self.hass, session.trigger_sensors)
+        type_label = ", ".join(labels)
+        title = "CCTV detection recorded"
+        message = f"{type_label} detection for {duration}"
+        payload = {
+            "session_id": session.session_id,
+            "types": labels,
+            "duration": duration,
+            "started": meta.get("started"),
+            "ended": meta.get("ended"),
+            "mode": meta.get("mode"),
+            "cameras": list(session.cameras),
+        }
+        # Event for optional automations (does not replace per-user push).
+        self.hass.bus.async_fire(f"{DOMAIN}_detection_recorded", payload)
+        for user_id in user_ids:
+            try:
+                await self._notify_user(user_id, title, message, session.session_id)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception(
+                    "Failed to notify user %s about detection %s",
+                    user_id,
+                    session.session_id,
+                )
+
+    async def _notify_user(
+        self, user_id: str, title: str, message: str, session_id: str
+    ) -> None:
+        """Push to that user's mobile_app notify services; else persistent notification."""
+        notified = False
+        for entry in self.hass.config_entries.async_entries("mobile_app"):
+            if str(entry.data.get("user_id") or "") != str(user_id):
+                continue
+            device_name = (
+                entry.data.get("device_name")
+                or entry.title
+                or entry.data.get("app_id")
+                or ""
+            )
+            if not device_name:
+                continue
+            service = f"mobile_app_{ha_slugify(str(device_name))}"
+            if not self.hass.services.has_service("notify", service):
+                # Some installs register without repeating the mobile_app_ prefix.
+                alt = ha_slugify(str(device_name))
+                if self.hass.services.has_service("notify", alt):
+                    service = alt
+                else:
+                    continue
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "title": title,
+                        "message": message,
+                        "data": {
+                            # Companion deep-link into the CCTV sidebar panel.
+                            "url": f"/{PANEL_URL_PATH}",
+                            "channel": "cctv_detection",
+                            "tag": f"cctv_{session_id}",
+                            "importance": "high",
+                        },
+                    },
+                    blocking=False,
+                )
+                notified = True
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug(
+                    "notify.%s failed for user %s", service, user_id, exc_info=True
+                )
+
+        # Persistent notification is visible in the HA UI (not private per user),
+        # but ensures something lands when Companion isn't linked.
+        if not notified:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": title,
+                    "message": f"{message} (user notification — enable Companion for mobile push)",
+                    "notification_id": f"cctv_detection_{session_id}_{user_id[:8]}",
+                },
+                blocking=False,
+            )
 
     def _all_cameras(self) -> list[str]:
         cameras = []
