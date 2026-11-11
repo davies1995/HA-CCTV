@@ -189,6 +189,9 @@ export class CctvView extends LitElement {
     this._playbackDone = new Map();
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
+    /** @type {string[]} */
+    this._cameraIdsCache = [];
+    this._cameraIdsKey = "";
     this._lastHassSig = "";
     this._onDocVisibility = null;
     this._onLocationChange = null;
@@ -519,16 +522,18 @@ export class CctvView extends LitElement {
         changed.has("_detailId") ||
         changed.has("_pickerOpen") ||
         changed.has("_settingsOpen") ||
-        changed.has("_aspectById") ||
+        // Skip aspect-driven packs while detection clips play — avoids tile
+        // style churn that reloads playback media / thrash HA.
+        (changed.has("_aspectById") && !this._playback?.playing) ||
         changed.has("_forceAspect") ||
         changed.has("_playback") ||
         changed.has("_tvMode") ||
-        changed.has("_tvStage") ||
+        (changed.has("_tvStage") && !this._playback?.playing) ||
         changed.has("_panelActive"))
     ) {
       this._schedulePack();
       this.updateComplete.then(() => {
-        if (this._tvMode) this._refreshTvStage();
+        if (this._tvMode && !this._playback?.playing) this._refreshTvStage();
         this._bindPackObserver();
       });
     }
@@ -582,6 +587,21 @@ export class CctvView extends LitElement {
     if (!this._isDesktop || !this.panelMode || this._detailId) {
       if (Object.keys(this._packStyles).length) this._packStyles = {};
       return;
+    }
+    // While clips play, keep pack geometry once tiles are placed. Further
+    // ResizeObserver / TV stage refresh must not rewrite % styles mid-playback
+    // (that reloaded media against HA). Still pack once when layout cams change.
+    if (this._playback?.playing) {
+      const layoutIds = this._layoutCameras(this._cameras())
+        .slice(0, 4)
+        .map((c) => c.entityId);
+      const styles = this._packStyles || {};
+      if (
+        layoutIds.length &&
+        layoutIds.every((id) => typeof styles[id] === "string" && styles[id])
+      ) {
+        return;
+      }
     }
     if (this._tvMode) this._refreshTvStage();
     const el = this.renderRoot?.querySelector?.(".layout-pack");
@@ -659,6 +679,10 @@ export class CctvView extends LitElement {
    * @param {number} height
    */
   _onPlaybackMediaSize(entityId, width, height) {
+    // Do not feed playback probes into mosaic packing while clips are playing.
+    // Pack style churn re-renders tiles and was reloading <video> src against HA
+    // (freeze + resource spike), especially with trigger-cam border updates.
+    if (this._playback?.playing) return;
     const w = Number(width);
     const h = Number(height);
     if (!entityId || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
@@ -1447,6 +1471,14 @@ export class CctvView extends LitElement {
       this._status = "Playback ready but no video elements found";
       return;
     }
+    // Bind src imperatively once — template must not set src= on every Lit
+    // re-render (that aborts/reloads media and storms the HA media proxy).
+    for (const video of videos) {
+      const nextSrc = video.getAttribute("data-playback-src") || "";
+      if (nextSrc && video.getAttribute("src") !== nextSrc) {
+        video.src = nextSrc;
+      }
+    }
     // Start every visible camera together (not one-at-a-time).
     const results = await Promise.all(
       videos.map((video) => this._startOnePlaybackVideo(video))
@@ -1584,6 +1616,12 @@ export class CctvView extends LitElement {
       item.url = await signRecordingUrl(this.hass, item.path || item.url);
       video.muted = true;
       video.playsInline = true;
+      video.setAttribute("data-playback-src", item.url);
+      video.setAttribute(
+        "data-clip-key",
+        `${cameraId}:${item.kind}:${item.path || item.url || ""}`
+      );
+      // Imperative src only — template does not bind src= (avoids reload loops).
       video.src = item.url;
       video.load?.();
       await this._startOnePlaybackVideo(video);
@@ -1625,6 +1663,23 @@ export class CctvView extends LitElement {
       cameras.map((c) => [c.entityId, c.name])
     );
     return this._cameraNamesCache;
+  }
+
+  /**
+   * Stable camera-id list for the timeline so parent re-renders do not look
+   * like a cameras change (which triggered full detection refetches).
+   * @param {Array<{ entityId: string }>} cameras
+   * @returns {string[]}
+   */
+  _stableCameraIds(cameras) {
+    const ids = (cameras || []).map((c) => c.entityId);
+    const key = ids.join(",");
+    if (key === this._cameraIdsKey && this._cameraIdsCache) {
+      return this._cameraIdsCache;
+    }
+    this._cameraIdsKey = key;
+    this._cameraIdsCache = ids;
+    return ids;
   }
 
   render() {
@@ -1737,7 +1792,7 @@ export class CctvView extends LitElement {
           ? html`
               <cctv-detection-timeline
                 .hass=${this.hass}
-                .cameras=${visible.map((c) => c.entityId)}
+                .cameras=${this._stableCameraIds(visible)}
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${cameraNames}
                 .active=${streamsActive}
@@ -2073,7 +2128,8 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
-    // Highlight the camera(s) that triggered this detection (event-type color).
+    // Highlight trigger cam(s) via class only (color from kind-* CSS). Avoid
+    // inline style churn on the tile — pack % styles stay stable during play.
     const triggerMeta =
       playing && this._playback?.triggerHighlights
         ? this._playback.triggerHighlights[cam.entityId]
@@ -2081,22 +2137,20 @@ export class CctvView extends LitElement {
     const triggerClass = triggerMeta
       ? `trigger-cam kind-${triggerMeta.kindId}`
       : "";
-    const triggerStyle = triggerMeta
-      ? `--cctv-trigger-color:${triggerMeta.color};`
-      : "";
     // Mobile / unpacked tiles: seed a definite box from the shared override.
     const mediaStyle =
       !positioned && forcedRatio
         ? `aspect-ratio:${forcedRatio}; width:100%;`
         : nothing;
-    const tileStyle = [positioned ? packStyle : "", triggerStyle]
-      .filter(Boolean)
-      .join(";");
+    const clipKey = item
+      ? `${cam.entityId}:${item.kind}:${item.path || item.url || ""}`
+      : cam.entityId;
     return html`
       <article
         class="tile layout-tile ${positioned ? "pack-tile" : ""} ${triggerClass}"
         role="listitem"
-        style=${tileStyle || nothing}
+        data-camera=${cam.entityId}
+        style=${positioned && packStyle ? packStyle : nothing}
       >
         <div class="tile-media" style=${mediaStyle}>
           ${playing
@@ -2118,8 +2172,8 @@ export class CctvView extends LitElement {
                     <video
                       class="playback-media"
                       data-camera=${cam.entityId}
-                      src=${item.url}
-                      autoplay
+                      data-clip-key=${clipKey}
+                      data-playback-src=${item.url || ""}
                       muted
                       playsinline
                       webkit-playsinline
@@ -2127,12 +2181,6 @@ export class CctvView extends LitElement {
                       .muted=${true}
                       .playsInline=${true}
                       controls
-                      @loadedmetadata=${(e) =>
-                        this._onPlaybackMediaSize(
-                          cam.entityId,
-                          e.target.videoWidth,
-                          e.target.videoHeight
-                        )}
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
                     ></video>
                   `

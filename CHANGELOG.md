@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Detection **Play** no longer freezes / storms HA after trigger-cam highlight: stop packing from playback media probes while playing, bind clip `src` imperatively (not on every Lit re-render), keep trigger outline layout-neutral, and skip timeline refetches when camera ids are unchanged
+
 ## 0.18.0 — 2026-11-11
 
 ### Fixed

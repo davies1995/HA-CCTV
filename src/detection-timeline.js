@@ -102,6 +102,18 @@ export class CctvDetectionTimeline extends LitElement {
       changed.has("sensorLinks") ||
       changed.has("_windowMs")
     ) {
+      // Parent often passes a new cameras array identity with the same ids.
+      // Only hard-refresh when the id set / window actually changes.
+      const cams = [...(this.cameras || [])];
+      const entityKey = `${cams.join(",")}|${this._windowMs}`;
+      if (
+        changed.has("cameras") &&
+        !changed.has("sensorLinks") &&
+        !changed.has("_windowMs") &&
+        entityKey === this._lastEntityKey
+      ) {
+        return;
+      }
       this._selected = null;
       this._refresh({ showLoading: true });
       return;
