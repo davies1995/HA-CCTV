@@ -187,6 +187,8 @@ export class CctvView extends LitElement {
     this._playbackSeek = new Map();
     /** @type {Map<string, boolean>} */
     this._playbackDone = new Map();
+    /** Invalidates in-flight playback kicks when Play/Stop races. */
+    this._playbackKickToken = 0;
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
     /** @type {string[]} */
@@ -1420,15 +1422,29 @@ export class CctvView extends LitElement {
     }
     // Drop live slots before swapping mosaic media to recordings.
     this._resetLiveStreamSlots();
+    const token = ++this._playbackKickToken;
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     await this.updateComplete;
-    // Wait a frame so <video> nodes exist after the live→playback swap.
+    if (token !== this._playbackKickToken || !this._playback?.playing) return;
+    // Desktop pack places tiles on the first playing render — wait so <video>
+    // nodes are the settled ones we kick (not replaced a frame later).
+    if (this._isDesktop) {
+      this._schedulePack();
+      await this.updateComplete;
+      if (token !== this._playbackKickToken || !this._playback?.playing) return;
+    }
     await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-    await this._kickPlaybackVideos();
+    if (token !== this._playbackKickToken || !this._playback?.playing) return;
+    await this._kickPlaybackVideos(token);
+    // Second pass for Companion / slow decode: paused-with-frame tiles get play().
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    if (token !== this._playbackKickToken || !this._playback?.playing) return;
+    await this._kickPlaybackVideos(token);
   }
 
   _stopPlayback() {
+    this._playbackKickToken += 1;
     this._teardownPlaybackMedia();
     this._playback = null;
     this._playbackIndex = new Map();
@@ -1442,6 +1458,7 @@ export class CctvView extends LitElement {
 
   _pausePlaybackToLive() {
     if (!this._playback) return;
+    this._playbackKickToken += 1;
     this._teardownPlaybackMedia();
     this._playback = { ...this._playback, playing: false };
     this._resetLiveStreamSlots();
@@ -1463,39 +1480,63 @@ export class CctvView extends LitElement {
     });
   }
 
-  async _kickPlaybackVideos() {
+  /**
+   * Ensure every mosaic playback <video> has src bound and is playing.
+   * @param {number} [token]
+   */
+  async _kickPlaybackVideos(token = this._playbackKickToken) {
     const root = this.renderRoot;
     if (!root || !this._playback?.playing) return;
+    if (token !== this._playbackKickToken) return;
     const videos = [...root.querySelectorAll("video.playback-media")];
     if (!videos.length) {
       this._status = "Playback ready but no video elements found";
       return;
     }
-    // Bind src imperatively once — template must not set src= on every Lit
-    // re-render (that aborts/reloads media and storms the HA media proxy).
     for (const video of videos) {
-      const nextSrc = video.getAttribute("data-playback-src") || "";
-      if (nextSrc && video.getAttribute("src") !== nextSrc) {
-        video.src = nextSrc;
-      }
+      this._ensurePlaybackVideoSrc(video);
     }
     // Start every visible camera together (not one-at-a-time).
     const results = await Promise.all(
-      videos.map((video) => this._startOnePlaybackVideo(video))
+      videos.map((video) => this._startOnePlaybackVideo(video, token))
     );
+    if (token !== this._playbackKickToken || !this._playback?.playing) return;
     const failed = results.filter((r) => !r.ok);
+    const playing = results.filter((r) => r.ok).length;
     if (failed.length && failed.length === results.length) {
       this._status = `Playback failed to start (${failed[0].reason || "media error"})`;
     } else if (failed.length) {
-      this._status = `Playing ${results.length - failed.length}/${results.length} cameras`;
+      this._status = `Playing ${playing}/${results.length} cameras`;
+    } else if (playing) {
+      this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     }
   }
 
   /**
-   * Ensure muted/playsInline, wait for media data, seek, then play.
+   * Bind signed clip URL onto the element without an extra load() reset.
    * @param {HTMLVideoElement} video
    */
-  _startOnePlaybackVideo(video) {
+  _ensurePlaybackVideoSrc(video) {
+    const nextSrc =
+      video.getAttribute("data-playback-src") ||
+      video.dataset?.playbackSrc ||
+      "";
+    if (!nextSrc) return;
+    const attrSrc = video.getAttribute("src") || "";
+    // currentSrc is absolute; attr may be relative — only skip when either matches.
+    if (attrSrc === nextSrc || video.currentSrc === nextSrc) return;
+    if (video.currentSrc && video.currentSrc.endsWith(nextSrc)) return;
+    video.src = nextSrc;
+  }
+
+  /**
+   * Ensure muted/playsInline, wait for media data, seek, then play.
+   * Does not call load() when src is already set — that aborted the in-flight
+   * fetch and left Companion/desktop stuck on the first decoded frame.
+   * @param {HTMLVideoElement} video
+   * @param {number} [token]
+   */
+  _startOnePlaybackVideo(video, token = this._playbackKickToken) {
     const cameraId = video.getAttribute("data-camera") || "";
     const seek = this._playbackSeek.get(cameraId) || 0;
 
@@ -1507,16 +1548,26 @@ export class CctvView extends LitElement {
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     video.preload = "auto";
+    this._ensurePlaybackVideoSrc(video);
+
+    if (!video.paused && !video.ended && video.readyState >= 2) {
+      return Promise.resolve({ ok: true, cameraId });
+    }
 
     const playNow = async () => {
+      if (token !== this._playbackKickToken || !this._playback?.playing) {
+        return { ok: false, cameraId, reason: "playback cancelled" };
+      }
       try {
-        if (seek > 0) {
+        if (seek > 0 && Number.isFinite(video.duration) && video.duration > 0) {
           try {
-            video.currentTime = seek;
+            const t = Math.min(seek, Math.max(0, video.duration - 0.05));
+            if (Math.abs(video.currentTime - t) > 0.05) video.currentTime = t;
           } catch {
             /* seek may fail on some containers */
           }
         }
+        video.muted = true;
         await video.play();
         return { ok: true, cameraId };
       } catch (err) {
@@ -1524,6 +1575,7 @@ export class CctvView extends LitElement {
         console.warn("CCTV playback play() failed", cameraId, err);
         try {
           video.muted = true;
+          video.setAttribute("muted", "");
           await video.play();
           return { ok: true, cameraId };
         } catch (err2) {
@@ -1534,6 +1586,13 @@ export class CctvView extends LitElement {
     };
 
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
       const onError = () => {
         const code = video.error?.code;
         const reason =
@@ -1542,27 +1601,39 @@ export class CctvView extends LitElement {
             : code === 2
               ? "network error loading clip"
               : `media error ${code || ""}`.trim();
-        console.warn("CCTV playback media error", cameraId, video.error, video.currentSrc);
-        resolve({ ok: false, cameraId, reason });
+        console.warn(
+          "CCTV playback media error",
+          cameraId,
+          video.error,
+          video.currentSrc
+        );
+        finish({ ok: false, cameraId, reason });
+      };
+
+      const onReady = () => {
+        playNow().then(finish);
       };
 
       if (video.readyState >= 2) {
-        playNow().then(resolve);
+        onReady();
         return;
       }
-      video.addEventListener(
-        "loadeddata",
-        () => {
-          playNow().then(resolve);
-        },
-        { once: true }
-      );
+
+      video.addEventListener("loadeddata", onReady, { once: true });
+      video.addEventListener("canplay", onReady, { once: true });
       video.addEventListener("error", onError, { once: true });
-      try {
-        video.load();
-      } catch {
-        playNow().then(resolve);
-      }
+
+      // Safety: if events were missed (WebView), try play after a short wait.
+      window.setTimeout(() => {
+        if (settled) return;
+        if (token !== this._playbackKickToken) {
+          finish({ ok: false, cameraId, reason: "playback cancelled" });
+          return;
+        }
+        if (video.readyState >= 2 || video.currentSrc) {
+          onReady();
+        }
+      }, 400);
     });
   }
 
@@ -1621,10 +1692,9 @@ export class CctvView extends LitElement {
         "data-clip-key",
         `${cameraId}:${item.kind}:${item.path || item.url || ""}`
       );
-      // Imperative src only — template does not bind src= (avoids reload loops).
+      // New chunk URL — set src; do not load() again (startOne waits for data).
       video.src = item.url;
-      video.load?.();
-      await this._startOnePlaybackVideo(video);
+      await this._startOnePlaybackVideo(video, this._playbackKickToken);
     } catch (err) {
       console.warn("CCTV chunk advance failed", cameraId, err);
       this._markPlaybackCameraDone(cameraId);
@@ -2174,11 +2244,14 @@ export class CctvView extends LitElement {
                       data-camera=${cam.entityId}
                       data-clip-key=${clipKey}
                       data-playback-src=${item.url || ""}
+                      .src=${item.url || ""}
+                      autoplay
                       muted
                       playsinline
                       webkit-playsinline
                       preload="auto"
                       .muted=${true}
+                      .autoplay=${true}
                       .playsInline=${true}
                       controls
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
