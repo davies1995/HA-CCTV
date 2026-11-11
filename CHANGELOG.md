@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Restore **pre-#46** detection playback pipeline (`src=`, `autoplay`, `controls`, simple kick) so clips play with native controls; keep trigger-cam highlight as a `pointer-events: none` overlay (does not rewrite tile class/style)
+
 ## 0.18.2 — 2026-11-11
 
 ### Fixed

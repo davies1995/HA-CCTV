@@ -187,8 +187,6 @@ export class CctvView extends LitElement {
     this._playbackSeek = new Map();
     /** @type {Map<string, boolean>} */
     this._playbackDone = new Map();
-    /** Invalidates in-flight playback kicks when Play/Stop races. */
-    this._playbackKickToken = 0;
     this._cameraNamesCache = {};
     this._cameraNamesKey = "";
     /** @type {string[]} */
@@ -524,18 +522,16 @@ export class CctvView extends LitElement {
         changed.has("_detailId") ||
         changed.has("_pickerOpen") ||
         changed.has("_settingsOpen") ||
-        // Skip aspect-driven packs while detection clips play — avoids tile
-        // style churn that reloads playback media / thrash HA.
-        (changed.has("_aspectById") && !this._playback?.playing) ||
+        changed.has("_aspectById") ||
         changed.has("_forceAspect") ||
         changed.has("_playback") ||
         changed.has("_tvMode") ||
-        (changed.has("_tvStage") && !this._playback?.playing) ||
+        changed.has("_tvStage") ||
         changed.has("_panelActive"))
     ) {
       this._schedulePack();
       this.updateComplete.then(() => {
-        if (this._tvMode && !this._playback?.playing) this._refreshTvStage();
+        if (this._tvMode) this._refreshTvStage();
         this._bindPackObserver();
       });
     }
@@ -589,21 +585,6 @@ export class CctvView extends LitElement {
     if (!this._isDesktop || !this.panelMode || this._detailId) {
       if (Object.keys(this._packStyles).length) this._packStyles = {};
       return;
-    }
-    // While clips play, keep pack geometry once tiles are placed. Further
-    // ResizeObserver / TV stage refresh must not rewrite % styles mid-playback
-    // (that reloaded media against HA). Still pack once when layout cams change.
-    if (this._playback?.playing) {
-      const layoutIds = this._layoutCameras(this._cameras())
-        .slice(0, 4)
-        .map((c) => c.entityId);
-      const styles = this._packStyles || {};
-      if (
-        layoutIds.length &&
-        layoutIds.every((id) => typeof styles[id] === "string" && styles[id])
-      ) {
-        return;
-      }
     }
     if (this._tvMode) this._refreshTvStage();
     const el = this.renderRoot?.querySelector?.(".layout-pack");
@@ -681,10 +662,6 @@ export class CctvView extends LitElement {
    * @param {number} height
    */
   _onPlaybackMediaSize(entityId, width, height) {
-    // Do not feed playback probes into mosaic packing while clips are playing.
-    // Pack style churn re-renders tiles and was reloading <video> src against HA
-    // (freeze + resource spike), especially with trigger-cam border updates.
-    if (this._playback?.playing) return;
     const w = Number(width);
     const h = Number(height);
     if (!entityId || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
@@ -1422,29 +1399,15 @@ export class CctvView extends LitElement {
     }
     // Drop live slots before swapping mosaic media to recordings.
     this._resetLiveStreamSlots();
-    const token = ++this._playbackKickToken;
     this._playback = { ...this._playback, playing: true };
     this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
     await this.updateComplete;
-    if (token !== this._playbackKickToken || !this._playback?.playing) return;
-    // Desktop pack places tiles on the first playing render — wait so <video>
-    // nodes are the settled ones we kick (not replaced a frame later).
-    if (this._isDesktop) {
-      this._schedulePack();
-      await this.updateComplete;
-      if (token !== this._playbackKickToken || !this._playback?.playing) return;
-    }
+    // Wait a frame so <video> nodes exist after the live→playback swap.
     await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-    if (token !== this._playbackKickToken || !this._playback?.playing) return;
-    await this._kickPlaybackVideos(token);
-    // Second pass for Companion / slow decode: paused-with-frame tiles get play().
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    if (token !== this._playbackKickToken || !this._playback?.playing) return;
-    await this._kickPlaybackVideos(token);
+    await this._kickPlaybackVideos();
   }
 
   _stopPlayback() {
-    this._playbackKickToken += 1;
     this._teardownPlaybackMedia();
     this._playback = null;
     this._playbackIndex = new Map();
@@ -1458,7 +1421,6 @@ export class CctvView extends LitElement {
 
   _pausePlaybackToLive() {
     if (!this._playback) return;
-    this._playbackKickToken += 1;
     this._teardownPlaybackMedia();
     this._playback = { ...this._playback, playing: false };
     this._resetLiveStreamSlots();
@@ -1480,63 +1442,32 @@ export class CctvView extends LitElement {
     });
   }
 
-  /**
-   * Ensure every mosaic playback <video> has src bound and is playing.
-   * @param {number} [token]
-   */
-  async _kickPlaybackVideos(token = this._playbackKickToken) {
+  async _kickPlaybackVideos() {
     const root = this.renderRoot;
     if (!root || !this._playback?.playing) return;
-    if (token !== this._playbackKickToken) return;
     const videos = [...root.querySelectorAll("video.playback-media")];
     if (!videos.length) {
       this._status = "Playback ready but no video elements found";
       return;
     }
-    for (const video of videos) {
-      this._ensurePlaybackVideoSrc(video);
-    }
     // Start every visible camera together (not one-at-a-time).
     const results = await Promise.all(
-      videos.map((video) => this._startOnePlaybackVideo(video, token))
+      videos.map((video) => this._startOnePlaybackVideo(video))
     );
-    if (token !== this._playbackKickToken || !this._playback?.playing) return;
     const failed = results.filter((r) => !r.ok);
-    const playing = results.filter((r) => r.ok).length;
     if (failed.length && failed.length === results.length) {
       this._status = `Playback failed to start (${failed[0].reason || "media error"})`;
     } else if (failed.length) {
-      this._status = `Playing ${playing}/${results.length} cameras`;
-    } else if (playing) {
-      this._status = `Playing ${this._playback.labels.join(", ")} (synced)`;
+      this._status = `Playing ${results.length - failed.length}/${results.length} cameras`;
     }
-  }
-
-  /**
-   * Bind signed clip URL onto the element without an extra load() reset.
-   * @param {HTMLVideoElement} video
-   */
-  _ensurePlaybackVideoSrc(video) {
-    const nextSrc =
-      video.getAttribute("data-playback-src") ||
-      video.dataset?.playbackSrc ||
-      "";
-    if (!nextSrc) return;
-    const attrSrc = video.getAttribute("src") || "";
-    // currentSrc is absolute; attr may be relative — only skip when either matches.
-    if (attrSrc === nextSrc || video.currentSrc === nextSrc) return;
-    if (video.currentSrc && video.currentSrc.endsWith(nextSrc)) return;
-    video.src = nextSrc;
   }
 
   /**
    * Ensure muted/playsInline, wait for media data, seek, then play.
-   * Does not call load() when src is already set — that aborted the in-flight
-   * fetch and left Companion/desktop stuck on the first decoded frame.
+   * Pre-#46 pipeline (attribute src + autoplay + controls on the template).
    * @param {HTMLVideoElement} video
-   * @param {number} [token]
    */
-  _startOnePlaybackVideo(video, token = this._playbackKickToken) {
+  _startOnePlaybackVideo(video) {
     const cameraId = video.getAttribute("data-camera") || "";
     const seek = this._playbackSeek.get(cameraId) || 0;
 
@@ -1548,26 +1479,16 @@ export class CctvView extends LitElement {
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     video.preload = "auto";
-    this._ensurePlaybackVideoSrc(video);
-
-    if (!video.paused && !video.ended && video.readyState >= 2) {
-      return Promise.resolve({ ok: true, cameraId });
-    }
 
     const playNow = async () => {
-      if (token !== this._playbackKickToken || !this._playback?.playing) {
-        return { ok: false, cameraId, reason: "playback cancelled" };
-      }
       try {
-        if (seek > 0 && Number.isFinite(video.duration) && video.duration > 0) {
+        if (seek > 0) {
           try {
-            const t = Math.min(seek, Math.max(0, video.duration - 0.05));
-            if (Math.abs(video.currentTime - t) > 0.05) video.currentTime = t;
+            video.currentTime = seek;
           } catch {
             /* seek may fail on some containers */
           }
         }
-        video.muted = true;
         await video.play();
         return { ok: true, cameraId };
       } catch (err) {
@@ -1575,7 +1496,6 @@ export class CctvView extends LitElement {
         console.warn("CCTV playback play() failed", cameraId, err);
         try {
           video.muted = true;
-          video.setAttribute("muted", "");
           await video.play();
           return { ok: true, cameraId };
         } catch (err2) {
@@ -1586,13 +1506,6 @@ export class CctvView extends LitElement {
     };
 
     return new Promise((resolve) => {
-      let settled = false;
-      const finish = (result) => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
-
       const onError = () => {
         const code = video.error?.code;
         const reason =
@@ -1601,39 +1514,27 @@ export class CctvView extends LitElement {
             : code === 2
               ? "network error loading clip"
               : `media error ${code || ""}`.trim();
-        console.warn(
-          "CCTV playback media error",
-          cameraId,
-          video.error,
-          video.currentSrc
-        );
-        finish({ ok: false, cameraId, reason });
-      };
-
-      const onReady = () => {
-        playNow().then(finish);
+        console.warn("CCTV playback media error", cameraId, video.error, video.currentSrc);
+        resolve({ ok: false, cameraId, reason });
       };
 
       if (video.readyState >= 2) {
-        onReady();
+        playNow().then(resolve);
         return;
       }
-
-      video.addEventListener("loadeddata", onReady, { once: true });
-      video.addEventListener("canplay", onReady, { once: true });
+      video.addEventListener(
+        "loadeddata",
+        () => {
+          playNow().then(resolve);
+        },
+        { once: true }
+      );
       video.addEventListener("error", onError, { once: true });
-
-      // Safety: if events were missed (WebView), try play after a short wait.
-      window.setTimeout(() => {
-        if (settled) return;
-        if (token !== this._playbackKickToken) {
-          finish({ ok: false, cameraId, reason: "playback cancelled" });
-          return;
-        }
-        if (video.readyState >= 2 || video.currentSrc) {
-          onReady();
-        }
-      }, 400);
+      try {
+        video.load();
+      } catch {
+        playNow().then(resolve);
+      }
     });
   }
 
@@ -1687,14 +1588,9 @@ export class CctvView extends LitElement {
       item.url = await signRecordingUrl(this.hass, item.path || item.url);
       video.muted = true;
       video.playsInline = true;
-      video.setAttribute("data-playback-src", item.url);
-      video.setAttribute(
-        "data-clip-key",
-        `${cameraId}:${item.kind}:${item.path || item.url || ""}`
-      );
-      // New chunk URL — set src; do not load() again (startOne waits for data).
       video.src = item.url;
-      await this._startOnePlaybackVideo(video, this._playbackKickToken);
+      video.load?.();
+      await this._startOnePlaybackVideo(video);
     } catch (err) {
       console.warn("CCTV chunk advance failed", cameraId, err);
       this._markPlaybackCameraDone(cameraId);
@@ -2198,29 +2094,22 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
-    // Highlight trigger cam(s) via class only (color from kind-* CSS). Avoid
-    // inline style churn on the tile — pack % styles stay stable during play.
+    // Trigger highlight is a pointer-events:none overlay — never rewrite the
+    // tile class/style (that broke pre-#46 src/controls/play).
     const triggerMeta =
       playing && this._playback?.triggerHighlights
         ? this._playback.triggerHighlights[cam.entityId]
         : null;
-    const triggerClass = triggerMeta
-      ? `trigger-cam kind-${triggerMeta.kindId}`
-      : "";
     // Mobile / unpacked tiles: seed a definite box from the shared override.
     const mediaStyle =
       !positioned && forcedRatio
         ? `aspect-ratio:${forcedRatio}; width:100%;`
         : nothing;
-    const clipKey = item
-      ? `${cam.entityId}:${item.kind}:${item.path || item.url || ""}`
-      : cam.entityId;
     return html`
       <article
-        class="tile layout-tile ${positioned ? "pack-tile" : ""} ${triggerClass}"
+        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
         role="listitem"
-        data-camera=${cam.entityId}
-        style=${positioned && packStyle ? packStyle : nothing}
+        style=${positioned ? packStyle : nothing}
       >
         <div class="tile-media" style=${mediaStyle}>
           ${playing
@@ -2242,18 +2131,21 @@ export class CctvView extends LitElement {
                     <video
                       class="playback-media"
                       data-camera=${cam.entityId}
-                      data-clip-key=${clipKey}
-                      data-playback-src=${item.url || ""}
-                      .src=${item.url || ""}
+                      src=${item.url}
                       autoplay
                       muted
                       playsinline
                       webkit-playsinline
                       preload="auto"
                       .muted=${true}
-                      .autoplay=${true}
                       .playsInline=${true}
                       controls
+                      @loadedmetadata=${(e) =>
+                        this._onPlaybackMediaSize(
+                          cam.entityId,
+                          e.target.videoWidth,
+                          e.target.videoHeight
+                        )}
                       @ended=${() => this._onPlaybackEnded(cam.entityId)}
                     ></video>
                   `
@@ -2271,6 +2163,13 @@ export class CctvView extends LitElement {
                   muted
                 ></cctv-stream-player>
               `}
+          ${triggerMeta
+            ? html`<div
+                class="trigger-cam-overlay kind-${triggerMeta.kindId}"
+                style=${`--cctv-trigger-color:${triggerMeta.color}`}
+                aria-hidden="true"
+              ></div>`
+            : nothing}
         </div>
         ${playing
           ? html`
