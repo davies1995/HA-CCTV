@@ -501,14 +501,13 @@ export const sharedStyles = css`
   }
 
   /*
-   * During detection playback: border the camera that triggered the event in
-   * the matching type color so attention lands there first.
+   * During detection playback: outline the trigger camera in the event-type
+   * color. Use outline (not box-shadow / z-index) so packing geometry and
+   * ResizeObserver stay stable — layout thrash was reloading playback media.
    */
   .layout-tile.trigger-cam {
-    z-index: 3;
-    box-shadow:
-      inset 0 0 0 3px var(--cctv-trigger-color, var(--cctv-accent)),
-      0 0 0 1px rgba(0, 0, 0, 0.45);
+    outline: 3px solid var(--cctv-trigger-color, var(--cctv-accent));
+    outline-offset: -3px;
   }
 
   .layout-tile.trigger-cam.kind-person {
