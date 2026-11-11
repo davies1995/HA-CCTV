@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
@@ -97,13 +98,113 @@ def _needs_record_sibling(entity_id: str) -> bool:
     return any(name.endswith(suffix) for suffix in _HIGH_RECORD_UNFRIENDLY_SUFFIXES)
 
 
+def _recordable_suffix_rank(entity_id: str) -> int | None:
+    """Lower rank = preferred record stream (fluent first)."""
+    name = _camera_object_id(entity_id)
+    for index, suffix in enumerate(_RECORD_SIBLING_SUFFIXES):
+        if name.endswith(suffix):
+            return index
+    return None
+
+
+def _stem_contains_base(stem: str, base: str) -> bool:
+    """True when base tokens appear as a contiguous token run in stem."""
+    stem_s = str(stem or "")
+    base_s = str(base or "")
+    if not stem_s or not base_s:
+        return False
+    if stem_s == base_s:
+        return True
+    stem_tokens = [t for t in stem_s.split("_") if t]
+    base_tokens = [t for t in base_s.split("_") if t]
+    if not base_tokens or len(base_tokens) > len(stem_tokens):
+        return False
+    n = len(base_tokens)
+    for i in range(len(stem_tokens) - n + 1):
+        if stem_tokens[i : i + n] == base_tokens:
+            return True
+    return False
+
+
+def _pick_recordable_candidate(
+    candidates: list[str] | set[str] | tuple[str, ...],
+    available: set[str],
+    *,
+    exclude: str,
+) -> str | None:
+    scored: list[tuple[int, int, str]] = []
+    for cand in candidates:
+        cam = str(cand)
+        if not cam.startswith("camera.") or cam == exclude or cam not in available:
+            continue
+        rank = _recordable_suffix_rank(cam)
+        if rank is None:
+            continue
+        # Prefer shorter object ids when rank ties (less noisy names).
+        scored.append((rank, len(_camera_object_id(cam)), cam))
+    if not scored:
+        return None
+    scored.sort()
+    return scored[0][2]
+
+
+def same_device_camera_ids(hass: HomeAssistant, entity_id: str) -> list[str]:
+    """Camera entity ids that share the same entity-registry device_id."""
+    cam = str(entity_id or "")
+    if not cam.startswith("camera."):
+        return []
+    try:
+        registry = er.async_get(hass)
+    except Exception:  # noqa: BLE001 — registry may be unavailable in tests
+        return []
+    entry = registry.async_get(cam)
+    if entry is None or not entry.device_id:
+        return []
+    out: list[str] = []
+    for other in er.async_entries_for_device(registry, entry.device_id):
+        oid = str(other.entity_id or "")
+        if not oid.startswith("camera."):
+            continue
+        if getattr(other, "disabled", False) or getattr(other, "disabled_by", None):
+            continue
+        out.append(oid)
+    return out
+
+
+def build_device_camera_map(
+    hass: HomeAssistant, cameras: list[str]
+) -> dict[str, list[str]]:
+    """entity_id → same-device camera.* ids (for session cams that need siblings)."""
+    out: dict[str, list[str]] = {}
+    for camera_id in cameras:
+        cam = str(camera_id)
+        if not cam.startswith("camera.") or not _needs_record_sibling(cam):
+            continue
+        siblings = same_device_camera_ids(hass, cam)
+        if siblings:
+            out[cam] = siblings
+    return out
+
+
 def find_recordable_sibling(
-    entity_id: str, available: set[str] | list[str] | tuple[str, ...]
+    entity_id: str,
+    available: set[str] | list[str] | tuple[str, ...],
+    *,
+    same_device_cameras: list[str] | set[str] | tuple[str, ...] | None = None,
 ) -> str | None:
     """
     Pick a fluent/substream sibling for cameras that lack camera.record.
 
-    Example: camera.drive_high_resolution_channel → camera.drive_fluent
+    Resolution order:
+    1. Same HA device (entity registry device_id) with a recordable suffix
+    2. Exact slug remap: base + _fluent/_sub/…
+    3. Fuzzy token match against available recordable streams
+       (handles garden_* / reolink_* prefixes that do not share a slug base)
+
+    Examples:
+    - camera.drive_high_resolution_channel → camera.drive_fluent
+    - camera.driveway_high_resolution_channel → camera.garden_driveway_fluent
+    - camera.doorbell_high_resolution_channel → camera.reolink_video_doorbell_poe_w_fluent
     """
     cam = str(entity_id or "")
     if not cam.startswith("camera."):
@@ -111,34 +212,74 @@ def find_recordable_sibling(
     available_set = {str(item) for item in (available or [])}
     if not _needs_record_sibling(cam):
         return None
+
+    # 1) Same physical device via entity registry.
+    device_pick = _pick_recordable_candidate(
+        list(same_device_cameras or []),
+        available_set,
+        exclude=cam,
+    )
+    if device_pick:
+        return device_pick
+
     base = _strip_camera_suffix(_camera_object_id(cam))
     if not base:
         return None
+
+    # 2) Exact slug sibling (legacy / simple installs).
     for suffix in _RECORD_SIBLING_SUFFIXES:
         candidate = f"camera.{base}{suffix}"
         if candidate != cam and candidate in available_set:
             return candidate
+
+    # 3) Fuzzy: recordable streams whose stem contains the high-res base tokens
+    # (Reolink often prefixes garden_ / reolink_ so exact slug misses).
+    fuzzy: list[str] = []
+    for candidate in available_set:
+        if candidate == cam or not candidate.startswith("camera."):
+            continue
+        if _recordable_suffix_rank(candidate) is None:
+            continue
+        stem = _strip_camera_suffix(_camera_object_id(candidate))
+        if _stem_contains_base(stem, base):
+            fuzzy.append(candidate)
+    fuzzy_pick = _pick_recordable_candidate(fuzzy, available_set, exclude=cam)
+    if fuzzy_pick:
+        return fuzzy_pick
+
+    # Last resort: bare camera.{base} when present and available.
     bare = f"camera.{base}"
-    if bare != cam and bare in available_set:
+    if bare != cam and bare in available_set and not _needs_record_sibling(bare):
         return bare
     return None
 
 
 def build_record_capture_groups(
-    cameras: list[str], available: set[str] | list[str] | tuple[str, ...]
+    cameras: list[str],
+    available: set[str] | list[str] | tuple[str, ...],
+    *,
+    device_cameras_by_entity: dict[str, list[str]] | None = None,
 ) -> dict[str, list[str]]:
     """
     Map record_entity → mosaic camera ids that should receive that clip.
 
     High-res cams that cannot record map onto their fluent sibling so one
     camera.record call can attribute mp4s to the high-res mosaic entity.
+
+    Deduping: when both high-res and fluent are in `cameras`, they share one
+    group keyed by the fluent/record entity — one record call, clips for both.
     """
+    device_map = device_cameras_by_entity or {}
     groups: dict[str, list[str]] = {}
     for camera_id in cameras:
         cam = str(camera_id)
         if not cam.startswith("camera."):
             continue
-        sibling = find_recordable_sibling(cam, available)
+        sibling = find_recordable_sibling(
+            cam,
+            available,
+            same_device_cameras=device_map.get(cam),
+        )
         record_entity = sibling or cam
         attrs = groups.setdefault(record_entity, [])
         if cam not in attrs:
@@ -753,9 +894,16 @@ class RecordingManager:
     async def _capture_chunk(self, session: RecordingSession, seq: int) -> None:
         stamp = dt_util.utcnow().strftime("%Y%m%dT%H%M%SZ")
         available = self._available_camera_ids()
+        # Same-device fluent/substream siblings via entity registry (not slug-only).
+        device_map = build_device_camera_map(self.hass, list(session.cameras))
         # Group high-res mosaic cams onto fluent/recordable siblings so one
         # camera.record can attribute mp4s back to the high-res entity for Play.
-        groups = build_record_capture_groups(list(session.cameras), available)
+        # When both high-res and fluent are selected, they share one group.
+        groups = build_record_capture_groups(
+            list(session.cameras),
+            available,
+            device_cameras_by_entity=device_map,
+        )
         # Sequential capture: many camera integrations fail/stall when multiple
         # camera.record calls run in parallel on the same host.
         for record_entity, attribute_ids in groups.items():
@@ -765,6 +913,7 @@ class RecordingManager:
                 attribute_ids=attribute_ids,
                 stamp=stamp,
                 seq=seq,
+                device_cameras_by_entity=device_map,
             )
             session.clips.extend(clips)
         self._refresh_session_mode(session)
@@ -777,18 +926,25 @@ class RecordingManager:
         attribute_ids: list[str],
         stamp: str,
         seq: int,
+        device_cameras_by_entity: dict[str, list[str]] | None = None,
     ) -> list[dict[str, Any]]:
         """Record once via record_entity; attribute clips to each mosaic camera id."""
         attrs = [str(item) for item in attribute_ids if str(item).startswith("camera.")]
         if not attrs:
             attrs = [record_entity]
-        primary = attrs[0]
-        via = record_entity if record_entity != primary or len(attrs) > 1 else None
-        if via and record_entity != primary:
+        # Prefer a high-res / mosaic id as the debug primary when remapped.
+        primary = next(
+            (cam for cam in attrs if cam != record_entity),
+            attrs[0],
+        )
+        remapped = record_entity != primary or any(
+            cam != record_entity for cam in attrs
+        )
+        if remapped and record_entity != primary:
             via_reason = (
                 f"record via {record_entity} (fluent/recordable sibling of {primary})"
             )
-        elif via:
+        elif remapped:
             via_reason = f"shared record via {record_entity}"
         else:
             via_reason = None
@@ -872,10 +1028,14 @@ class RecordingManager:
                 )
                 return _video_clips(recovered, recovered=True)
 
-            # If we recorded the mosaic cam itself, try a fluent sibling once.
-            if record_entity == primary:
+            # If we recorded a high-res/mosaic cam directly, try a fluent sibling once.
+            if record_entity == primary and _needs_record_sibling(primary):
+                device_map = device_cameras_by_entity or {}
                 sibling = find_recordable_sibling(
-                    primary, self._available_camera_ids()
+                    primary,
+                    self._available_camera_ids(),
+                    same_device_cameras=device_map.get(primary)
+                    or same_device_camera_ids(self.hass, primary),
                 )
                 if sibling and sibling != record_entity:
                     _LOGGER.warning(
@@ -890,6 +1050,7 @@ class RecordingManager:
                         attribute_ids=attrs,
                         stamp=stamp,
                         seq=seq,
+                        device_cameras_by_entity=device_map,
                     )
 
             _LOGGER.warning(
