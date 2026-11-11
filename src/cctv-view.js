@@ -66,7 +66,7 @@ import {
   loadTvMode,
   saveTvMode,
   tvPackGap,
-  tvStageFillWidth,
+  tvStageFullContentWidth,
 } from "./tv-mode.js";
 import "./stream-player.js";
 import "./detection-timeline.js";
@@ -311,8 +311,9 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * Size the above-the-fold mosaic stage for TV / kiosk displays.
-   * Fills the panel content width (no centered 16:9 letterbox / side gutters).
+   * Size the above-the-fold 16:9 mosaic stage for TV / kiosk displays.
+   * Width = full panel content width; height = width/(16/9). Never shrink
+   * width to fit chrome height (that left side gutters).
    */
   _refreshTvStage() {
     if (!this._tvMode || !this.panelMode) {
@@ -336,7 +337,11 @@ export class CctvView extends LitElement {
     }
     const viewportH =
       typeof window !== "undefined" ? Number(window.innerHeight) || 0 : 0;
-    const { stage } = tvStageFillWidth(contentW, viewportH, chrome);
+    const { stage, offsetTop } = tvStageFullContentWidth(
+      contentW,
+      viewportH,
+      chrome
+    );
     const next = {
       width: Math.round(stage.width),
       height: Math.round(stage.height),
@@ -344,9 +349,6 @@ export class CctvView extends LitElement {
     // Avoid stamping a 0×N stage before the panel has laid out.
     if (next.width < 8) {
       this.style.setProperty("--cctv-tv-chrome", `${chrome}px`);
-      if (next.height >= 8) {
-        this.style.setProperty("--cctv-tv-stage-h", `${next.height}px`);
-      }
       return;
     }
     if (
@@ -358,6 +360,10 @@ export class CctvView extends LitElement {
     this.style.setProperty("--cctv-tv-stage-w", `${next.width}px`);
     this.style.setProperty("--cctv-tv-stage-h", `${next.height}px`);
     this.style.setProperty("--cctv-tv-chrome", `${chrome}px`);
+    this.style.setProperty(
+      "--cctv-tv-stage-offset",
+      `${Math.round(offsetTop)}px`
+    );
   }
 
   /**
@@ -583,12 +589,9 @@ export class CctvView extends LitElement {
     const rect = el.getBoundingClientRect();
     let boxW = Math.max(0, rect.width);
     let boxH = Math.max(0, rect.height);
-    // TV mode: prefer the full-width chrome-aware stage so packing matches the fold.
-    // Prefer the laid-out width when the stage is already stretched to 100%.
-    if (this._tvMode && this._tvStage?.height >= 8) {
-      if (this._tvStage.width >= 8) {
-        boxW = Math.max(boxW, this._tvStage.width);
-      }
+    // TV mode: pack into the full-width 16:9 stage (not an arbitrary stretch box).
+    if (this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8) {
+      boxW = this._tvStage.width;
       boxH = this._tvStage.height;
     }
     if (boxW < 8 || boxH < 8) return;
@@ -1145,7 +1148,7 @@ export class CctvView extends LitElement {
     }
     this._refreshTvStage();
     this._status = this._tvMode
-      ? "TV mode on — mosaic fills this display width (saved on this device)"
+      ? "TV mode on — 16:9 mosaic fills this display width (saved on this device)"
       : "TV mode off";
     this._schedulePack();
     this.updateComplete.then(() => this._bindPackObserver());
@@ -1836,7 +1839,7 @@ export class CctvView extends LitElement {
             />
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
-              Per-device (this browser / kiosk). Fills the panel width above the fold
+              Per-device (this browser / kiosk). Full-width 16:9 mosaic above the fold
               (accounts for HA / kiosk chrome); up to 4 cams fill the stage; 1–2 cams
               maximize. Timeline and Saved detections scroll below.
             </span>
@@ -2038,12 +2041,12 @@ export class CctvView extends LitElement {
       `;
     }
 
-    // Width always 100% of the panel content box; height is chrome-aware above the fold.
+    // Full content width × 16:9 height (never a height-limited narrower box).
     const tvStage =
-      this._tvMode && this._tvStage?.height >= 8
-        ? `width:100%;height:${this._tvStage.height}px;max-width:100%;`
+      this._tvMode && this._tvStage?.width >= 8 && this._tvStage?.height >= 8
+        ? `width:${this._tvStage.width}px;height:${this._tvStage.height}px;max-width:100%;aspect-ratio:16/9;`
         : this._tvMode
-          ? `width:100%;max-width:100%;`
+          ? `width:100%;max-width:100%;aspect-ratio:16/9;`
           : nothing;
     const countClass =
       this._tvMode && list.length <= 2 ? "layout-pack-maximize" : "";

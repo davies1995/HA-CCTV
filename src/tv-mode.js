@@ -7,6 +7,9 @@
 
 export const TV_MODE_STORAGE_KEY = "cctv_dashboard:tv_mode";
 
+/** Fixed mosaic stage aspect (width / height). */
+export const TV_STAGE_ASPECT = 16 / 9;
+
 /**
  * @returns {boolean}
  */
@@ -82,29 +85,63 @@ export function contentBoxWidth(el) {
 }
 
 /**
- * TV mosaic stage: **full content width** × chrome-aware height (above the fold).
- * Do not letterbox to 16:9 — that left large side gutters on wide TVs.
+ * Largest 16:9 box that fits inside maxW × maxH (inscribed).
+ * Prefer {@link tvStageFullContentWidth} for TV mode — inscribing against
+ * height shrinks width and leaves side gutters.
+ *
+ * @param {number} maxW
+ * @param {number} maxH
+ * @param {number} [aspect]
+ * @returns {{ width: number, height: number }}
+ */
+export function fitStageBox(maxW, maxH, aspect = TV_STAGE_ASPECT) {
+  const w = Math.max(0, Number(maxW) || 0);
+  const h = Math.max(0, Number(maxH) || 0);
+  const a = Number(aspect) > 0 ? Number(aspect) : TV_STAGE_ASPECT;
+  if (w <= 0 || h <= 0) return { width: 0, height: 0 };
+  if (w / h >= a) {
+    return { width: h * a, height: h };
+  }
+  return { width: w, height: w / a };
+}
+
+/**
+ * TV mosaic stage: **16:9**, width = full content width (sidebar excluded),
+ * height = width / (16/9). Never shrink width to fit chrome height — that
+ * was the old inscribed box that left large side gutters. Extra vertical
+ * room after chrome is reported as `offsetTop` for centering.
  *
  * @param {number} contentW  Panel content width (sidebar already excluded)
  * @param {number} viewportH Window / viewport height
  * @param {number} [chromePx]
- * @returns {{ availW: number, availH: number, stage: { width: number, height: number } }}
+ * @returns {{
+ *   availW: number,
+ *   availH: number,
+ *   offsetTop: number,
+ *   stage: { width: number, height: number }
+ * }}
  */
-export function tvStageFillWidth(contentW, viewportH, chromePx) {
+export function tvStageFullContentWidth(contentW, viewportH, chromePx) {
   const w = Math.max(0, Number(contentW) || 0);
   const vh = Math.max(0, Number(viewportH) || 0);
   const chrome = Number.isFinite(chromePx) ? Number(chromePx) : estimateTvChromePx();
-  const h = Math.max(0, vh - chrome);
+  const availH = Math.max(0, vh - chrome);
+  const stageH = w > 0 ? w / TV_STAGE_ASPECT : 0;
+  const offsetTop = Math.max(0, (availH - stageH) / 2);
   return {
     availW: w,
-    availH: h,
-    stage: { width: w, height: h },
+    availH,
+    offsetTop,
+    stage: { width: w, height: stageH },
   };
 }
 
+/** @deprecated Use {@link tvStageFullContentWidth}. */
+export function tvStageFillWidth(contentW, viewportH, chromePx) {
+  return tvStageFullContentWidth(contentW, viewportH, chromePx);
+}
+
 /**
- * @deprecated Prefer tvStageFillWidth with measured panel content width.
- * Kept for older call sites / tests that only have window metrics.
  * @param {{ innerWidth?: number, innerHeight?: number } | null | undefined} [win]
  * @param {number} [chromePx]
  * @param {number} [sidebarPx] Approximate HA sidebar width to subtract
@@ -116,7 +153,7 @@ export function tvStageFromViewport(win, chromePx, sidebarPx = 0) {
   // Horizontal padding from .wrap (~1.25rem each side).
   const sidePad = 40;
   const contentW = Math.max(0, iw - side - sidePad);
-  return tvStageFillWidth(contentW, ih, chromePx);
+  return tvStageFullContentWidth(contentW, ih, chromePx);
 }
 
 /**

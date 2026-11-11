@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **TV mode** mosaic now fills the panel content width (no centered 16:9 letterbox / side gutters); height stays chrome-aware above the fold
+- **TV mode** keeps a centred **16:9** mosaic stage, but sizes it to the **full panel content width** (sidebar excluded; height = width×9/16) instead of inscribing a smaller 16:9 box that left side gutters
 
 ## 0.17.1 — 2026-11-11
 
