@@ -44,9 +44,21 @@ function resume(pb) {
   return { ...pb, paused: false };
 }
 
-function restart(pb) {
+/**
+ * Restart remounts media (playbackMountGen++) and resets index/seek to window start.
+ * @param {{ playing?: boolean, paused?: boolean, mountGen?: number, index?: number }} pb
+ * @param {{ index?: number, seekSec?: number }} [pos]
+ */
+function restart(pb, pos = { index: 0, seekSec: 0 }) {
   assert(pb.tracks || true, "restart needs session");
-  return { ...pb, playing: true, paused: false };
+  return {
+    ...pb,
+    playing: true,
+    paused: false,
+    mountGen: (pb.mountGen || 0) + 1,
+    index: pos.index ?? 0,
+    seekSec: pos.seekSec ?? 0,
+  };
 }
 
 function returnToLive(_pb) {
@@ -70,8 +82,16 @@ pb = resume(pb);
 assert(pb.paused === false, "resume clears paused");
 assert(playPauseLabel(pb) === "Pause", "resumed → Pause");
 
-pb = restart(pb);
+pb = { ...pb, mountGen: 0, index: 2, seekSec: 12 };
+pb = restart(pb, { index: 0, seekSec: 0 });
 assert(pb.playing && !pb.paused, "restart plays from start");
+assert(pb.mountGen === 1, "restart bumps media mount gen");
+assert(pb.index === 0 && pb.seekSec === 0, "restart seeks window start");
+
+// Restart from EOF / finished-paused also remounts.
+pb = pauseClips({ ...pb, index: 3, seekSec: 40, mountGen: 1 });
+pb = restart(pb, { index: 0, seekSec: 0 });
+assert(pb.mountGen === 2 && pb.index === 0, "restart from finished remounts");
 
 pb = returnToLive(pb);
 assert(pb === null, "Back to live clears playback session");

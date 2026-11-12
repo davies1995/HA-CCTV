@@ -161,6 +161,8 @@ export class CctvView extends LitElement {
     _panelActive: { state: true },
     /** Bumped on Back to live / suspend so mosaic stream players remount. */
     _liveMountGen: { state: true },
+    /** Bumped on Restart so playback media remounts and replays from start. */
+    _playbackMountGen: { state: true },
   };
 
   static styles = sharedStyles;
@@ -208,6 +210,7 @@ export class CctvView extends LitElement {
     this._panelActive = true;
     /** Bumped to force remount of live <cctv-stream-player> after Back to live. */
     this._liveMountGen = 0;
+    this._playbackMountGen = 0;
     /** @type {Map<string, string>} */
     this._deviceMap = new Map();
     this._packObserver = null;
@@ -1795,6 +1798,8 @@ export class CctvView extends LitElement {
 
   /**
    * Replay the same event/session from the window start on the same cams.
+   * Remounts media elements: Lit will not re-apply an unchanged src after we
+   * clear it, so Restart previously left tiles stuck mid-clip / at EOF.
    */
   async _restartPlayback() {
     if (!this._playback?.tracks?.length) return;
@@ -1808,14 +1813,18 @@ export class CctvView extends LitElement {
       this._playbackSeek.set(track.cameraId, pos.seekSec);
       this._playbackDone.set(track.cameraId, !track.items.length);
     }
-    // Stay on clip tiles; clear src so kick reloads first chunks cleanly.
+    // Stay on clip tiles; clear src, then remount so the first clip loads again.
     this._teardownPlaybackMedia({ clearSrc: true });
+    this._playbackMountGen += 1;
     this._playback = { ...this._playback, playing: true, paused: false };
     this._status = `Restarting ${this._playback.labels.join(", ")}…`;
     this.requestUpdate();
     await this.updateComplete;
     await this._waitForPlaybackMedia();
     await this._kickPlaybackVideos();
+    if (this._playback?.playing && !this._playback?.paused) {
+      this._status = `Playing ${this._playback.labels.join(", ")} (restarted)`;
+    }
   }
 
   /**
@@ -1966,7 +1975,9 @@ export class CctvView extends LitElement {
    */
   _startOnePlaybackVideo(video) {
     const cameraId = video.getAttribute("data-camera") || "";
-    const seek = this._playbackSeek.get(cameraId) || 0;
+    const seek = Number(this._playbackSeek.get(cameraId)) || 0;
+    const track = this._trackForCamera(cameraId);
+    const item = track ? this._currentPlaybackItem(track) : null;
 
     // Autoplay policies require muted + playsInline; set properties not just attrs.
     video.muted = true;
@@ -1977,14 +1988,31 @@ export class CctvView extends LitElement {
     video.setAttribute("webkit-playsinline", "");
     video.preload = "auto";
 
+    // After Restart teardown, Lit may leave src empty when the URL is unchanged.
+    if (item?.kind === "video" && item.url) {
+      const current = video.getAttribute("src") || video.currentSrc || "";
+      if (!current || current !== item.url) {
+        video.setAttribute("src", item.url);
+        video.src = item.url;
+        try {
+          video.load?.();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
     const playNow = async () => {
       try {
-        if (seek > 0) {
-          try {
+        // Always seek (incl. 0) so Restart from EOF / mid-clip starts cleanly.
+        try {
+          if (Number.isFinite(seek) && Math.abs((video.currentTime || 0) - seek) > 0.05) {
             video.currentTime = seek;
-          } catch {
-            /* seek may fail on some containers */
+          } else if (seek === 0 && (video.currentTime || 0) > 0.05) {
+            video.currentTime = 0;
           }
+        } catch {
+          /* seek may fail on some containers */
         }
         await video.play();
         return { ok: true, cameraId };
@@ -2809,39 +2837,45 @@ export class CctvView extends LitElement {
             ? !item
               ? html`<div class="playback-empty">No recording for this camera</div>`
               : item.kind === "snapshot"
-                ? html`<img
-                    class="playback-media"
-                    alt=""
-                    src=${item.url}
-                    @load=${(e) =>
-                      this._onPlaybackMediaSize(
-                        cam.entityId,
-                        e.target.naturalWidth,
-                        e.target.naturalHeight
-                      )}
-                  />`
-                : html`
-                    <video
+                ? keyed(
+                    `${this._playbackMountGen}:${cam.entityId}:snap:${item.url}`,
+                    html`<img
                       class="playback-media"
-                      data-camera=${cam.entityId}
+                      alt=""
                       src=${item.url}
-                      ?autoplay=${!paused}
-                      muted
-                      playsinline
-                      webkit-playsinline
-                      preload="auto"
-                      .muted=${true}
-                      .playsInline=${true}
-                      controls
-                      @loadedmetadata=${(e) =>
+                      @load=${(e) =>
                         this._onPlaybackMediaSize(
                           cam.entityId,
-                          e.target.videoWidth,
-                          e.target.videoHeight
+                          e.target.naturalWidth,
+                          e.target.naturalHeight
                         )}
-                      @ended=${() => this._onPlaybackEnded(cam.entityId)}
-                    ></video>
-                  `
+                    />`
+                  )
+                : keyed(
+                    `${this._playbackMountGen}:${cam.entityId}:vid:${item.url}`,
+                    html`
+                      <video
+                        class="playback-media"
+                        data-camera=${cam.entityId}
+                        src=${item.url}
+                        ?autoplay=${!paused}
+                        muted
+                        playsinline
+                        webkit-playsinline
+                        preload="auto"
+                        .muted=${true}
+                        .playsInline=${true}
+                        controls
+                        @loadedmetadata=${(e) =>
+                          this._onPlaybackMediaSize(
+                            cam.entityId,
+                            e.target.videoWidth,
+                            e.target.videoHeight
+                          )}
+                        @ended=${() => this._onPlaybackEnded(cam.entityId)}
+                      ></video>
+                    `
+                  )
             : keyed(
                 `${this._liveMountGen}:${cam.entityId}`,
                 html`
