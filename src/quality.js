@@ -65,6 +65,49 @@ export function normalizeCameraQualityMap(raw) {
   return out;
 }
 
+/**
+ * Look up quality for a camera, falling back to physical-group siblings.
+ * @param {Record<string, string> | null | undefined} map
+ * @param {string} entityId
+ * @param {string[] | null | undefined} groupMembers
+ * @returns {string | null}
+ */
+export function qualityFromMap(map, entityId, groupMembers = null) {
+  if (!map || typeof map !== "object") return null;
+  const id = String(entityId || "");
+  if (map[id]) return normalizeQuality(map[id]);
+  for (const mid of groupMembers || []) {
+    if (mid && mid !== id && map[mid]) return normalizeQuality(map[mid]);
+  }
+  return null;
+}
+
+/**
+ * Write a quality value onto a camera and every stream in its physical group.
+ * @param {Record<string, string> | null | undefined} map
+ * @param {string} entityId
+ * @param {string} quality
+ * @param {string[] | null | undefined} groupMembers
+ * @returns {Record<string, string>}
+ */
+export function mirrorQualityAcrossGroup(map, entityId, quality, groupMembers = null) {
+  const value = normalizeQuality(quality);
+  const targets = [
+    ...new Set(
+      [...(groupMembers || []), entityId]
+        .map(String)
+        .filter((id) => id.startsWith("camera."))
+    ),
+  ];
+  /** @type {Record<string, string>} */
+  const next = { ...(map || {}) };
+  for (const id of targets) {
+    if (value === "auto") delete next[id];
+    else next[id] = value;
+  }
+  return normalizeCameraQualityMap(next);
+}
+
 export function getCameraSettings(config, entityId) {
   const map = config?.camera_settings || config?.cameras_settings || {};
   const fromMap = map?.[entityId] || map?.[entityId?.toLowerCase?.()] || {};
@@ -105,13 +148,29 @@ export function writeStoredQuality(entityId, quality) {
  * @param {string} entityId
  * @param {Record<string, string> | null} [sharedMap]
  */
-export function resolveQuality(config, entityId, sharedMap = null) {
+/**
+ * @param {any} config
+ * @param {string} entityId
+ * @param {Record<string, string> | null} [sharedMap]
+ * @param {string[] | null} [groupMembers]
+ */
+export function resolveQuality(
+  config,
+  entityId,
+  sharedMap = null,
+  groupMembers = null
+) {
   if (sharedMap) {
-    const fromShared = sharedMap[entityId];
-    if (fromShared) return normalizeQuality(fromShared);
+    const fromShared = qualityFromMap(sharedMap, entityId, groupMembers);
+    if (fromShared) return fromShared;
   } else {
     const stored = readStoredQuality(entityId);
     if (stored) return stored;
+    for (const mid of groupMembers || []) {
+      if (!mid || mid === entityId) continue;
+      const sibling = readStoredQuality(mid);
+      if (sibling) return sibling;
+    }
   }
   const perCam = getCameraSettings(config, entityId);
   if (perCam.quality) return normalizeQuality(perCam.quality);

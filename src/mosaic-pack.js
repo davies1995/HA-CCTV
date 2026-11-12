@@ -122,6 +122,56 @@ export function normalizeForceAspectMap(raw) {
 }
 
 /**
+ * Look up force-aspect for a camera, falling back to physical-group siblings.
+ * @param {Record<string, string> | null | undefined} map
+ * @param {string} entityId
+ * @param {string[] | null | undefined} groupMembers
+ * @returns {string}
+ */
+export function forceAspectFromMap(map, entityId, groupMembers = null) {
+  if (!map || typeof map !== "object") return "auto";
+  const id = String(entityId || "");
+  if (map[id]) return normalizeForceAspectLabel(map[id]);
+  for (const mid of groupMembers || []) {
+    if (mid && mid !== id && map[mid]) {
+      return normalizeForceAspectLabel(map[mid]);
+    }
+  }
+  return "auto";
+}
+
+/**
+ * Write a force-aspect value onto a camera and every stream in its physical group.
+ * @param {Record<string, string> | null | undefined} map
+ * @param {string} entityId
+ * @param {string} label
+ * @param {string[] | null | undefined} groupMembers
+ * @returns {Record<string, string>}
+ */
+export function mirrorForceAspectAcrossGroup(
+  map,
+  entityId,
+  label,
+  groupMembers = null
+) {
+  const normalized = normalizeForceAspectLabel(label);
+  const targets = [
+    ...new Set(
+      [...(groupMembers || []), entityId]
+        .map(String)
+        .filter((id) => id.startsWith("camera."))
+    ),
+  ];
+  /** @type {Record<string, string>} */
+  const next = { ...(map || {}) };
+  for (const id of targets) {
+    if (normalized === "auto") delete next[id];
+    else next[id] = normalized;
+  }
+  return normalizeForceAspectMap(next);
+}
+
+/**
  * @param {number | null | undefined} value
  * @returns {number}
  */
