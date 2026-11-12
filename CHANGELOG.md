@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.20.2 — 2026-11-12
+
+### Fixed
+
+- Detection playback **Restart** remounts clip media and seeks to the event window start so clips actually replay (Play/Pause and Back to live unchanged)
+
 ## 0.20.1 — 2026-11-12
 
 ### Fixed
