@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.20.1 — 2026-11-12
+
+### Fixed
+
+- Camera settings quality/aspect (and stream pick) bind to the **persisted shared** values on reopen instead of resetting to Auto
+- Choose cameras shows current quality + aspect for each cam/group and persists picker changes
+- Quality/aspect prefs are mirrored across physical stream-group members (like sensor links)
+
 ## 0.20.0 — 2026-11-12
 
 ### Added

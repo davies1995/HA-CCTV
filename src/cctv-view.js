@@ -17,6 +17,7 @@ import {
 } from "./detection-sensors.js";
 import {
   QUALITY_OPTIONS,
+  mirrorQualityAcrossGroup,
   normalizeCameraQualityMap,
   qualityHelp,
   resolveQuality,
@@ -39,9 +40,11 @@ import {
   cellsToPercentStyles,
   DEFAULT_ASPECT,
   FORCE_ASPECT_OPTIONS,
+  forceAspectFromMap,
   forceAspectRatio,
   forceAspectSelectValue,
   isPresetForceAspect,
+  mirrorForceAspectAcrossGroup,
   normalizeAspect,
   normalizeForceAspectLabel,
   normalizeForceAspectMap,
@@ -651,7 +654,8 @@ export class CctvView extends LitElement {
    * @param {string} entityId
    */
   _effectiveAspect(entityId) {
-    const forced = forceAspectRatio(this._forceAspect?.[entityId]);
+    const label = this._forceAspectLabel(entityId);
+    const forced = forceAspectRatio(label);
     if (forced) return normalizeAspect(forced);
     return normalizeAspect(this._aspectById[entityId] || DEFAULT_ASPECT);
   }
@@ -659,8 +663,19 @@ export class CctvView extends LitElement {
   /**
    * @param {string} entityId
    */
+  _groupMembers(entityId) {
+    return groupMembersForCamera(this._streamGroups, entityId);
+  }
+
+  /**
+   * @param {string} entityId
+   */
   _forceAspectLabel(entityId) {
-    return normalizeForceAspectLabel(this._forceAspect?.[entityId]);
+    return forceAspectFromMap(
+      this._forceAspect,
+      entityId,
+      this._groupMembers(entityId)
+    );
   }
 
   /**
@@ -870,7 +885,20 @@ export class CctvView extends LitElement {
     this._cameraQuality = { ...quality };
     this._savedCameraQuality = { ...quality };
     this._prefsDirty = false;
-    this._customAspectDraft = "";
+    // Keep detail custom-aspect field bound to the saved value when reopening.
+    if (this._detailId) {
+      const current = forceAspectFromMap(
+        force,
+        this._detailId,
+        this._groupMembers(this._detailId)
+      );
+      this._customAspectDraft =
+        current && current !== "auto" && !isPresetForceAspect(current)
+          ? current
+          : "";
+    } else {
+      this._customAspectDraft = "";
+    }
     this._qualityTick += 1;
   }
 
@@ -896,13 +924,16 @@ export class CctvView extends LitElement {
 
   /**
    * Quality for mosaic/detail. Panel uses shared/draft map; cards use localStorage.
+   * Falls back to other streams in the same physical group when the preferred
+   * entity has no explicit quality saved yet.
    * @param {string} entityId
    */
   _qualityFor(entityId) {
     return resolveQuality(
       this.config,
       entityId,
-      this.panelMode ? this._cameraQuality : null
+      this.panelMode ? this._cameraQuality : null,
+      this._groupMembers(entityId)
     );
   }
 
@@ -1077,28 +1108,34 @@ export class CctvView extends LitElement {
 
   /**
    * Draft force-aspect change (not persisted until Save).
+   * Mirrors across physical-group members so reopen/picker stay consistent.
    * @param {string} cameraId
    * @param {string} label
    */
   _setForceAspect(cameraId, label) {
+    const members = this._groupMembers(cameraId);
     if (label === "custom") {
-      const existing = this._forceAspect?.[cameraId] || "";
+      const existing = this._forceAspectLabel(cameraId);
       this._customAspectDraft =
         existing && !isPresetForceAspect(existing) ? existing : "1920:2560";
       const normalized = normalizeForceAspectLabel(this._customAspectDraft);
-      const next = { ...this._forceAspect };
-      if (normalized === "auto") delete next[cameraId];
-      else next[cameraId] = normalized;
-      this._forceAspect = next;
+      this._forceAspect = mirrorForceAspectAcrossGroup(
+        this._forceAspect,
+        cameraId,
+        normalized,
+        members
+      );
       this._syncPrefsDirty();
       this._schedulePack();
       return;
     }
     const normalized = normalizeForceAspectLabel(label);
-    const next = { ...this._forceAspect };
-    if (normalized === "auto") delete next[cameraId];
-    else next[cameraId] = normalized;
-    this._forceAspect = next;
+    this._forceAspect = mirrorForceAspectAcrossGroup(
+      this._forceAspect,
+      cameraId,
+      normalized,
+      members
+    );
     if (isPresetForceAspect(normalized) || normalized === "auto") {
       this._customAspectDraft = "";
     }
@@ -1113,10 +1150,12 @@ export class CctvView extends LitElement {
   _setCustomForceAspect(cameraId, raw) {
     this._customAspectDraft = raw;
     const normalized = normalizeForceAspectLabel(raw);
-    const next = { ...this._forceAspect };
-    if (normalized === "auto") delete next[cameraId];
-    else next[cameraId] = normalized;
-    this._forceAspect = next;
+    this._forceAspect = mirrorForceAspectAcrossGroup(
+      this._forceAspect,
+      cameraId,
+      normalized,
+      this._groupMembers(cameraId)
+    );
     this._syncPrefsDirty();
     this._schedulePack();
   }
@@ -1300,9 +1339,12 @@ export class CctvView extends LitElement {
   _openDetail(entityId) {
     this._detailId = entityId;
     this._sensorFilter = "";
-    const current = this._forceAspect?.[entityId];
+    // Bind custom draft from persisted/group-resolved aspect (not defaults).
+    const current = this._forceAspectLabel(entityId);
     this._customAspectDraft =
-      current && !isPresetForceAspect(current) ? current : "";
+      current && current !== "auto" && !isPresetForceAspect(current)
+        ? current
+        : "";
     this._syncGroupDraftFromCamera(entityId);
   }
 
@@ -1322,15 +1364,20 @@ export class CctvView extends LitElement {
    */
   _setQuality(entityId, quality) {
     if (!this.panelMode) {
+      const members = this._groupMembers(entityId);
       writeStoredQuality(entityId, quality);
+      for (const mid of members) {
+        if (mid !== entityId) writeStoredQuality(mid, quality);
+      }
       this._qualityTick += 1;
       return;
     }
-    const value = String(quality || "auto").toLowerCase();
-    const next = { ...this._cameraQuality };
-    if (!value || value === "auto") delete next[entityId];
-    else next[entityId] = value;
-    this._cameraQuality = normalizeCameraQualityMap(next);
+    this._cameraQuality = mirrorQualityAcrossGroup(
+      this._cameraQuality,
+      entityId,
+      quality,
+      this._groupMembers(entityId)
+    );
     this._syncPrefsDirty();
     this._qualityTick += 1;
   }
@@ -1343,6 +1390,17 @@ export class CctvView extends LitElement {
       await this._saveCameraPrefs();
     } catch (err) {
       this._status = err?.message || "Could not save quality";
+    }
+  }
+
+  /** Choose-cameras aspect change: draft + persist shared map immediately. */
+  async _setPickerForceAspect(entityId, label) {
+    this._setForceAspect(entityId, label);
+    if (!this.panelMode) return;
+    try {
+      await this._saveCameraPrefs();
+    } catch (err) {
+      this._status = err?.message || "Could not save aspect";
     }
   }
 
@@ -2513,6 +2571,9 @@ export class CctvView extends LitElement {
               const disabled = !checked && this._visibleIds.length >= maxStreams;
               const preferred = selectedId || row.members[0]?.entityId || "";
               const quality = preferred ? this._qualityFor(preferred) : "auto";
+              const forceSelect = preferred
+                ? forceAspectSelectValue(this._forceAspectLabel(preferred))
+                : "auto";
               const linked = preferred ? this._linksFor(preferred).length : 0;
               return html`
                 <div class="picker-item picker-group ${disabled ? "disabled" : ""}">
@@ -2536,12 +2597,12 @@ export class CctvView extends LitElement {
                     ${linked
                       ? `${linked} sensor${linked === 1 ? "" : "s"} shared`
                       : "No sensors linked yet"}
+                    · quality ${quality} · aspect ${forceSelect}
                   </span>
                   <div class="picker-stream-controls">
                     <label>
                       Stream
                       <select
-                        .value=${preferred}
                         ?disabled=${!checked || this._saving}
                         @change=${(e) =>
                           this._setPreferredStream(
@@ -2551,7 +2612,10 @@ export class CctvView extends LitElement {
                       >
                         ${row.members.map(
                           (m) =>
-                            html`<option value=${m.entityId}>
+                            html`<option
+                              value=${m.entityId}
+                              ?selected=${m.entityId === preferred}
+                            >
                               ${m.name || m.entityId}
                             </option>`
                         )}
@@ -2560,14 +2624,36 @@ export class CctvView extends LitElement {
                     <label>
                       Quality
                       <select
-                        .value=${quality}
                         ?disabled=${!checked || this._saving}
                         @change=${(e) =>
                           this._setPickerQuality(preferred, e.target.value)}
                       >
                         ${QUALITY_OPTIONS.map(
                           (opt) =>
-                            html`<option value=${opt.value}>${opt.label}</option>`
+                            html`<option
+                              value=${opt.value}
+                              ?selected=${opt.value === quality}
+                            >
+                              ${opt.label}
+                            </option>`
+                        )}
+                      </select>
+                    </label>
+                    <label>
+                      Aspect
+                      <select
+                        ?disabled=${!checked || this._saving}
+                        @change=${(e) =>
+                          this._setPickerForceAspect(preferred, e.target.value)}
+                      >
+                        ${FORCE_ASPECT_OPTIONS.map(
+                          (opt) =>
+                            html`<option
+                              value=${opt.value}
+                              ?selected=${opt.value === forceSelect}
+                            >
+                              ${opt.label}
+                            </option>`
                         )}
                       </select>
                     </label>
@@ -2580,6 +2666,9 @@ export class CctvView extends LitElement {
             const disabled = !checked && this._visibleIds.length >= maxStreams;
             const linked = this._linksFor(cam.entityId).length;
             const quality = this._qualityFor(cam.entityId);
+            const forceSelect = forceAspectSelectValue(
+              this._forceAspectLabel(cam.entityId)
+            );
             return html`
               <div class="picker-item ${disabled ? "disabled" : ""}">
                 <label class="picker-group-main">
@@ -2594,19 +2683,42 @@ export class CctvView extends LitElement {
                 </label>
                 <span class="picker-id">
                   ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}
+                  · quality ${quality} · aspect ${forceSelect}
                 </span>
                 <div class="picker-stream-controls">
                   <label>
                     Quality
                     <select
-                      .value=${quality}
                       ?disabled=${!checked || this._saving}
                       @change=${(e) =>
                         this._setPickerQuality(cam.entityId, e.target.value)}
                     >
                       ${QUALITY_OPTIONS.map(
                         (opt) =>
-                          html`<option value=${opt.value}>${opt.label}</option>`
+                          html`<option
+                            value=${opt.value}
+                            ?selected=${opt.value === quality}
+                          >
+                            ${opt.label}
+                          </option>`
+                      )}
+                    </select>
+                  </label>
+                  <label>
+                    Aspect
+                    <select
+                      ?disabled=${!checked || this._saving}
+                      @change=${(e) =>
+                        this._setPickerForceAspect(cam.entityId, e.target.value)}
+                    >
+                      ${FORCE_ASPECT_OPTIONS.map(
+                        (opt) =>
+                          html`<option
+                            value=${opt.value}
+                            ?selected=${opt.value === forceSelect}
+                          >
+                            ${opt.label}
+                          </option>`
                       )}
                     </select>
                   </label>
@@ -2834,7 +2946,7 @@ export class CctvView extends LitElement {
       quality,
       "detail"
     );
-    const forceSelect = forceAspectSelectValue(this._forceAspect?.[cam.entityId]);
+    const forceSelect = forceAspectSelectValue(this._forceAspectLabel(cam.entityId));
     const showCustomAspect =
       this.panelMode &&
       (forceSelect === "custom" || Boolean(this._customAspectDraft));
@@ -2843,6 +2955,8 @@ export class CctvView extends LitElement {
       (forceSelect === "custom"
         ? this._forceAspectLabel(cam.entityId)
         : "");
+    const group = this._groupFor(cam.entityId);
+    const groupMembers = this._groupMembers(cam.entityId);
     return html`
       <button class="btn linkish" type="button" @click=${this._back}>
         ← ${this.panelMode ? "Back to layout" : "All cameras"}
@@ -2857,20 +2971,57 @@ export class CctvView extends LitElement {
           .camera=${cam}
           .config=${this.config}
           .quality=${quality}
+          .groupMembers=${groupMembers}
+          .failoverEntityIds=${failoverStreamOrder(cam.entityId, groupMembers)}
           context="detail"
           .muted=${false}
           controls
         ></cctv-stream-player>
       </div>
+      ${group
+        ? html`
+            <div class="quality-row">
+              <label>
+                Live stream
+                <select
+                  @change=${(e) => {
+                    const nextId = e.target.value;
+                    void this._setPreferredStream(cam.entityId, nextId);
+                    this._detailId = nextId;
+                    this._syncGroupDraftFromCamera(nextId);
+                  }}
+                >
+                  ${group.members.map((mid) => {
+                    const member =
+                      this._cameras().find((c) => c.entityId === mid) ||
+                      cameraFromState(mid, this.hass?.states?.[mid]);
+                    return html`<option
+                      value=${mid}
+                      ?selected=${mid === cam.entityId}
+                    >
+                      ${member?.name || mid}
+                    </option>`;
+                  })}
+                </select>
+              </label>
+              <span class="hint">Physical group: ${group.name}</span>
+            </div>
+          `
+        : nothing}
       <div class="quality-row">
         <label>
           Stream quality
           <select
-            .value=${quality}
             @change=${(e) => this._setQuality(cam.entityId, e.target.value)}
           >
             ${QUALITY_OPTIONS.map(
-              (opt) => html`<option value=${opt.value}>${opt.label}</option>`
+              (opt) =>
+                html`<option
+                  value=${opt.value}
+                  ?selected=${opt.value === quality}
+                >
+                  ${opt.label}
+                </option>`
             )}
           </select>
         </label>
@@ -2882,13 +3033,17 @@ export class CctvView extends LitElement {
               <label>
                 Force aspect ratio
                 <select
-                  .value=${forceSelect}
                   @change=${(e) =>
                     this._setForceAspect(cam.entityId, e.target.value)}
                 >
                   ${FORCE_ASPECT_OPTIONS.map(
                     (opt) =>
-                      html`<option value=${opt.value}>${opt.label}</option>`
+                      html`<option
+                        value=${opt.value}
+                        ?selected=${opt.value === forceSelect}
+                      >
+                        ${opt.label}
+                      </option>`
                   )}
                 </select>
               </label>
