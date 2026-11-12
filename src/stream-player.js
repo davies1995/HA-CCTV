@@ -1,6 +1,7 @@
 import { LitElement, html, nothing, css } from "lit";
 import {
   addWebRtcCandidate,
+  cameraFromState,
   cameraMjpegStreamUrl,
   cameraPreviewUrl,
   fetchCameraCapabilities,
@@ -37,6 +38,16 @@ export class CctvStreamPlayer extends LitElement {
      * and release stream slots. Panel sets this false when hidden/away.
      */
     active: { type: Boolean },
+    /**
+     * Other camera.* ids in the same physical stream group (failover candidates).
+     * @type {string[]}
+     */
+    failoverEntityIds: { attribute: false },
+    /**
+     * Optional explicit group member list for quality→substream resolution.
+     * @type {string[]}
+     */
+    groupMembers: { attribute: false },
     _mode: { state: true },
     _error: { state: true },
     _hlsUrl: { state: true },
@@ -47,6 +58,8 @@ export class CctvStreamPlayer extends LitElement {
     _queued: { state: true },
     /** Tile box width/height — required by ha-camera-stream for contain letterboxing. */
     _tileAspect: { state: true },
+    /** Runtime failover entity currently streaming (session only). */
+    _failoverEntityId: { state: true },
   };
 
   static styles = css`
@@ -171,6 +184,8 @@ export class CctvStreamPlayer extends LitElement {
     this.eager = false;
     this.posterOnly = false;
     this.active = true;
+    this.failoverEntityIds = [];
+    this.groupMembers = [];
     this._mode = "loading";
     this._error = "";
     this._hlsUrl = "";
@@ -179,6 +194,8 @@ export class CctvStreamPlayer extends LitElement {
     this._visible = false;
     this._slotHeld = false;
     this._queued = false;
+    this._failoverEntityId = "";
+    this._failoverTried = new Set();
     this._pc = null;
     this._unsubWebRtc = null;
     this._sessionId = null;
@@ -269,6 +286,15 @@ export class CctvStreamPlayer extends LitElement {
       changed.has("config") && this._configMeaningful(changed.get("config"), this.config);
 
     if (
+      changed.has("camera") ||
+      changed.has("failoverEntityIds") ||
+      changed.has("groupMembers")
+    ) {
+      this._failoverTried = new Set();
+      this._failoverEntityId = "";
+    }
+
+    if (
       hassRelevant ||
       cameraRelevant ||
       configRelevant ||
@@ -276,6 +302,8 @@ export class CctvStreamPlayer extends LitElement {
       changed.has("context") ||
       changed.has("eager") ||
       changed.has("posterOnly") ||
+      changed.has("failoverEntityIds") ||
+      changed.has("groupMembers") ||
       (changed.has("active") && this.active)
     ) {
       this._reconcilePlayback();
@@ -572,6 +600,8 @@ export class CctvStreamPlayer extends LitElement {
     this._queued = false;
     this._stableStateObj = null;
     this._streamCamera = null;
+    this._failoverEntityId = "";
+    this._failoverTried = new Set();
   }
 
   _showIdle(reason = "idle") {
@@ -615,14 +645,32 @@ export class CctvStreamPlayer extends LitElement {
       return;
     }
 
-    const resolved = resolveStreamCamera(
-      this.hass,
-      this.camera,
-      this.config,
-      this._effectiveQuality,
-      this.context
-    );
-    this._syncStableStreamCamera(resolved);
+    const groupMembers = [
+      ...new Set([
+        ...(this.groupMembers || []),
+        ...(this.failoverEntityIds || []),
+        this.camera?.entityId,
+      ].filter(Boolean)),
+    ];
+    // Runtime failover overrides preferred entity until camera/group changes.
+    if (this._failoverEntityId && this.hass?.states?.[this._failoverEntityId]) {
+      this._syncStableStreamCamera(
+        cameraFromState(
+          this._failoverEntityId,
+          this.hass.states[this._failoverEntityId]
+        )
+      );
+    } else {
+      const resolved = resolveStreamCamera(
+        this.hass,
+        this.camera,
+        this.config,
+        this._effectiveQuality,
+        this.context,
+        groupMembers
+      );
+      this._syncStableStreamCamera(resolved);
+    }
     const nextSlotId = this._streamCamera?.entityId || this.camera.entityId;
     // Quality/substream resolution can change entity id after hass loads.
     // Releasing the previous id prevents ghost holders that fill the max-stream
@@ -766,8 +814,115 @@ export class CctvStreamPlayer extends LitElement {
       }
     }
 
+    // Preferred stream could not open any live transport — try group siblings.
+    if (await this._tryGroupFailover(token)) return;
+
     this._mode = this._stillUrl ? "still" : "empty";
     if (!this._stillUrl) this._error = "No stream or preview available";
+  }
+
+  /**
+   * Try the next physical-group stream after live transports fail.
+   * @param {number} token
+   * @returns {Promise<boolean>}
+   */
+  async _tryGroupFailover(token) {
+    const preferred = this.camera?.entityId || "";
+    const candidates = [
+      ...new Set(
+        [...(this.failoverEntityIds || []), ...(this.groupMembers || [])]
+          .map(String)
+          .filter((id) => id.startsWith("camera."))
+      ),
+    ].filter((id) => id !== preferred);
+
+    // Prefer fluent/substream-like first.
+    const soft = [];
+    const other = [];
+    for (const id of candidates) {
+      const name = id.replace(/^camera\./, "");
+      if (
+        ["_fluent", "_sub", "_lq", "_low", "_sd", "_substream"].some((s) =>
+          name.endsWith(s)
+        )
+      ) {
+        soft.push(id);
+      } else {
+        other.push(id);
+      }
+    }
+    const ordered = [...soft, ...other];
+
+    if (!this._failoverTried) this._failoverTried = new Set();
+    const current =
+      this._failoverEntityId ||
+      this._streamCamera?.entityId ||
+      preferred;
+    if (current) this._failoverTried.add(current);
+
+    for (const nextId of ordered) {
+      if (token !== this._startToken || !this._slotHeld) return false;
+      if (this._failoverTried.has(nextId)) continue;
+      if (!this.hass?.states?.[nextId]) continue;
+      this._failoverTried.add(nextId);
+
+      const nextCam = cameraFromState(nextId, this.hass.states[nextId]);
+      if (!nextCam?.stateObj) continue;
+
+      // Swap slot holder to the failover entity.
+      if (this._slotId && this._slotId !== nextId) {
+        streamSlots.release(this._slotId);
+        this._slotHeld = false;
+      }
+      this._failoverEntityId = nextId;
+      this._streamCamera = nextCam;
+      this._stableStateObj = nextCam.stateObj;
+      this._slotId = nextId;
+      this._playKey = "";
+
+      const granted = streamSlots.request(nextId, this._priority, {
+        onGrant: () => {
+          this._slotHeld = true;
+          this._queued = false;
+        },
+        onRevoke: () => {
+          this._slotHeld = false;
+          this._queued = this._wantsLive();
+          this._playKey = "";
+          this._showIdle("queued");
+        },
+      });
+      if (!granted) {
+        this._queued = true;
+        this._showIdle("queued");
+        return false;
+      }
+      this._slotHeld = true;
+
+      this.dispatchEvent(
+        new CustomEvent("cctv-stream-failover", {
+          detail: {
+            from: preferred,
+            to: nextId,
+            groupMembers: this.groupMembers || [],
+          },
+          bubbles: true,
+          composed: true,
+        })
+      );
+
+      await this._startLive();
+      if (token !== this._startToken) return false;
+      if (
+        this._mode === "ha" ||
+        this._mode === "webrtc" ||
+        this._mode === "hls" ||
+        this._mode === "mjpeg"
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   _canPlayHlsNatively() {
@@ -910,6 +1065,16 @@ export class CctvStreamPlayer extends LitElement {
     let badge = this._mode;
     if (this._queued) badge = "queued";
     else if (!this._slotHeld && this._mode === "still") badge = this._idleReason || "idle";
+    else if (
+      this._failoverEntityId &&
+      this._failoverEntityId !== this.camera?.entityId &&
+      (this._mode === "ha" ||
+        this._mode === "webrtc" ||
+        this._mode === "hls" ||
+        this._mode === "mjpeg")
+    ) {
+      badge = `failover`;
+    }
 
     return html`
       ${this._renderMedia()}

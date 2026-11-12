@@ -63,7 +63,9 @@ import {
 } from "./recordings-api.js";
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
 import {
+  failoverStreamOrder,
   groupForCamera,
+  groupMembersForCamera,
   normalizeStreamGroups,
   removeStreamGroup,
   suggestGroupMembersFromDevice,
@@ -970,13 +972,29 @@ export class CctvView extends LitElement {
   async _toggleVisible(entityId, checked) {
     const max = this._maxStreams();
     let next = [...this._visibleIds];
+    const group = groupForCamera(this._streamGroups, entityId);
+    const groupMembers = new Set(group?.members || []);
     if (checked) {
       if (next.includes(entityId)) return;
-      if (next.length >= max) {
-        this._status = `Select at most ${max} cameras`;
-        return;
+      // One mosaic slot per physical group — swap sibling if already selected.
+      if (groupMembers.size) {
+        const existing = next.find((id) => groupMembers.has(id));
+        if (existing) {
+          next = next.map((id) => (id === existing ? entityId : id));
+        } else {
+          if (next.length >= max) {
+            this._status = `Select at most ${max} cameras`;
+            return;
+          }
+          next.push(entityId);
+        }
+      } else {
+        if (next.length >= max) {
+          this._status = `Select at most ${max} cameras`;
+          return;
+        }
+        next.push(entityId);
       }
-      next.push(entityId);
     } else {
       next = next.filter((id) => id !== entityId);
     }
@@ -985,6 +1003,38 @@ export class CctvView extends LitElement {
       this._detailId = null;
     }
     // Selection change while event playback is up — free clips and remount live.
+    if (this._playback) this._returnToLive();
+    await this._persistSelection(next);
+  }
+
+  /**
+   * Change preferred live stream within a physical group (same mosaic slot).
+   * @param {string} previousId
+   * @param {string} nextId
+   */
+  async _setPreferredStream(previousId, nextId) {
+    const prev = String(previousId || "");
+    const nextStream = String(nextId || "");
+    if (!nextStream.startsWith("camera.") || prev === nextStream) return;
+    const group = groupForCamera(this._streamGroups, prev);
+    if (group && !group.members.includes(nextStream)) return;
+    let next = [...this._visibleIds];
+    const idx = next.indexOf(prev);
+    if (idx >= 0) next[idx] = nextStream;
+    else if (!next.includes(nextStream)) {
+      if (next.length >= this._maxStreams()) {
+        this._status = `Select at most ${this._maxStreams()} cameras`;
+        return;
+      }
+      next.push(nextStream);
+    }
+    // Drop any other group siblings from selection.
+    if (group) {
+      next = next.filter(
+        (id) => id === nextStream || !group.members.includes(id)
+      );
+    }
+    this._visibleIds = next;
     if (this._playback) this._returnToLive();
     await this._persistSelection(next);
   }
@@ -1283,6 +1333,17 @@ export class CctvView extends LitElement {
     this._cameraQuality = normalizeCameraQualityMap(next);
     this._syncPrefsDirty();
     this._qualityTick += 1;
+  }
+
+  /** Choose-cameras quality change: draft + persist shared map immediately. */
+  async _setPickerQuality(entityId, quality) {
+    this._setQuality(entityId, quality);
+    if (!this.panelMode) return;
+    try {
+      await this._saveCameraPrefs();
+    } catch (err) {
+      this._status = err?.message || "Could not save quality";
+    }
   }
 
   async _run(service, entityId) {
@@ -2401,43 +2462,156 @@ export class CctvView extends LitElement {
     `;
   }
 
+  /**
+   * Picker rows: one per physical group + ungrouped cameras.
+   * @param {ReturnType<typeof listCameras>} cameras
+   */
+  _pickerRows(cameras) {
+    const byId = new Map(cameras.map((c) => [c.entityId, c]));
+    const seen = new Set();
+    /** @type {Array<{ type: "group", group: any, members: any[], selectedId: string | null } | { type: "camera", cam: any }>} */
+    const rows = [];
+    for (const cam of cameras) {
+      if (seen.has(cam.entityId)) continue;
+      const group = this._groupFor(cam.entityId);
+      if (group) {
+        for (const mid of group.members) seen.add(mid);
+        const members = group.members
+          .map((id) => byId.get(id) || cameraFromState(id, this.hass?.states?.[id]))
+          .filter(Boolean);
+        const selectedId =
+          this._visibleIds.find((id) => group.members.includes(id)) || null;
+        rows.push({ type: "group", group, members, selectedId });
+      } else {
+        seen.add(cam.entityId);
+        rows.push({ type: "camera", cam });
+      }
+    }
+    return rows;
+  }
+
   _renderPicker(cameras, maxStreams) {
     if (!cameras.length) {
       return html`<p class="empty">No camera entities found.</p>`;
     }
+    const rows = this._pickerRows(cameras);
     return html`
       <section class="picker" aria-label="Camera selection">
         <div class="picker-head">
           <strong>Visible streams</strong>
           <span class="hint">
-            Select 1–${maxStreams}. Layout updates automatically. Saved to your HA profile (per user).
-            Group high-res + fluent under one physical camera in camera settings — sensors are shared.
+            Select 1–${maxStreams}. For grouped physical cameras, pick which stream and quality.
+            Live failover uses another group stream if the preferred one fails.
+            Selection is per user; sensors/groups stay shared.
           </span>
         </div>
         <div class="picker-list">
-          ${cameras.map((cam) => {
+          ${rows.map((row) => {
+            if (row.type === "group") {
+              const selectedId = row.selectedId;
+              const checked = Boolean(selectedId);
+              const disabled = !checked && this._visibleIds.length >= maxStreams;
+              const preferred = selectedId || row.members[0]?.entityId || "";
+              const quality = preferred ? this._qualityFor(preferred) : "auto";
+              const linked = preferred ? this._linksFor(preferred).length : 0;
+              return html`
+                <div class="picker-item picker-group ${disabled ? "disabled" : ""}">
+                  <label class="picker-group-main">
+                    <input
+                      type="checkbox"
+                      .checked=${checked}
+                      ?disabled=${disabled && !checked}
+                      @change=${(e) =>
+                        this._toggleVisible(
+                          preferred || row.members[0]?.entityId,
+                          e.target.checked
+                        )}
+                    />
+                    <span class="picker-name">
+                      ${row.group.name}
+                      <span class="group-badge">${row.members.length} streams</span>
+                    </span>
+                  </label>
+                  <span class="picker-id">
+                    ${linked
+                      ? `${linked} sensor${linked === 1 ? "" : "s"} shared`
+                      : "No sensors linked yet"}
+                  </span>
+                  <div class="picker-stream-controls">
+                    <label>
+                      Stream
+                      <select
+                        .value=${preferred}
+                        ?disabled=${!checked || this._saving}
+                        @change=${(e) =>
+                          this._setPreferredStream(
+                            selectedId || preferred,
+                            e.target.value
+                          )}
+                      >
+                        ${row.members.map(
+                          (m) =>
+                            html`<option value=${m.entityId}>
+                              ${m.name || m.entityId}
+                            </option>`
+                        )}
+                      </select>
+                    </label>
+                    <label>
+                      Quality
+                      <select
+                        .value=${quality}
+                        ?disabled=${!checked || this._saving}
+                        @change=${(e) =>
+                          this._setPickerQuality(preferred, e.target.value)}
+                      >
+                        ${QUALITY_OPTIONS.map(
+                          (opt) =>
+                            html`<option value=${opt.value}>${opt.label}</option>`
+                        )}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              `;
+            }
+            const cam = row.cam;
             const checked = this._visibleIds.includes(cam.entityId);
             const disabled = !checked && this._visibleIds.length >= maxStreams;
             const linked = this._linksFor(cam.entityId).length;
-            const group = this._groupFor(cam.entityId);
+            const quality = this._qualityFor(cam.entityId);
             return html`
-              <label class="picker-item ${disabled ? "disabled" : ""}">
-                <input
-                  type="checkbox"
-                  .checked=${checked}
-                  ?disabled=${disabled}
-                  @change=${(e) =>
-                    this._toggleVisible(cam.entityId, e.target.checked)}
-                />
-                <span class="picker-name">
-                  ${cam.name}${group
-                    ? html` <span class="group-badge">${group.name}</span>`
-                    : nothing}
-                </span>
+              <div class="picker-item ${disabled ? "disabled" : ""}">
+                <label class="picker-group-main">
+                  <input
+                    type="checkbox"
+                    .checked=${checked}
+                    ?disabled=${disabled}
+                    @change=${(e) =>
+                      this._toggleVisible(cam.entityId, e.target.checked)}
+                  />
+                  <span class="picker-name">${cam.name}</span>
+                </label>
                 <span class="picker-id">
-                  ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}${group ? ` · ${group.members.length} streams` : ""}
+                  ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}
                 </span>
-              </label>
+                <div class="picker-stream-controls">
+                  <label>
+                    Quality
+                    <select
+                      .value=${quality}
+                      ?disabled=${!checked || this._saving}
+                      @change=${(e) =>
+                        this._setPickerQuality(cam.entityId, e.target.value)}
+                    >
+                      ${QUALITY_OPTIONS.map(
+                        (opt) =>
+                          html`<option value=${opt.value}>${opt.label}</option>`
+                      )}
+                    </select>
+                  </label>
+                </div>
+              </div>
             `;
           })}
         </div>
@@ -2490,6 +2664,8 @@ export class CctvView extends LitElement {
 
   _renderLayoutTile(cam, packed, streamsActive = true) {
     const quality = this._qualityFor(cam.entityId);
+    const groupMembers = groupMembersForCamera(this._streamGroups, cam.entityId);
+    const failoverIds = failoverStreamOrder(cam.entityId, groupMembers);
     const linked = this._linksFor(cam.entityId).length;
     const packStyle = packed ? this._packStyles?.[cam.entityId] : "";
     const positioned = Boolean(packed && packStyle);
@@ -2566,8 +2742,16 @@ export class CctvView extends LitElement {
                     .camera=${cam}
                     .config=${this.config}
                     .quality=${quality}
+                    .groupMembers=${groupMembers}
+                    .failoverEntityIds=${failoverIds}
                     context="mosaic"
                     muted
+                    @cctv-stream-failover=${(e) => {
+                      const to = e?.detail?.to;
+                      if (to) {
+                        this._status = `Live failover → ${to.replace(/^camera\./, "")}`;
+                      }
+                    }}
                   ></cctv-stream-player>
                 `
               )}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.20.0 — 2026-11-12
+
+### Added
+
+- Choose cameras: pick **stream + quality** per physical camera group (one mosaic slot per group)
+- Live **failover** to another stream in the same physical group when the preferred live feed fails (fluent/substream preferred)
+
 ## 0.19.0 — 2026-11-12
 
 ### Added
