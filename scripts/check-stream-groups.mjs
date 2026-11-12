@@ -1,8 +1,10 @@
 /** Sanity checks for physical-camera stream groups. */
 import {
   camerasForSensorExpanded,
+  failoverStreamOrder,
   groupForCamera,
   normalizeStreamGroups,
+  pickLowStreamFromGroup,
   removeStreamGroup,
   suggestGroupMembersFromDevice,
   syncSensorLinksAcrossGroups,
@@ -108,5 +110,25 @@ assert(!suggested.includes("camera.other"), "other device excluded");
 
 const cleared = removeStreamGroup(next, "grp_driveway");
 assert(!groupForCamera(cleared, "camera.garden_driveway_fluent"), "ungroup");
+
+const failover = failoverStreamOrder(
+  "camera.driveway_high_resolution_channel",
+  [
+    "camera.driveway_high_resolution_channel",
+    "camera.garden_driveway_fluent",
+    "camera.driveway_clear",
+  ]
+);
+assert(failover[0] === "camera.garden_driveway_fluent", "failover prefers fluent");
+assert(
+  pickLowStreamFromGroup(
+    [
+      "camera.driveway_high_resolution_channel",
+      "camera.garden_driveway_fluent",
+    ],
+    "camera.driveway_high_resolution_channel"
+  ) === "camera.garden_driveway_fluent",
+  "low stream from group"
+);
 
 console.log("stream-groups checks ok");

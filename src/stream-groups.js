@@ -70,6 +70,62 @@ export function groupMembersForCamera(groups, cameraId) {
   return cam.startsWith("camera.") ? [cam] : [];
 }
 
+const FAILOVER_PREFERRED_SUFFIXES = [
+  "_fluent",
+  "_sub",
+  "_lq",
+  "_low",
+  "_sd",
+  "_substream",
+];
+
+/**
+ * Ordered failover candidates after the preferred stream fails live.
+ * Prefers fluent/substream-like entities (usually more recordable/reliable).
+ * @param {string} preferredId
+ * @param {string[] | null | undefined} members
+ * @returns {string[]}
+ */
+export function failoverStreamOrder(preferredId, members) {
+  const preferred = String(preferredId || "");
+  const rest = [...new Set((members || []).map(String))].filter(
+    (id) => id.startsWith("camera.") && id !== preferred
+  );
+  /** @type {string[]} */
+  const soft = [];
+  /** @type {string[]} */
+  const other = [];
+  for (const id of rest) {
+    const name = id.replace(/^camera\./, "");
+    if (FAILOVER_PREFERRED_SUFFIXES.some((suffix) => name.endsWith(suffix))) {
+      soft.push(id);
+    } else {
+      other.push(id);
+    }
+  }
+  return [...soft, ...other];
+}
+
+/**
+ * Pick a low/substream entity from group members for quality=low/auto mosaic.
+ * @param {string[] | null | undefined} members
+ * @param {string} preferredId
+ * @returns {string}
+ */
+export function pickLowStreamFromGroup(members, preferredId) {
+  const preferred = String(preferredId || "");
+  const list = [...new Set((members || []).map(String))].filter((id) =>
+    id.startsWith("camera.")
+  );
+  for (const suffix of FAILOVER_PREFERRED_SUFFIXES) {
+    const hit = list.find(
+      (id) => id !== preferred && id.replace(/^camera\./, "").endsWith(suffix)
+    );
+    if (hit) return hit;
+  }
+  return list.find((id) => id !== preferred) || "";
+}
+
 /**
  * Mirror sensor link lists across every group so each member has the same set.
  * @param {Record<string, string[]> | null | undefined} sensorLinks

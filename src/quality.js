@@ -1,4 +1,5 @@
 import { cameraFromState } from "./cameras.js";
+import { pickLowStreamFromGroup } from "./stream-groups.js";
 
 /**
  * Per-camera stream quality helpers.
@@ -132,8 +133,21 @@ function findSibling(hass, entityId, suffixes) {
 
 /**
  * Pick which camera entity to stream for the requested quality.
+ * @param {any} hass
+ * @param {any} camera
+ * @param {any} config
+ * @param {string} quality
+ * @param {string} [context]
+ * @param {string[] | null} [groupMembers] physical-camera group streams (HC-77)
  */
-export function resolveStreamCamera(hass, camera, config, quality, context = "mosaic") {
+export function resolveStreamCamera(
+  hass,
+  camera,
+  config,
+  quality,
+  context = "mosaic",
+  groupMembers = null
+) {
   const q = normalizeQuality(quality);
   const settings = getCameraSettings(config, camera.entityId);
   const states = hass?.states || {};
@@ -145,6 +159,7 @@ export function resolveStreamCamera(hass, camera, config, quality, context = "mo
   const lowEntity =
     settings.low_entity ||
     settings.substream_entity ||
+    pickLowStreamFromGroup(groupMembers, camera.entityId) ||
     findSibling(hass, camera.entityId, LOW_SUFFIXES) ||
     "";
 

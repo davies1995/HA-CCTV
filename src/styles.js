@@ -1181,6 +1181,40 @@ export const sharedStyles = css`
     vertical-align: middle;
   }
 
+  .picker-group,
+  .picker-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: stretch;
+  }
+
+  .picker-group-main {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+  }
+
+  .picker-stream-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.75rem;
+    margin-left: 1.55rem;
+  }
+
+  .picker-stream-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.78rem;
+    color: var(--cctv-muted);
+  }
+
+  .picker-stream-controls select {
+    min-width: 10rem;
+    max-width: 100%;
+  }
+
   .playback-media {
     width: 100%;
     height: 100%;
