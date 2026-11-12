@@ -2,6 +2,7 @@
 
 import { classifyDetectionSensor } from "./detection-sensors.js";
 import { recordingMediaUrl } from "./recordings-api.js";
+import { camerasForSensorExpanded } from "./stream-groups.js";
 
 /** Border colors — keep in sync with styles.js `.kind-*` / timeline marks. */
 export const DETECTION_KIND_COLORS = {
@@ -24,15 +25,30 @@ export function detectionKindColor(kindId) {
 
 /**
  * Cameras linked to any of the given trigger sensors (site-wide sensor_links).
+ * Expands physical-camera stream groups when provided.
  * @param {Record<string, string[]> | null | undefined} sensorLinks
  * @param {string[]} triggerSensors
+ * @param {import("./stream-groups.js").StreamGroup[] | null | undefined} [streamGroups]
  * @returns {string[]}
  */
-export function camerasForTriggerSensors(sensorLinks, triggerSensors) {
+export function camerasForTriggerSensors(
+  sensorLinks,
+  triggerSensors,
+  streamGroups = null
+) {
   const triggers = new Set(
     (triggerSensors || []).map(String).filter(Boolean)
   );
   if (!triggers.size) return [];
+  if (streamGroups?.length) {
+    const out = new Set();
+    for (const sid of triggers) {
+      for (const cam of camerasForSensorExpanded(sensorLinks, streamGroups, sid)) {
+        out.add(cam);
+      }
+    }
+    return [...out];
+  }
   const out = [];
   for (const [cameraId, sensors] of Object.entries(sensorLinks || {})) {
     if (!String(cameraId).startsWith("camera.")) continue;
@@ -53,13 +69,15 @@ export function camerasForTriggerSensors(sensorLinks, triggerSensors) {
  * @param {any} session
  * @param {Record<string, string[]> | null | undefined} sensorLinks
  * @param {{ kind?: { id?: string }, cameras?: string[], sensors?: Array<{ entityId?: string }> } | null} [eventDetail]
+ * @param {import("./stream-groups.js").StreamGroup[] | null | undefined} [streamGroups]
  * @returns {Record<string, { kindId: string, color: string }>}
  */
 export function triggerHighlightsForPlayback(
   hass,
   session,
   sensorLinks,
-  eventDetail = null
+  eventDetail = null,
+  streamGroups = null
 ) {
   /** @type {Record<string, { kindId: string, color: string }>} */
   const byCamera = {};
@@ -91,7 +109,11 @@ export function triggerHighlightsForPlayback(
       sensorId,
       hass?.states?.[sensorId]
     );
-    for (const cameraId of camerasForTriggerSensors(sensorLinks, [sensorId])) {
+    for (const cameraId of camerasForTriggerSensors(
+      sensorLinks,
+      [sensorId],
+      streamGroups
+    )) {
       assign(cameraId, kind.id);
     }
   }

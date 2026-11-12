@@ -3,6 +3,10 @@
 import { normalizeSensorLinks } from "./detection-sensors.js";
 import { normalizeForceAspectMap } from "./mosaic-pack.js";
 import { normalizeCameraQualityMap } from "./quality.js";
+import {
+  normalizeStreamGroups,
+  syncSensorLinksAcrossGroups,
+} from "./stream-groups.js";
 
 /**
  * Load site-wide settings (sensor links, force aspect, quality, retention).
@@ -13,9 +17,15 @@ export async function loadSharedConfig(hass) {
   try {
     const result = await hass.callWS({ type: "cctv_dashboard/get_settings" });
     if (!result || typeof result !== "object") return null;
+    const streamGroups = normalizeStreamGroups(result.stream_groups || []);
+    const sensorLinks = syncSensorLinksAcrossGroups(
+      normalizeSensorLinks(result.sensor_links || {}),
+      streamGroups
+    );
     return {
       ...result,
-      sensorLinks: normalizeSensorLinks(result.sensor_links || {}),
+      sensorLinks,
+      streamGroups,
       forceAspect: normalizeForceAspectMap(result.force_aspect || {}),
       cameraQuality: normalizeCameraQualityMap(result.camera_quality || {}),
     };
@@ -36,6 +46,20 @@ export async function saveSensorLinks(hass, sensorLinks) {
   return hass.callWS({
     type: "cctv_dashboard/set_sensor_links",
     sensor_links: cleaned,
+  });
+}
+
+/**
+ * Persist physical-camera stream groups (shared for all HA users).
+ * @param {any} hass
+ * @param {import("./stream-groups.js").StreamGroup[]} groups
+ */
+export async function saveStreamGroups(hass, groups) {
+  if (!hass?.callWS) return null;
+  const cleaned = normalizeStreamGroups(groups);
+  return hass.callWS({
+    type: "cctv_dashboard/set_stream_groups",
+    stream_groups: cleaned,
   });
 }
 

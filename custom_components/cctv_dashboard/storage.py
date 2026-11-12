@@ -42,6 +42,105 @@ def _normalize_links(raw: Any) -> dict[str, list[str]]:
     return out
 
 
+def _normalize_stream_groups(raw: Any) -> list[dict[str, Any]]:
+    """Physical-camera groups: multiple camera.* streams under one name."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    used: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        members: list[str] = []
+        for mid in item.get("members") or []:
+            cam = str(mid or "")
+            if not cam.startswith("camera.") or cam in used or cam in members:
+                continue
+            used.add(cam)
+            members.append(cam)
+            if len(members) >= 8:
+                break
+        if len(members) < 2:
+            continue
+        raw_id = str(item.get("id") or "").strip()
+        if raw_id and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", raw_id):
+            group_id = raw_id
+        else:
+            group_id = f"grp_{members[0].removeprefix('camera.')[:40]}"
+        name = str(item.get("name") or "").strip()[:64]
+        if not name:
+            name = members[0].removeprefix("camera.").replace("_", " ")
+        out.append({"id": group_id, "name": name, "members": members})
+        if len(out) >= 32:
+            break
+    return out
+
+
+def sync_sensor_links_across_groups(
+    links: dict[str, list[str]], groups: list[dict[str, Any]]
+) -> dict[str, list[str]]:
+    """Mirror sensor lists onto every member of each stream group."""
+    next_links = {str(k): list(v) for k, v in (links or {}).items()}
+    for group in groups or []:
+        members = [
+            str(m)
+            for m in (group.get("members") or [])
+            if str(m).startswith("camera.")
+        ]
+        if len(members) < 2:
+            continue
+        union: list[str] = []
+        seen: set[str] = set()
+        for mid in members:
+            for sid in next_links.get(mid) or []:
+                s = str(sid)
+                if s in seen:
+                    continue
+                seen.add(s)
+                union.append(s)
+                if len(union) >= 16:
+                    break
+            if len(union) >= 16:
+                break
+        for mid in members:
+            if union:
+                next_links[mid] = list(union)
+            else:
+                next_links.pop(mid, None)
+    return _normalize_links(next_links)
+
+
+def cameras_for_sensor_expanded(
+    links: dict[str, list[str]],
+    groups: list[dict[str, Any]],
+    sensor_id: str,
+) -> list[str]:
+    """Cameras linked to sensor_id, expanded by physical-camera stream groups."""
+    sid = str(sensor_id or "")
+    if not sid:
+        return []
+    direct = [
+        cam
+        for cam, sensors in (links or {}).items()
+        if sid in (sensors or [])
+    ]
+    member_map: dict[str, list[str]] = {}
+    for group in groups or []:
+        members = [
+            str(m)
+            for m in (group.get("members") or [])
+            if str(m).startswith("camera.")
+        ]
+        for mid in members:
+            member_map[mid] = members
+    out: set[str] = set()
+    for cam in direct:
+        for mid in member_map.get(cam) or [cam]:
+            if str(mid).startswith("camera."):
+                out.add(str(mid))
+    return sorted(out)
+
+
 # Known presets; custom W:H / WxH values are also accepted.
 FORCE_ASPECT_LABELS = {
     "16:9",
@@ -155,6 +254,7 @@ def default_data() -> dict[str, Any]:
     # Per-user camera mosaic selection stays in frontend user data.
     return {
         "sensor_links": {},
+        "stream_groups": [],
         "force_aspect": {},
         "camera_quality": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
@@ -175,7 +275,13 @@ class PanelStore:
         loaded = await self._store.async_load()
         data = default_data()
         if isinstance(loaded, dict):
-            data["sensor_links"] = _normalize_links(loaded.get("sensor_links"))
+            data["stream_groups"] = _normalize_stream_groups(
+                loaded.get("stream_groups")
+            )
+            data["sensor_links"] = sync_sensor_links_across_groups(
+                _normalize_links(loaded.get("sensor_links")),
+                data["stream_groups"],
+            )
             data["force_aspect"] = _normalize_force_aspect(loaded.get("force_aspect"))
             data["camera_quality"] = _normalize_camera_quality(
                 loaded.get("camera_quality")
@@ -202,8 +308,18 @@ class PanelStore:
     async def async_save(self, patch: dict[str, Any] | None = None) -> dict[str, Any]:
         data = dict(self.data)
         if patch:
+            if "stream_groups" in patch:
+                data["stream_groups"] = _normalize_stream_groups(
+                    patch["stream_groups"]
+                )
             if "sensor_links" in patch:
                 data["sensor_links"] = _normalize_links(patch["sensor_links"])
+            # Keep sensor lists aligned whenever groups or links change.
+            if "stream_groups" in patch or "sensor_links" in patch:
+                data["sensor_links"] = sync_sensor_links_across_groups(
+                    data.get("sensor_links") or {},
+                    data.get("stream_groups") or [],
+                )
             if "force_aspect" in patch:
                 data["force_aspect"] = _normalize_force_aspect(patch["force_aspect"])
             if "camera_quality" in patch:

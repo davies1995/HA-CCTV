@@ -55,12 +55,21 @@ import {
   saveCameraPrefs,
   saveRecordingSettings,
   saveSensorLinks,
+  saveStreamGroups,
   saveUserNotifyPreference,
   signPlaybackTracks,
   mediaApiPathFromClip,
   signRecordingUrl,
 } from "./recordings-api.js";
 import { loadPanelData, savePanelSelection } from "./selection-store.js";
+import {
+  groupForCamera,
+  normalizeStreamGroups,
+  removeStreamGroup,
+  suggestGroupMembersFromDevice,
+  syncSensorLinksAcrossGroups,
+  upsertStreamGroup,
+} from "./stream-groups.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import {
   contentBoxWidth,
@@ -94,6 +103,12 @@ export class CctvView extends LitElement {
     _visibleIds: { state: true },
     /** @type {Record<string, string[]>} */
     _sensorLinks: { state: true },
+    /** @type {import("./stream-groups.js").StreamGroup[]} physical-camera groups */
+    _streamGroups: { state: true },
+    /** Draft member entity ids while editing a stream group on detail. */
+    _groupDraftMembers: { state: true },
+    /** Draft display name for the stream group on detail. */
+    _groupDraftName: { state: true },
     /** @type {Record<string, string>} draft forced aspect labels */
     _forceAspect: { state: true },
     /** @type {Record<string, string>} last saved forced aspect */
@@ -155,6 +170,9 @@ export class CctvView extends LitElement {
     this._qualityTick = 0;
     this._visibleIds = [];
     this._sensorLinks = {};
+    this._streamGroups = [];
+    this._groupDraftMembers = [];
+    this._groupDraftName = "";
     this._forceAspect = {};
     this._savedForceAspect = {};
     this._cameraQuality = {};
@@ -733,7 +751,11 @@ export class CctvView extends LitElement {
       }
     }
 
-    this._sensorLinks = links;
+    this._streamGroups = normalizeStreamGroups(shared?.streamGroups || []);
+    this._sensorLinks = syncSensorLinksAcrossGroups(
+      links,
+      this._streamGroups
+    );
     if (shared) {
       this._retentionDays = Number(shared.retention_days) || 1;
       this._recordOnDetection = shared.record_on_detection !== false;
@@ -778,7 +800,15 @@ export class CctvView extends LitElement {
       this._recordDir = settings.record_dir || "";
       this._recordingDebug = String(settings.recording_debug || "");
       this._recordingDebugSummary = String(settings.recording_debug_summary || "");
-      if (settings.sensorLinks) this._sensorLinks = settings.sensorLinks;
+      if (settings.streamGroups) {
+        this._streamGroups = normalizeStreamGroups(settings.streamGroups);
+      }
+      if (settings.sensorLinks) {
+        this._sensorLinks = syncSensorLinksAcrossGroups(
+          settings.sensorLinks,
+          this._streamGroups
+        );
+      }
       // Don't clobber unsaved quality/aspect drafts while editing.
       if (!this._prefsDirty) this._applySharedCameraPrefs(settings);
     } else if (this.config?.retention_days) {
@@ -920,6 +950,23 @@ export class CctvView extends LitElement {
     return this._sensorLinks?.[cameraId] || [];
   }
 
+  _groupFor(cameraId) {
+    return groupForCamera(this._streamGroups, cameraId);
+  }
+
+  _applyStreamGroupsResult(saved) {
+    if (!saved || typeof saved !== "object") return;
+    if (Array.isArray(saved.stream_groups)) {
+      this._streamGroups = normalizeStreamGroups(saved.stream_groups);
+    }
+    if (saved.sensor_links) {
+      this._sensorLinks = syncSensorLinksAcrossGroups(
+        saved.sensor_links,
+        this._streamGroups
+      );
+    }
+  }
+
   async _toggleVisible(entityId, checked) {
     const max = this._maxStreams();
     let next = [...this._visibleIds];
@@ -960,11 +1007,15 @@ export class CctvView extends LitElement {
 
   async _persistSensorLinks(next) {
     this._saving = true;
-    this._sensorLinks = next;
+    const synced = syncSensorLinksAcrossGroups(next, this._streamGroups);
+    this._sensorLinks = synced;
     try {
-      const saved = await saveSensorLinks(this.hass, next);
+      const saved = await saveSensorLinks(this.hass, synced);
       if (saved?.sensor_links) {
-        this._sensorLinks = saved.sensor_links;
+        this._sensorLinks = syncSensorLinksAcrossGroups(
+          saved.sensor_links,
+          this._streamGroups
+        );
       }
       this._status = "Detection sensors saved for all users";
     } catch (err) {
@@ -1050,15 +1101,21 @@ export class CctvView extends LitElement {
   }
 
   async _setSensorLinked(cameraId, sensorId, linked) {
+    const members = groupForCamera(this._streamGroups, cameraId)?.members || [
+      cameraId,
+    ];
     const current = new Set(this._linksFor(cameraId));
     if (linked) current.add(sensorId);
     else current.delete(sensorId);
-    const next = {
-      ...this._sensorLinks,
-      [cameraId]: [...current],
-    };
-    if (!next[cameraId].length) delete next[cameraId];
-    await this._persistSensorLinks(next);
+    const shared = [...current];
+    const next = { ...this._sensorLinks };
+    for (const mid of members) {
+      if (shared.length) next[mid] = [...shared];
+      else delete next[mid];
+    }
+    await this._persistSensorLinks(
+      syncSensorLinksAcrossGroups(next, this._streamGroups)
+    );
   }
 
   async _applySuggestions(cameraId) {
@@ -1070,17 +1127,124 @@ export class CctvView extends LitElement {
       this._status = "No related detection sensors found";
       return;
     }
-    const next = {
-      ...this._sensorLinks,
-      [cameraId]: [
-        ...new Set([
-          ...this._linksFor(cameraId),
-          ...suggestions.map((s) => s.entityId),
-        ]),
-      ].slice(0, 16),
-    };
-    await this._persistSensorLinks(next);
+    const members = groupForCamera(this._streamGroups, cameraId)?.members || [
+      cameraId,
+    ];
+    const shared = [
+      ...new Set([
+        ...this._linksFor(cameraId),
+        ...suggestions.map((s) => s.entityId),
+      ]),
+    ].slice(0, 16);
+    const next = { ...this._sensorLinks };
+    for (const mid of members) next[mid] = [...shared];
+    await this._persistSensorLinks(
+      syncSensorLinksAcrossGroups(next, this._streamGroups)
+    );
     this._status = `Linked ${suggestions.length} suggested sensor${suggestions.length === 1 ? "" : "s"} (all users)`;
+  }
+
+  async _persistStreamGroups(groups) {
+    this._saving = true;
+    try {
+      const normalized = normalizeStreamGroups(groups);
+      const syncedLinks = syncSensorLinksAcrossGroups(
+        this._sensorLinks,
+        normalized
+      );
+      const saved = await saveStreamGroups(this.hass, normalized);
+      this._applyStreamGroupsResult(saved);
+      if (!saved?.stream_groups) {
+        this._streamGroups = normalized;
+        // Persist mirrored sensor links when WS response is minimal.
+        await this._persistSensorLinks(syncedLinks);
+      } else if (saved?.sensor_links == null && Object.keys(syncedLinks).length) {
+        await this._persistSensorLinks(syncedLinks);
+      }
+      this._status = "Stream groups saved for all users";
+    } catch (err) {
+      this._status = err?.message || "Could not save stream groups";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  _syncGroupDraftFromCamera(cameraId) {
+    const group = groupForCamera(this._streamGroups, cameraId);
+    if (group) {
+      this._groupDraftMembers = [...group.members];
+      this._groupDraftName = group.name || "";
+      return;
+    }
+    this._groupDraftMembers = [cameraId];
+    this._groupDraftName = "";
+  }
+
+  _toggleGroupDraftMember(cameraId, memberId, checked) {
+    const cam = String(cameraId);
+    const mid = String(memberId);
+    let next = [...(this._groupDraftMembers || [])];
+    if (!next.includes(cam)) next.unshift(cam);
+    if (checked) {
+      if (!next.includes(mid)) next.push(mid);
+    } else {
+      next = next.filter((id) => id !== mid);
+      if (!next.includes(cam)) next.unshift(cam);
+    }
+    this._groupDraftMembers = [...new Set(next)].slice(0, 8);
+  }
+
+  async _saveGroupDraft(cameraId) {
+    const members = [...new Set([cameraId, ...(this._groupDraftMembers || [])])]
+      .filter((id) => String(id).startsWith("camera."))
+      .slice(0, 8);
+    if (members.length < 2) {
+      this._status = "Add at least one other stream to form a physical camera";
+      return;
+    }
+    const existing = groupForCamera(this._streamGroups, cameraId);
+    const next = upsertStreamGroup(this._streamGroups, {
+      id: existing?.id,
+      name: this._groupDraftName,
+      members,
+    });
+    await this._persistStreamGroups(next);
+    this._syncGroupDraftFromCamera(cameraId);
+  }
+
+  async _suggestGroupFromDevice(cameraId) {
+    await this._loadDeviceMap();
+    const suggested = suggestGroupMembersFromDevice(cameraId, {
+      cameras: this._cameras(),
+      deviceMap: this._deviceMap,
+      groups: this._streamGroups,
+    });
+    if (!suggested.length) {
+      this._status = "No same-device camera streams found to group";
+      return;
+    }
+    this._groupDraftMembers = [
+      ...new Set([cameraId, ...this._groupDraftMembers, ...suggested]),
+    ].slice(0, 8);
+    if (!this._groupDraftName) {
+      this._groupDraftName = cameraId
+        .replace(/^camera\./, "")
+        .replace(/_high_resolution_channel$/, "")
+        .replace(/_/g, " ");
+    }
+    this._status = `Suggested ${suggested.length} stream${suggested.length === 1 ? "" : "s"} from the same device`;
+  }
+
+  async _ungroupCamera(cameraId) {
+    const group = groupForCamera(this._streamGroups, cameraId);
+    if (!group) {
+      this._status = "This stream is not in a group";
+      return;
+    }
+    await this._persistStreamGroups(
+      removeStreamGroup(this._streamGroups, group.id)
+    );
+    this._syncGroupDraftFromCamera(cameraId);
   }
 
   _openDetail(entityId) {
@@ -1089,12 +1253,15 @@ export class CctvView extends LitElement {
     const current = this._forceAspect?.[entityId];
     this._customAspectDraft =
       current && !isPresetForceAspect(current) ? current : "";
+    this._syncGroupDraftFromCamera(entityId);
   }
 
   _back() {
     this._detailId = null;
     this._sensorFilter = "";
     this._customAspectDraft = "";
+    this._groupDraftMembers = [];
+    this._groupDraftName = "";
   }
 
   /**
@@ -1352,7 +1519,8 @@ export class CctvView extends LitElement {
         this.hass,
         session,
         this._sensorLinks,
-        event
+        event,
+        this._streamGroups
       ),
     };
     const n = resolved.cameraIds.length;
@@ -2241,13 +2409,17 @@ export class CctvView extends LitElement {
       <section class="picker" aria-label="Camera selection">
         <div class="picker-head">
           <strong>Visible streams</strong>
-          <span class="hint">Select 1–${maxStreams}. Layout updates automatically. Saved to your HA profile (per user).</span>
+          <span class="hint">
+            Select 1–${maxStreams}. Layout updates automatically. Saved to your HA profile (per user).
+            Group high-res + fluent under one physical camera in camera settings — sensors are shared.
+          </span>
         </div>
         <div class="picker-list">
           ${cameras.map((cam) => {
             const checked = this._visibleIds.includes(cam.entityId);
             const disabled = !checked && this._visibleIds.length >= maxStreams;
             const linked = this._linksFor(cam.entityId).length;
+            const group = this._groupFor(cam.entityId);
             return html`
               <label class="picker-item ${disabled ? "disabled" : ""}">
                 <input
@@ -2257,9 +2429,13 @@ export class CctvView extends LitElement {
                   @change=${(e) =>
                     this._toggleVisible(cam.entityId, e.target.checked)}
                 />
-                <span class="picker-name">${cam.name}</span>
+                <span class="picker-name">
+                  ${cam.name}${group
+                    ? html` <span class="group-badge">${group.name}</span>`
+                    : nothing}
+                </span>
                 <span class="picker-id">
-                  ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}
+                  ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}${group ? ` · ${group.members.length} streams` : ""}
                 </span>
               </label>
             `;
@@ -2606,13 +2782,109 @@ export class CctvView extends LitElement {
           More info
         </button>
       </div>
+      ${this.panelMode ? this._renderStreamGroupSettings(cam) : nothing}
       ${this.panelMode ? this._renderSensorSettings(cam) : nothing}
+    `;
+  }
+
+  _renderStreamGroupSettings(cam) {
+    const group = this._groupFor(cam.entityId);
+    const draft = new Set(this._groupDraftMembers || [cam.entityId]);
+    if (!draft.has(cam.entityId)) draft.add(cam.entityId);
+    const cameras = this._cameras();
+    const usedElsewhere = new Set();
+    for (const g of this._streamGroups || []) {
+      if (group && g.id === group.id) continue;
+      for (const mid of g.members || []) usedElsewhere.add(mid);
+    }
+    const candidates = cameras.filter(
+      (c) => c.entityId === cam.entityId || !usedElsewhere.has(c.entityId)
+    );
+    return html`
+      <section class="sensor-settings" aria-label="Physical camera stream group">
+        <div class="picker-head">
+          <strong>Physical camera (stream group)</strong>
+          <span class="hint">
+            Combine high-res + fluent (or other) <code>camera.*</code> streams into one physical camera.
+            Detection sensors are assigned once and apply to <strong>all streams in the group</strong>
+            (shared for all users). Mosaic still selects which stream(s) to show live.
+          </span>
+        </div>
+        <div class="quality-row">
+          <label>
+            Group name
+            <input
+              type="text"
+              class="aspect-input"
+              placeholder="Driveway"
+              .value=${this._groupDraftName || ""}
+              @input=${(e) => (this._groupDraftName = e.target.value)}
+            />
+          </label>
+          <span class="hint">${group ? `Saved as ${group.id}` : "Not grouped yet"}</span>
+        </div>
+        <div class="sensor-candidates">
+          <p class="hint">Streams in this physical camera</p>
+          ${candidates.map((c) => {
+            const checked = draft.has(c.entityId);
+            const locked = c.entityId === cam.entityId;
+            return html`
+              <label class="sensor-item ${locked ? "disabled" : ""}">
+                <input
+                  type="checkbox"
+                  .checked=${checked}
+                  ?disabled=${locked || this._saving}
+                  @change=${(e) =>
+                    this._toggleGroupDraftMember(
+                      cam.entityId,
+                      c.entityId,
+                      e.target.checked
+                    )}
+                />
+                <span class="sensor-name">${c.name}</span>
+                <span class="picker-id">${c.entityId}</span>
+              </label>
+            `;
+          })}
+        </div>
+        <div class="sensor-tools">
+          <button
+            class="btn primary"
+            type="button"
+            ?disabled=${this._saving}
+            @click=${() => this._saveGroupDraft(cam.entityId)}
+          >
+            ${this._saving ? "Saving…" : "Save stream group"}
+          </button>
+          <button
+            class="btn"
+            type="button"
+            ?disabled=${this._saving}
+            @click=${() => this._suggestGroupFromDevice(cam.entityId)}
+          >
+            Suggest from device
+          </button>
+          ${group
+            ? html`
+                <button
+                  class="btn"
+                  type="button"
+                  ?disabled=${this._saving}
+                  @click=${() => this._ungroupCamera(cam.entityId)}
+                >
+                  Ungroup
+                </button>
+              `
+            : nothing}
+        </div>
+      </section>
     `;
   }
 
   _renderSensorSettings(cam) {
     const linkedIds = this._linksFor(cam.entityId);
     const linked = describeLinkedSensors(this.hass, linkedIds);
+    const group = this._groupFor(cam.entityId);
     const suggestions = suggestDetectionSensors(this.hass, cam.entityId, {
       deviceIds: this._deviceMap,
       limit: 12,
@@ -2638,6 +2910,9 @@ export class CctvView extends LitElement {
           <span class="hint">
             Link person / car / animal / package sensors for the timeline and recordings.
             Associations are <strong>shared for all Home Assistant users</strong> (site-wide).
+            ${group
+              ? html` Assigned once for physical camera <strong>${group.name}</strong> (${group.members.length} streams). `
+              : nothing}
             Suggestions use name + device heuristics; confirm or pick manually.
           </span>
         </div>

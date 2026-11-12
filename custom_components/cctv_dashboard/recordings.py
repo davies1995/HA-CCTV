@@ -29,7 +29,7 @@ from .const import (
     RECORDINGS_URL_BASE,
     SNAPSHOT_INTERVAL_SECONDS,
 )
-from .storage import PanelStore
+from .storage import PanelStore, cameras_for_sensor_expanded
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -511,12 +511,10 @@ class RecordingManager:
 
     def _cameras_for_sensor(self, sensor_id: str) -> list[str]:
         links = self.store.data.get("sensor_links") or {}
-        cams = [
-            cam
-            for cam, sensors in links.items()
-            if sensor_id in (sensors or [])
-        ]
-        return sorted(cams)
+        groups = self.store.data.get("stream_groups") or []
+        # Expand via physical-camera stream groups so sensors assigned once
+        # apply to every stream member (high-res + fluent, etc.).
+        return cameras_for_sensor_expanded(links, groups, sensor_id)
 
     def _enabled_record_kinds(self) -> set[str]:
         raw = self.store.data.get("record_detection_kinds")
