@@ -1168,6 +1168,19 @@ export const sharedStyles = css`
     gap: 0.35rem;
   }
 
+  .group-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid var(--cctv-border);
+    background: color-mix(in srgb, var(--cctv-accent) 16%, transparent);
+    color: var(--cctv-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+
   .playback-media {
     width: 100%;
     height: 100%;

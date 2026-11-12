@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.19.0 — 2026-11-12
+
+### Added
+
+- **Physical camera stream groups**: combine multiple `camera.*` streams (e.g. high-res + fluent) under one name in camera settings; detection sensors are assigned once and apply to all streams in the group (shared site-wide). Choose cameras shows group badges; **Suggest from device** uses the entity registry
+
 ## 0.18.11 — 2026-11-11
 
 ### Fixed
