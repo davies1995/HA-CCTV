@@ -289,8 +289,8 @@ async def ws_sync_panel(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "cctv_dashboard/list_recordings",
-        vol.Optional("limit", default=40): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=200)
+        vol.Optional("limit", default=200): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=500)
         ),
     }
 )
@@ -304,8 +304,21 @@ async def ws_list_recordings(
     if not manager:
         connection.send_error(msg["id"], "not_ready", "Recording manager not ready")
         return
+    # Finalize orphan active sessions before the UI lists "recording…".
+    try:
+        await manager.async_reconcile_active_session()
+    except Exception:  # noqa: BLE001
+        pass
+    limit = msg["limit"]
+    sessions = manager.list_sessions(limit=limit)
+    total_bytes = sum(int(item.get("total_bytes") or 0) for item in sessions)
     connection.send_result(
-        msg["id"], {"sessions": manager.list_sessions(limit=msg["limit"])}
+        msg["id"],
+        {
+            "sessions": sessions,
+            "total_bytes": total_bytes,
+            "count": len(sessions),
+        },
     )
 
 

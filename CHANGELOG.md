@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.20.3 — 2026-11-13
+
+### Added
+
+- Saved detections: **10 per page** with Previous/Next; shared **total file size** shown near Clear all for all users
+
+### Fixed
+
+- Stuck **recording…** sessions finalize when sensors clear or after a 15‑minute max; admins can Delete in-progress rows; Play works once media exists
+
 ## 0.20.2 — 2026-11-12
 
 ### Fixed
