@@ -1,7 +1,7 @@
 """Constants for the CCTV Dashboard integration."""
 
 DOMAIN = "cctv_dashboard"
-VERSION = "0.20.2"
+VERSION = "0.20.3"
 PANEL_URL_PATH = "cctv"
 URL_BASE = "/cctv_dashboard"
 JS_FILENAME = "cctv-dashboard.js"
@@ -43,6 +43,8 @@ DEFAULT_RECORD_DETECTION_KINDS = list(RECORD_DETECTION_KIND_IDS)
 RECORD_CHUNK_SECONDS = 30
 RECORD_LOOKBACK_SECONDS = 5
 SNAPSHOT_INTERVAL_SECONDS = 10
+# Hard cap so a stuck ON sensor cannot leave "recording…" forever.
+MAX_RECORD_SESSION_SECONDS = 15 * 60
 
 STORAGE_KEY = f"{DOMAIN}.panel"
 STORAGE_VERSION = 1

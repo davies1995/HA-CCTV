@@ -1042,6 +1042,28 @@ export const sharedStyles = css`
     justify-content: flex-end;
   }
 
+  .recording-total {
+    margin-right: 0.25rem;
+    color: var(--cctv-muted);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .recording-pager {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.65rem;
+  }
+
+  .recording-page-label {
+    color: var(--cctv-muted);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+
   .recording-list {
     display: flex;
     flex-direction: column;

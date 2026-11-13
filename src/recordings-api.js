@@ -156,7 +156,7 @@ export async function saveUserNotifyPreference(hass, enabled) {
  * @param {any} hass
  * @param {number} [limit]
  */
-export async function listRecordings(hass, limit = 40) {
+export async function listRecordings(hass, limit = 200) {
   if (!hass?.callWS) return [];
   try {
     const result = await hass.callWS({

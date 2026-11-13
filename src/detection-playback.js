@@ -221,13 +221,45 @@ export function preferVideoClips(clips) {
 }
 
 /**
- * True when a saved detection has at least one playable clip / non-zero bytes.
+ * True when a detection has at least one playable clip / non-zero bytes.
+ * In-progress ("recording…") sessions are playable once media exists so users
+ * are not stuck with a disabled Play on a multi‑MB orphan row.
  * @param {any} session
  */
 export function sessionIsPlayable(session) {
-  if (!session || session.active) return false;
+  if (!session) return false;
   if (sessionTotalBytes(session) > 0) return true;
+  if (session.active) return false;
   return (session.clips || []).some(clipIsPlayable);
+}
+
+/** Page size for the Saved detections list. */
+export const SAVED_DETECTIONS_PAGE_SIZE = 10;
+
+/**
+ * Slice saved detections for a 1-based page number.
+ * @param {any[]} sessions
+ * @param {number} page
+ * @param {number} [pageSize]
+ */
+export function paginateSessions(
+  sessions,
+  page,
+  pageSize = SAVED_DETECTIONS_PAGE_SIZE
+) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  const size = Math.max(1, Number(pageSize) || SAVED_DETECTIONS_PAGE_SIZE);
+  const total = list.length;
+  const pageCount = Math.max(1, Math.ceil(total / size) || 1);
+  const safePage = Math.min(Math.max(1, Number(page) || 1), pageCount);
+  const start = (safePage - 1) * size;
+  return {
+    page: safePage,
+    pageCount,
+    pageSize: size,
+    total,
+    items: list.slice(start, start + size),
+  };
 }
 
 /**

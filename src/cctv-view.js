@@ -29,9 +29,11 @@ import {
   detectionLabelsFromTriggers,
   findSessionForTimelineEvent,
   formatBytes,
+  paginateSessions,
   playbackTracksFromSession,
   playbackWindow,
   resolvePlaybackCameraIds,
+  SAVED_DETECTIONS_PAGE_SIZE,
   sessionIsPlayable,
   sessionTotalBytes,
   triggerHighlightsForPlayback,
@@ -139,6 +141,8 @@ export class CctvView extends LitElement {
     _notifyOnDetection: { state: true },
     /** @type {Array<any>} */
     _sessions: { state: true },
+    /** 1-based page for Saved detections (10 per page). */
+    _recordingsPage: { state: true },
     _recordDir: { state: true },
     /** Settings-only copyable recording diagnostics (not on main dashboard). */
     _recordingDebug: { state: true },
@@ -197,6 +201,7 @@ export class CctvView extends LitElement {
     this._recordDetectionKinds = DETECTION_KINDS.map((k) => k.id);
     this._notifyOnDetection = false;
     this._sessions = [];
+    this._recordingsPage = 1;
     this._recordDir = "";
     this._recordingDebug = "";
     this._recordingDebugSummary = "";
@@ -1509,6 +1514,7 @@ export class CctvView extends LitElement {
 
   async _refreshSessions() {
     this._sessions = await listRecordings(this.hass);
+    this._setRecordingsPage(this._recordingsPage);
     this._status = "Recordings refreshed";
   }
 
@@ -1521,17 +1527,18 @@ export class CctvView extends LitElement {
     return Boolean(this.hass?.user?.is_admin);
   }
 
-  async _deleteSession(sessionId, event) {
+  async _deleteSession(sessionId, event, session = null) {
     event?.stopPropagation?.();
     event?.preventDefault?.();
     if (!this._isAdmin()) {
       this._status = "Only Home Assistant admins can delete saved detections";
       return;
     }
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete this saved detection’s recordings for all users?")
-    ) {
+    const active = Boolean(session?.active);
+    const confirmMsg = active
+      ? "Stop and delete this in-progress recording for all users?"
+      : "Delete this saved detection’s recordings for all users?";
+    if (typeof window !== "undefined" && !window.confirm(confirmMsg)) {
       return;
     }
     try {
@@ -1541,11 +1548,30 @@ export class CctvView extends LitElement {
         this._returnToLive();
       }
       this._status = ok
-        ? "Saved detection deleted for all users"
+        ? active
+          ? "In-progress recording stopped and deleted"
+          : "Saved detection deleted for all users"
         : "Recording was already removed";
     } catch (err) {
       this._status = err?.message || "Could not delete recording";
     }
+  }
+
+  _setRecordingsPage(page) {
+    const sessions = this._savedDetectionSessions();
+    const { page: safe } = paginateSessions(
+      sessions,
+      page,
+      SAVED_DETECTIONS_PAGE_SIZE
+    );
+    this._recordingsPage = safe;
+  }
+
+  /** Visible/playable sessions for Saved detections (newest first from API). */
+  _savedDetectionSessions() {
+    return (this._sessions || []).filter(
+      (session) => session.active || sessionIsPlayable(session)
+    );
   }
 
   async _clearAllDetections(event) {
@@ -2443,8 +2469,15 @@ export class CctvView extends LitElement {
   }
 
   _renderRecordings() {
-    const sessions = (this._sessions || []).filter(
-      (session) => session.active || sessionIsPlayable(session)
+    const sessions = this._savedDetectionSessions();
+    const totalBytes = sessions.reduce(
+      (sum, session) => sum + sessionTotalBytes(session),
+      0
+    );
+    const paged = paginateSessions(
+      sessions,
+      this._recordingsPage,
+      SAVED_DETECTIONS_PAGE_SIZE
     );
     const admin = this._isAdmin();
     return html`
@@ -2457,13 +2490,20 @@ export class CctvView extends LitElement {
               playback for the visible cameras; click the row to load it first
               (desktop bar still works). Shared for all users; survives reboot;
               kept for ${this._retentionDays} day${this._retentionDays === 1 ? "" : "s"}.
+              Showing ${SAVED_DETECTIONS_PAGE_SIZE} per page.
               Empty 0&nbsp;B stubs are hidden.
               ${admin
-                ? " Admins can delete one detection or clear all for everyone."
+                ? " Admins can delete one detection (including stuck in-progress) or clear all for everyone."
                 : ""}
             </span>
           </div>
           <div class="recording-toolbar">
+            <span class="recording-total" title="Total size of saved detections">
+              Total ${formatBytes(totalBytes)}
+              ${sessions.length
+                ? html` · ${sessions.length} detection${sessions.length === 1 ? "" : "s"}`
+                : nothing}
+            </span>
             <button class="btn" type="button" @click=${() => this._refreshSessions()}>
               Refresh
             </button>
@@ -2486,8 +2526,33 @@ export class CctvView extends LitElement {
           ? html`<p class="empty">No detection recordings yet.</p>`
           : html`
               <div class="recording-list">
-                ${sessions.map((session) => this._renderSession(session, admin))}
+                ${paged.items.map((session) => this._renderSession(session, admin))}
               </div>
+              ${paged.pageCount > 1
+                ? html`
+                    <div class="recording-pager" role="navigation" aria-label="Saved detections pages">
+                      <button
+                        class="btn"
+                        type="button"
+                        ?disabled=${paged.page <= 1}
+                        @click=${() => this._setRecordingsPage(paged.page - 1)}
+                      >
+                        Previous
+                      </button>
+                      <span class="recording-page-label">
+                        Page ${paged.page} / ${paged.pageCount}
+                      </span>
+                      <button
+                        class="btn"
+                        type="button"
+                        ?disabled=${paged.page >= paged.pageCount}
+                        @click=${() => this._setRecordingsPage(paged.page + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  `
+                : nothing}
             `}
       </section>
     `;
@@ -2531,13 +2596,16 @@ export class CctvView extends LitElement {
           >
             Play
           </button>
-          ${admin && !session.active
+          ${admin
             ? html`
                 <button
                   type="button"
                   class="btn recording-delete"
-                  title="Delete recordings for all users"
-                  @click=${(e) => this._deleteSession(session.session_id, e)}
+                  title=${session.active
+                    ? "Stop and delete this in-progress recording"
+                    : "Delete recordings for all users"}
+                  @click=${(e) =>
+                    this._deleteSession(session.session_id, e, session)}
                 >
                   Delete
                 </button>

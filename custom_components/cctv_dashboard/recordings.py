@@ -21,6 +21,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DEFAULT_RECORD_DETECTION_KINDS,
     DOMAIN,
+    MAX_RECORD_SESSION_SECONDS,
     MEDIA_API_URL_BASE,
     PANEL_URL_PATH,
     RECORD_CHUNK_SECONDS,
@@ -840,10 +841,55 @@ class RecordingManager:
             cameras.append(state.entity_id)
         return sorted(cameras)
 
+    def _session_over_max_duration(self, session: RecordingSession) -> bool:
+        try:
+            elapsed = (dt_util.utcnow() - session.started).total_seconds()
+        except Exception:  # noqa: BLE001
+            return False
+        return elapsed >= MAX_RECORD_SESSION_SECONDS
+
+    async def async_reconcile_active_session(self) -> bool:
+        """End orphan active sessions (sensors cleared or over max duration).
+
+        Returns True when a session was finalized.
+        """
+        session = self._session
+        if not session or not session.active or self._ending:
+            return False
+        reason = ""
+        if not self._active_record_sensors():
+            reason = "no video-enabled sensors still on"
+        elif self._session_over_max_duration(session):
+            reason = f"max duration {MAX_RECORD_SESSION_SECONDS}s"
+        if not reason:
+            return False
+        _LOGGER.info(
+            "Reconciling stuck recording session %s (%s)",
+            session.session_id,
+            reason,
+        )
+        await self._end_session()
+        return True
+
     async def _chunk_loop(self, session: RecordingSession) -> None:
         seq = 0
         try:
             while session.active and self._session is session:
+                if self._session_over_max_duration(session):
+                    _LOGGER.warning(
+                        "Recording session %s hit max duration (%ss) — ending",
+                        session.session_id,
+                        MAX_RECORD_SESSION_SECONDS,
+                    )
+                    self.hass.async_create_task(self._end_session())
+                    break
+                if not self._active_record_sensors():
+                    _LOGGER.info(
+                        "Recording session %s — sensors cleared mid-loop; ending",
+                        session.session_id,
+                    )
+                    self.hass.async_create_task(self._end_session())
+                    break
                 seq += 1
                 await self._capture_chunk(session, seq)
                 if not session.active:
@@ -1217,8 +1263,13 @@ class RecordingManager:
     async def _cleanup_loop(self) -> None:
         try:
             while True:
+                try:
+                    await self.async_reconcile_active_session()
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("Active session reconcile failed")
                 await self.async_enforce_retention()
-                await asyncio.sleep(3600)
+                # Faster than hourly so stuck "recording…" clears within minutes.
+                await asyncio.sleep(120)
         except asyncio.CancelledError:
             raise
 
@@ -1410,7 +1461,7 @@ class RecordingManager:
         except Exception:  # noqa: BLE001
             _LOGGER.debug("Could not publish recording debug entity", exc_info=True)
 
-    def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_sessions(self, limit: int = 200) -> list[dict[str, Any]]:
         active = None
         if self._session and (self._session.active or self._ending):
             active = {
@@ -1434,6 +1485,10 @@ class RecordingManager:
                 continue
             items.append(enriched)
         return items[:limit]
+
+    def total_saved_bytes(self, limit: int = 200) -> int:
+        """Sum on-disk bytes for listed saved/active sessions (shared UI total)."""
+        return sum(int(item.get("total_bytes") or 0) for item in self.list_sessions(limit))
 
     def _cached_file_size(self, path: Path) -> int:
         key = str(path)
@@ -1496,11 +1551,41 @@ class RecordingManager:
         return removed
 
     async def async_delete_session(self, session_id: str) -> bool:
-        """Delete a saved detection's file set + index entry (site-wide)."""
+        """Delete a saved (or stuck active) detection's files + index entry."""
+        sid = str(session_id or "")
+        if not sid:
+            return False
+
+        # Allow admins to clear orphan "recording…" rows (in-memory session).
+        if self._session and self._session.session_id == sid:
+            session = self._session
+            self._ending = True
+            try:
+                session.active = False
+                if self._chunk_task and not self._chunk_task.done():
+                    self._chunk_task.cancel()
+                    try:
+                        await self._chunk_task
+                    except asyncio.CancelledError:
+                        pass
+                self._chunk_task = None
+                await self.hass.async_add_executor_job(
+                    self._purge_session_files_sync, sid
+                )
+                self._session = None
+            finally:
+                self._ending = False
+            # Also drop if it somehow landed in the index mid-flight.
+            self._sessions_meta = [
+                meta for meta in self._sessions_meta if meta.get("session_id") != sid
+            ]
+            await self.hass.async_add_executor_job(self._save_index_sync)
+            return True
+
         found = False
         remaining = []
         for meta in self._sessions_meta:
-            if meta.get("session_id") == session_id:
+            if meta.get("session_id") == sid:
                 found = True
                 for clip in meta.get("clips") or []:
                     path = Path(clip.get("path") or "")
@@ -1508,7 +1593,7 @@ class RecordingManager:
                         path.unlink(missing_ok=True)
                         self._size_cache.pop(str(path), None)
                 await self.hass.async_add_executor_job(
-                    self._purge_session_files_sync, session_id
+                    self._purge_session_files_sync, sid
                 )
             else:
                 remaining.append(meta)
