@@ -1,4 +1,4 @@
-const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,s=Symbol(),i=new WeakMap;let a=class{constructor(t,e,i){if(this._$cssResult$=!0,i!==s)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=t,this.t=e}get styleSheet(){let t=this.o;const s=this.t;if(e&&void 0===t){const e=void 0!==s&&1===s.length;e&&(t=i.get(s)),void 0===t&&((this.o=t=new CSSStyleSheet).replaceSync(this.cssText),e&&i.set(s,t))}return t}toString(){return this.cssText}};const r=(t,...e)=>{const i=1===t.length?t[0]:e.reduce((e,s,i)=>e+(t=>{if(!0===t._$cssResult$)return t.cssText;if("number"==typeof t)return t;throw Error("Value passed to 'css' function must be a 'css' function result: "+t+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(s)+t[i+1],t[0]);return new a(i,t,s)},n=e?t=>t:t=>t instanceof CSSStyleSheet?(t=>{let e="";for(const s of t.cssRules)e+=s.cssText;return(t=>new a("string"==typeof t?t:t+"",void 0,s))(e)})(t):t,{is:o,defineProperty:c,getOwnPropertyDescriptor:l,getOwnPropertyNames:d,getOwnPropertySymbols:h,getPrototypeOf:u}=Object,p=globalThis,m=p.trustedTypes,_=m?m.emptyScript:"",g=p.reactiveElementPolyfillSupport,f=(t,e)=>t,y={toAttribute(t,e){switch(e){case Boolean:t=t?_:null;break;case Object:case Array:t=null==t?t:JSON.stringify(t)}return t},fromAttribute(t,e){let s=t;switch(e){case Boolean:s=null!==t;break;case Number:s=null===t?null:Number(t);break;case Object:case Array:try{s=JSON.parse(t)}catch(t){s=null}}return s}},b=(t,e)=>!o(t,e),v={attribute:!0,type:String,converter:y,reflect:!1,useDefault:!1,hasChanged:b};Symbol.metadata??=Symbol("metadata"),p.litPropertyMetadata??=new WeakMap;let k=class extends HTMLElement{static addInitializer(t){this._$Ei(),(this.l??=[]).push(t)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(t,e=v){if(e.state&&(e.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(t)&&((e=Object.create(e)).wrapped=!0),this.elementProperties.set(t,e),!e.noAccessor){const s=Symbol(),i=this.getPropertyDescriptor(t,s,e);void 0!==i&&c(this.prototype,t,i)}}static getPropertyDescriptor(t,e,s){const{get:i,set:a}=l(this.prototype,t)??{get(){return this[e]},set(t){this[e]=t}};return{get:i,set(e){const r=i?.call(this);a?.call(this,e),this.requestUpdate(t,r,s)},configurable:!0,enumerable:!0}}static getPropertyOptions(t){return this.elementProperties.get(t)??v}static _$Ei(){if(this.hasOwnProperty(f("elementProperties")))return;const t=u(this);t.finalize(),void 0!==t.l&&(this.l=[...t.l]),this.elementProperties=new Map(t.elementProperties)}static finalize(){if(this.hasOwnProperty(f("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(f("properties"))){const t=this.properties,e=[...d(t),...h(t)];for(const s of e)this.createProperty(s,t[s])}const t=this[Symbol.metadata];if(null!==t){const e=litPropertyMetadata.get(t);if(void 0!==e)for(const[t,s]of e)this.elementProperties.set(t,s)}this._$Eh=new Map;for(const[t,e]of this.elementProperties){const s=this._$Eu(t,e);void 0!==s&&this._$Eh.set(s,t)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(t){const e=[];if(Array.isArray(t)){const s=new Set(t.flat(1/0).reverse());for(const t of s)e.unshift(n(t))}else void 0!==t&&e.push(n(t));return e}static _$Eu(t,e){const s=e.attribute;return!1===s?void 0:"string"==typeof s?s:"string"==typeof t?t.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(t=>this.enableUpdating=t),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(t=>t(this))}addController(t){(this._$EO??=new Set).add(t),void 0!==this.renderRoot&&this.isConnected&&t.hostConnected?.()}removeController(t){this._$EO?.delete(t)}_$E_(){const t=new Map,e=this.constructor.elementProperties;for(const s of e.keys())this.hasOwnProperty(s)&&(t.set(s,this[s]),delete this[s]);t.size>0&&(this._$Ep=t)}createRenderRoot(){const s=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return((s,i)=>{if(e)s.adoptedStyleSheets=i.map(t=>t instanceof CSSStyleSheet?t:t.styleSheet);else for(const e of i){const i=document.createElement("style"),a=t.litNonce;void 0!==a&&i.setAttribute("nonce",a),i.textContent=e.cssText,s.appendChild(i)}})(s,this.constructor.elementStyles),s}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(t=>t.hostConnected?.())}enableUpdating(t){}disconnectedCallback(){this._$EO?.forEach(t=>t.hostDisconnected?.())}attributeChangedCallback(t,e,s){this._$AK(t,s)}_$ET(t,e){const s=this.constructor.elementProperties.get(t),i=this.constructor._$Eu(t,s);if(void 0!==i&&!0===s.reflect){const a=(void 0!==s.converter?.toAttribute?s.converter:y).toAttribute(e,s.type);this._$Em=t,null==a?this.removeAttribute(i):this.setAttribute(i,a),this._$Em=null}}_$AK(t,e){const s=this.constructor,i=s._$Eh.get(t);if(void 0!==i&&this._$Em!==i){const t=s.getPropertyOptions(i),a="function"==typeof t.converter?{fromAttribute:t.converter}:void 0!==t.converter?.fromAttribute?t.converter:y;this._$Em=i;const r=a.fromAttribute(e,t.type);this[i]=r??this._$Ej?.get(i)??r,this._$Em=null}}requestUpdate(t,e,s,i=!1,a){if(void 0!==t){const r=this.constructor;if(!1===i&&(a=this[t]),s??=r.getPropertyOptions(t),!((s.hasChanged??b)(a,e)||s.useDefault&&s.reflect&&a===this._$Ej?.get(t)&&!this.hasAttribute(r._$Eu(t,s))))return;this.C(t,e,s)}!1===this.isUpdatePending&&(this._$ES=this._$EP())}C(t,e,{useDefault:s,reflect:i,wrapped:a},r){s&&!(this._$Ej??=new Map).has(t)&&(this._$Ej.set(t,r??e??this[t]),!0!==a||void 0!==r)||(this._$AL.has(t)||(this.hasUpdated||s||(e=void 0),this._$AL.set(t,e)),!0===i&&this._$Em!==t&&(this._$Eq??=new Set).add(t))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(t){Promise.reject(t)}const t=this.scheduleUpdate();return null!=t&&await t,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(const[t,e]of this._$Ep)this[t]=e;this._$Ep=void 0}const t=this.constructor.elementProperties;if(t.size>0)for(const[e,s]of t){const{wrapped:t}=s,i=this[e];!0!==t||this._$AL.has(e)||void 0===i||this.C(e,void 0,s,i)}}let t=!1;const e=this._$AL;try{t=this.shouldUpdate(e),t?(this.willUpdate(e),this._$EO?.forEach(t=>t.hostUpdate?.()),this.update(e)):this._$EM()}catch(e){throw t=!1,this._$EM(),e}t&&this._$AE(e)}willUpdate(t){}_$AE(t){this._$EO?.forEach(t=>t.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(t)),this.updated(t)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(t){return!0}update(t){this._$Eq&&=this._$Eq.forEach(t=>this._$ET(t,this[t])),this._$EM()}updated(t){}firstUpdated(t){}};k.elementStyles=[],k.shadowRootOptions={mode:"open"},k[f("elementProperties")]=new Map,k[f("finalized")]=new Map,g?.({ReactiveElement:k}),(p.reactiveElementVersions??=[]).push("2.1.2");const w=globalThis,$=t=>t,S=w.trustedTypes,x=S?S.createPolicy("lit-html",{createHTML:t=>t}):void 0,A="$lit$",C=`lit$${Math.random().toFixed(9).slice(2)}$`,M="?"+C,I=`<${M}>`,P=document,D=()=>P.createComment(""),E=t=>null===t||"object"!=typeof t&&"function"!=typeof t,T=Array.isArray,N="[ \t\n\f\r]",R=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,L=/-->/g,O=/>/g,q=RegExp(`>|${N}(?:([^\\s"'>=/]+)(${N}*=${N}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,"g"),j=/'/g,H=/"/g,W=/^(?:script|style|textarea|title)$/i,F=(t=>(e,...s)=>({_$litType$:t,strings:e,values:s}))(1),z=Symbol.for("lit-noChange"),U=Symbol.for("lit-nothing"),V=new WeakMap,B=P.createTreeWalker(P,129);function G(t,e){if(!T(t)||!t.hasOwnProperty("raw"))throw Error("invalid template strings array");return void 0!==x?x.createHTML(e):e}const Q=(t,e)=>{const s=t.length-1,i=[];let a,r=2===e?"<svg>":3===e?"<math>":"",n=R;for(let e=0;e<s;e++){const s=t[e];let o,c,l=-1,d=0;for(;d<s.length&&(n.lastIndex=d,c=n.exec(s),null!==c);)d=n.lastIndex,n===R?"!--"===c[1]?n=L:void 0!==c[1]?n=O:void 0!==c[2]?(W.test(c[2])&&(a=RegExp("</"+c[2],"g")),n=q):void 0!==c[3]&&(n=q):n===q?">"===c[0]?(n=a??R,l=-1):void 0===c[1]?l=-2:(l=n.lastIndex-c[2].length,o=c[1],n=void 0===c[3]?q:'"'===c[3]?H:j):n===H||n===j?n=q:n===L||n===O?n=R:(n=q,a=void 0);const h=n===q&&t[e+1].startsWith("/>")?" ":"";r+=n===R?s+I:l>=0?(i.push(o),s.slice(0,l)+A+s.slice(l)+C+h):s+C+(-2===l?e:h)}return[G(t,r+(t[s]||"<?>")+(2===e?"</svg>":3===e?"</math>":"")),i]};class K{constructor({strings:t,_$litType$:e},s){let i;this.parts=[];let a=0,r=0;const n=t.length-1,o=this.parts,[c,l]=Q(t,e);if(this.el=K.createElement(c,s),B.currentNode=this.el.content,2===e||3===e){const t=this.el.content.firstChild;t.replaceWith(...t.childNodes)}for(;null!==(i=B.nextNode())&&o.length<n;){if(1===i.nodeType){if(i.hasAttributes())for(const t of i.getAttributeNames())if(t.endsWith(A)){const e=l[r++],s=i.getAttribute(t).split(C),n=/([.?@])?(.*)/.exec(e);o.push({type:1,index:a,name:n[2],strings:s,ctor:"."===n[1]?tt:"?"===n[1]?et:"@"===n[1]?st:Y}),i.removeAttribute(t)}else t.startsWith(C)&&(o.push({type:6,index:a}),i.removeAttribute(t));if(W.test(i.tagName)){const t=i.textContent.split(C),e=t.length-1;if(e>0){i.textContent=S?S.emptyScript:"";for(let s=0;s<e;s++)i.append(t[s],D()),B.nextNode(),o.push({type:2,index:++a});i.append(t[e],D())}}}else if(8===i.nodeType)if(i.data===M)o.push({type:2,index:a});else{let t=-1;for(;-1!==(t=i.data.indexOf(C,t+1));)o.push({type:7,index:a}),t+=C.length-1}a++}}static createElement(t,e){const s=P.createElement("template");return s.innerHTML=t,s}}function J(t,e,s=t,i){if(e===z)return e;let a=void 0!==i?s._$Co?.[i]:s._$Cl;const r=E(e)?void 0:e._$litDirective$;return a?.constructor!==r&&(a?._$AO?.(!1),void 0===r?a=void 0:(a=new r(t),a._$AT(t,s,i)),void 0!==i?(s._$Co??=[])[i]=a:s._$Cl=a),void 0!==a&&(e=J(t,a._$AS(t,e.values),a,i)),e}class Z{constructor(t,e){this._$AV=[],this._$AN=void 0,this._$AD=t,this._$AM=e}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(t){const{el:{content:e},parts:s}=this._$AD,i=(t?.creationScope??P).importNode(e,!0);B.currentNode=i;let a=B.nextNode(),r=0,n=0,o=s[0];for(;void 0!==o;){if(r===o.index){let e;2===o.type?e=new X(a,a.nextSibling,this,t):1===o.type?e=new o.ctor(a,o.name,o.strings,this,t):6===o.type&&(e=new it(a,this,t)),this._$AV.push(e),o=s[++n]}r!==o?.index&&(a=B.nextNode(),r++)}return B.currentNode=P,i}p(t){let e=0;for(const s of this._$AV)void 0!==s&&(void 0!==s.strings?(s._$AI(t,s,e),e+=s.strings.length-2):s._$AI(t[e])),e++}}class X{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(t,e,s,i){this.type=2,this._$AH=U,this._$AN=void 0,this._$AA=t,this._$AB=e,this._$AM=s,this.options=i,this._$Cv=i?.isConnected??!0}get parentNode(){let t=this._$AA.parentNode;const e=this._$AM;return void 0!==e&&11===t?.nodeType&&(t=e.parentNode),t}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(t,e=this){t=J(this,t,e),E(t)?t===U||null==t||""===t?(this._$AH!==U&&this._$AR(),this._$AH=U):t!==this._$AH&&t!==z&&this._(t):void 0!==t._$litType$?this.$(t):void 0!==t.nodeType?this.T(t):(t=>T(t)||"function"==typeof t?.[Symbol.iterator])(t)?this.k(t):this._(t)}O(t){return this._$AA.parentNode.insertBefore(t,this._$AB)}T(t){this._$AH!==t&&(this._$AR(),this._$AH=this.O(t))}_(t){this._$AH!==U&&E(this._$AH)?this._$AA.nextSibling.data=t:this.T(P.createTextNode(t)),this._$AH=t}$(t){const{values:e,_$litType$:s}=t,i="number"==typeof s?this._$AC(t):(void 0===s.el&&(s.el=K.createElement(G(s.h,s.h[0]),this.options)),s);if(this._$AH?._$AD===i)this._$AH.p(e);else{const t=new Z(i,this),s=t.u(this.options);t.p(e),this.T(s),this._$AH=t}}_$AC(t){let e=V.get(t.strings);return void 0===e&&V.set(t.strings,e=new K(t)),e}k(t){T(this._$AH)||(this._$AH=[],this._$AR());const e=this._$AH;let s,i=0;for(const a of t)i===e.length?e.push(s=new X(this.O(D()),this.O(D()),this,this.options)):s=e[i],s._$AI(a),i++;i<e.length&&(this._$AR(s&&s._$AB.nextSibling,i),e.length=i)}_$AR(t=this._$AA.nextSibling,e){for(this._$AP?.(!1,!0,e);t!==this._$AB;){const e=$(t).nextSibling;$(t).remove(),t=e}}setConnected(t){void 0===this._$AM&&(this._$Cv=t,this._$AP?.(t))}}class Y{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(t,e,s,i,a){this.type=1,this._$AH=U,this._$AN=void 0,this.element=t,this.name=e,this._$AM=i,this.options=a,s.length>2||""!==s[0]||""!==s[1]?(this._$AH=Array(s.length-1).fill(new String),this.strings=s):this._$AH=U}_$AI(t,e=this,s,i){const a=this.strings;let r=!1;if(void 0===a)t=J(this,t,e,0),r=!E(t)||t!==this._$AH&&t!==z,r&&(this._$AH=t);else{const i=t;let n,o;for(t=a[0],n=0;n<a.length-1;n++)o=J(this,i[s+n],e,n),o===z&&(o=this._$AH[n]),r||=!E(o)||o!==this._$AH[n],o===U?t=U:t!==U&&(t+=(o??"")+a[n+1]),this._$AH[n]=o}r&&!i&&this.j(t)}j(t){t===U?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,t??"")}}class tt extends Y{constructor(){super(...arguments),this.type=3}j(t){this.element[this.name]=t===U?void 0:t}}class et extends Y{constructor(){super(...arguments),this.type=4}j(t){this.element.toggleAttribute(this.name,!!t&&t!==U)}}class st extends Y{constructor(t,e,s,i,a){super(t,e,s,i,a),this.type=5}_$AI(t,e=this){if((t=J(this,t,e,0)??U)===z)return;const s=this._$AH,i=t===U&&s!==U||t.capture!==s.capture||t.once!==s.once||t.passive!==s.passive,a=t!==U&&(s===U||i);i&&this.element.removeEventListener(this.name,this,s),a&&this.element.addEventListener(this.name,this,t),this._$AH=t}handleEvent(t){"function"==typeof this._$AH?this._$AH.call(this.options?.host??this.element,t):this._$AH.handleEvent(t)}}class it{constructor(t,e,s){this.element=t,this.type=6,this._$AN=void 0,this._$AM=e,this.options=s}get _$AU(){return this._$AM._$AU}_$AI(t){J(this,t)}}const at=w.litHtmlPolyfillSupport;at?.(K,X),(w.litHtmlVersions??=[]).push("3.3.3");const rt=globalThis;let nt=class extends k{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){const t=super.createRenderRoot();return this.renderOptions.renderBefore??=t.firstChild,t}update(t){const e=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(t),this._$Do=((t,e,s)=>{const i=s?.renderBefore??e;let a=i._$litPart$;if(void 0===a){const t=s?.renderBefore??null;i._$litPart$=a=new X(e.insertBefore(D(),t),t,void 0,s??{})}return a._$AI(t),a})(e,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return z}};nt._$litElement$=!0,nt.finalized=!0,rt.litElementHydrateSupport?.({LitElement:nt});const ot=rt.litElementPolyfillSupport;ot?.({LitElement:nt}),(rt.litElementVersions??=[]).push("4.2.2");let ct=class{constructor(t){}get _$AU(){return this._$AM._$AU}_$AT(t,e,s){this._$Ct=t,this._$AM=e,this._$Ci=s}_$AS(t,e){return this.update(t,e)}update(t,e){return this.render(...e)}};const lt={},dt=(t=>(...e)=>({_$litDirective$:t,values:e}))(class extends ct{constructor(){super(...arguments),this.key=U}render(t,e){return this.key=t,e}update(t,[e,s]){return e!==this.key&&(((t,e=lt)=>{t._$AH=e})(t),this.key=e),s}}),ht=r`
+const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,s=Symbol(),i=new WeakMap;let a=class{constructor(e,t,i){if(this._$cssResult$=!0,i!==s)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=e,this.t=t}get styleSheet(){let e=this.o;const s=this.t;if(t&&void 0===e){const t=void 0!==s&&1===s.length;t&&(e=i.get(s)),void 0===e&&((this.o=e=new CSSStyleSheet).replaceSync(this.cssText),t&&i.set(s,e))}return e}toString(){return this.cssText}};const r=(e,...t)=>{const i=1===e.length?e[0]:t.reduce((t,s,i)=>t+(e=>{if(!0===e._$cssResult$)return e.cssText;if("number"==typeof e)return e;throw Error("Value passed to 'css' function must be a 'css' function result: "+e+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(s)+e[i+1],e[0]);return new a(i,e,s)},n=t?e=>e:e=>e instanceof CSSStyleSheet?(e=>{let t="";for(const s of e.cssRules)t+=s.cssText;return(e=>new a("string"==typeof e?e:e+"",void 0,s))(t)})(e):e,{is:o,defineProperty:c,getOwnPropertyDescriptor:l,getOwnPropertyNames:d,getOwnPropertySymbols:h,getPrototypeOf:u}=Object,p=globalThis,m=p.trustedTypes,_=m?m.emptyScript:"",g=p.reactiveElementPolyfillSupport,f=(e,t)=>e,y={toAttribute(e,t){switch(t){case Boolean:e=e?_:null;break;case Object:case Array:e=null==e?e:JSON.stringify(e)}return e},fromAttribute(e,t){let s=e;switch(t){case Boolean:s=null!==e;break;case Number:s=null===e?null:Number(e);break;case Object:case Array:try{s=JSON.parse(e)}catch(e){s=null}}return s}},b=(e,t)=>!o(e,t),v={attribute:!0,type:String,converter:y,reflect:!1,useDefault:!1,hasChanged:b};Symbol.metadata??=Symbol("metadata"),p.litPropertyMetadata??=new WeakMap;let k=class extends HTMLElement{static addInitializer(e){this._$Ei(),(this.l??=[]).push(e)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(e,t=v){if(t.state&&(t.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(e)&&((t=Object.create(t)).wrapped=!0),this.elementProperties.set(e,t),!t.noAccessor){const s=Symbol(),i=this.getPropertyDescriptor(e,s,t);void 0!==i&&c(this.prototype,e,i)}}static getPropertyDescriptor(e,t,s){const{get:i,set:a}=l(this.prototype,e)??{get(){return this[t]},set(e){this[t]=e}};return{get:i,set(t){const r=i?.call(this);a?.call(this,t),this.requestUpdate(e,r,s)},configurable:!0,enumerable:!0}}static getPropertyOptions(e){return this.elementProperties.get(e)??v}static _$Ei(){if(this.hasOwnProperty(f("elementProperties")))return;const e=u(this);e.finalize(),void 0!==e.l&&(this.l=[...e.l]),this.elementProperties=new Map(e.elementProperties)}static finalize(){if(this.hasOwnProperty(f("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(f("properties"))){const e=this.properties,t=[...d(e),...h(e)];for(const s of t)this.createProperty(s,e[s])}const e=this[Symbol.metadata];if(null!==e){const t=litPropertyMetadata.get(e);if(void 0!==t)for(const[e,s]of t)this.elementProperties.set(e,s)}this._$Eh=new Map;for(const[e,t]of this.elementProperties){const s=this._$Eu(e,t);void 0!==s&&this._$Eh.set(s,e)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(e){const t=[];if(Array.isArray(e)){const s=new Set(e.flat(1/0).reverse());for(const e of s)t.unshift(n(e))}else void 0!==e&&t.push(n(e));return t}static _$Eu(e,t){const s=t.attribute;return!1===s?void 0:"string"==typeof s?s:"string"==typeof e?e.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(e=>this.enableUpdating=e),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(e=>e(this))}addController(e){(this._$EO??=new Set).add(e),void 0!==this.renderRoot&&this.isConnected&&e.hostConnected?.()}removeController(e){this._$EO?.delete(e)}_$E_(){const e=new Map,t=this.constructor.elementProperties;for(const s of t.keys())this.hasOwnProperty(s)&&(e.set(s,this[s]),delete this[s]);e.size>0&&(this._$Ep=e)}createRenderRoot(){const s=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return((s,i)=>{if(t)s.adoptedStyleSheets=i.map(e=>e instanceof CSSStyleSheet?e:e.styleSheet);else for(const t of i){const i=document.createElement("style"),a=e.litNonce;void 0!==a&&i.setAttribute("nonce",a),i.textContent=t.cssText,s.appendChild(i)}})(s,this.constructor.elementStyles),s}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(e=>e.hostConnected?.())}enableUpdating(e){}disconnectedCallback(){this._$EO?.forEach(e=>e.hostDisconnected?.())}attributeChangedCallback(e,t,s){this._$AK(e,s)}_$ET(e,t){const s=this.constructor.elementProperties.get(e),i=this.constructor._$Eu(e,s);if(void 0!==i&&!0===s.reflect){const a=(void 0!==s.converter?.toAttribute?s.converter:y).toAttribute(t,s.type);this._$Em=e,null==a?this.removeAttribute(i):this.setAttribute(i,a),this._$Em=null}}_$AK(e,t){const s=this.constructor,i=s._$Eh.get(e);if(void 0!==i&&this._$Em!==i){const e=s.getPropertyOptions(i),a="function"==typeof e.converter?{fromAttribute:e.converter}:void 0!==e.converter?.fromAttribute?e.converter:y;this._$Em=i;const r=a.fromAttribute(t,e.type);this[i]=r??this._$Ej?.get(i)??r,this._$Em=null}}requestUpdate(e,t,s,i=!1,a){if(void 0!==e){const r=this.constructor;if(!1===i&&(a=this[e]),s??=r.getPropertyOptions(e),!((s.hasChanged??b)(a,t)||s.useDefault&&s.reflect&&a===this._$Ej?.get(e)&&!this.hasAttribute(r._$Eu(e,s))))return;this.C(e,t,s)}!1===this.isUpdatePending&&(this._$ES=this._$EP())}C(e,t,{useDefault:s,reflect:i,wrapped:a},r){s&&!(this._$Ej??=new Map).has(e)&&(this._$Ej.set(e,r??t??this[e]),!0!==a||void 0!==r)||(this._$AL.has(e)||(this.hasUpdated||s||(t=void 0),this._$AL.set(e,t)),!0===i&&this._$Em!==e&&(this._$Eq??=new Set).add(e))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(e){Promise.reject(e)}const e=this.scheduleUpdate();return null!=e&&await e,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(const[e,t]of this._$Ep)this[e]=t;this._$Ep=void 0}const e=this.constructor.elementProperties;if(e.size>0)for(const[t,s]of e){const{wrapped:e}=s,i=this[t];!0!==e||this._$AL.has(t)||void 0===i||this.C(t,void 0,s,i)}}let e=!1;const t=this._$AL;try{e=this.shouldUpdate(t),e?(this.willUpdate(t),this._$EO?.forEach(e=>e.hostUpdate?.()),this.update(t)):this._$EM()}catch(t){throw e=!1,this._$EM(),t}e&&this._$AE(t)}willUpdate(e){}_$AE(e){this._$EO?.forEach(e=>e.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(e)),this.updated(e)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(e){return!0}update(e){this._$Eq&&=this._$Eq.forEach(e=>this._$ET(e,this[e])),this._$EM()}updated(e){}firstUpdated(e){}};k.elementStyles=[],k.shadowRootOptions={mode:"open"},k[f("elementProperties")]=new Map,k[f("finalized")]=new Map,g?.({ReactiveElement:k}),(p.reactiveElementVersions??=[]).push("2.1.2");const w=globalThis,$=e=>e,S=w.trustedTypes,x=S?S.createPolicy("lit-html",{createHTML:e=>e}):void 0,A="$lit$",M=`lit$${Math.random().toFixed(9).slice(2)}$`,C="?"+M,I=`<${C}>`,D=document,P=()=>D.createComment(""),N=e=>null===e||"object"!=typeof e&&"function"!=typeof e,E=Array.isArray,z="[ \t\n\f\r]",T=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,O=/-->/g,R=/>/g,L=RegExp(`>|${z}(?:([^\\s"'>=/]+)(${z}*=${z}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,"g"),q=/'/g,j=/"/g,H=/^(?:script|style|textarea|title)$/i,W=(e=>(t,...s)=>({_$litType$:e,strings:t,values:s}))(1),F=Symbol.for("lit-noChange"),G=Symbol.for("lit-nothing"),U=new WeakMap,V=D.createTreeWalker(D,129);function B(e,t){if(!E(e)||!e.hasOwnProperty("raw"))throw Error("invalid template strings array");return void 0!==x?x.createHTML(t):t}const Z=(e,t)=>{const s=e.length-1,i=[];let a,r=2===t?"<svg>":3===t?"<math>":"",n=T;for(let t=0;t<s;t++){const s=e[t];let o,c,l=-1,d=0;for(;d<s.length&&(n.lastIndex=d,c=n.exec(s),null!==c);)d=n.lastIndex,n===T?"!--"===c[1]?n=O:void 0!==c[1]?n=R:void 0!==c[2]?(H.test(c[2])&&(a=RegExp("</"+c[2],"g")),n=L):void 0!==c[3]&&(n=L):n===L?">"===c[0]?(n=a??T,l=-1):void 0===c[1]?l=-2:(l=n.lastIndex-c[2].length,o=c[1],n=void 0===c[3]?L:'"'===c[3]?j:q):n===j||n===q?n=L:n===O||n===R?n=T:(n=L,a=void 0);const h=n===L&&e[t+1].startsWith("/>")?" ":"";r+=n===T?s+I:l>=0?(i.push(o),s.slice(0,l)+A+s.slice(l)+M+h):s+M+(-2===l?t:h)}return[B(e,r+(e[s]||"<?>")+(2===t?"</svg>":3===t?"</math>":"")),i]};class Q{constructor({strings:e,_$litType$:t},s){let i;this.parts=[];let a=0,r=0;const n=e.length-1,o=this.parts,[c,l]=Z(e,t);if(this.el=Q.createElement(c,s),V.currentNode=this.el.content,2===t||3===t){const e=this.el.content.firstChild;e.replaceWith(...e.childNodes)}for(;null!==(i=V.nextNode())&&o.length<n;){if(1===i.nodeType){if(i.hasAttributes())for(const e of i.getAttributeNames())if(e.endsWith(A)){const t=l[r++],s=i.getAttribute(e).split(M),n=/([.?@])?(.*)/.exec(t);o.push({type:1,index:a,name:n[2],strings:s,ctor:"."===n[1]?ee:"?"===n[1]?te:"@"===n[1]?se:Y}),i.removeAttribute(e)}else e.startsWith(M)&&(o.push({type:6,index:a}),i.removeAttribute(e));if(H.test(i.tagName)){const e=i.textContent.split(M),t=e.length-1;if(t>0){i.textContent=S?S.emptyScript:"";for(let s=0;s<t;s++)i.append(e[s],P()),V.nextNode(),o.push({type:2,index:++a});i.append(e[t],P())}}}else if(8===i.nodeType)if(i.data===C)o.push({type:2,index:a});else{let e=-1;for(;-1!==(e=i.data.indexOf(M,e+1));)o.push({type:7,index:a}),e+=M.length-1}a++}}static createElement(e,t){const s=D.createElement("template");return s.innerHTML=e,s}}function K(e,t,s=e,i){if(t===F)return t;let a=void 0!==i?s._$Co?.[i]:s._$Cl;const r=N(t)?void 0:t._$litDirective$;return a?.constructor!==r&&(a?._$AO?.(!1),void 0===r?a=void 0:(a=new r(e),a._$AT(e,s,i)),void 0!==i?(s._$Co??=[])[i]=a:s._$Cl=a),void 0!==a&&(t=K(e,a._$AS(e,t.values),a,i)),t}class J{constructor(e,t){this._$AV=[],this._$AN=void 0,this._$AD=e,this._$AM=t}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(e){const{el:{content:t},parts:s}=this._$AD,i=(e?.creationScope??D).importNode(t,!0);V.currentNode=i;let a=V.nextNode(),r=0,n=0,o=s[0];for(;void 0!==o;){if(r===o.index){let t;2===o.type?t=new X(a,a.nextSibling,this,e):1===o.type?t=new o.ctor(a,o.name,o.strings,this,e):6===o.type&&(t=new ie(a,this,e)),this._$AV.push(t),o=s[++n]}r!==o?.index&&(a=V.nextNode(),r++)}return V.currentNode=D,i}p(e){let t=0;for(const s of this._$AV)void 0!==s&&(void 0!==s.strings?(s._$AI(e,s,t),t+=s.strings.length-2):s._$AI(e[t])),t++}}class X{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(e,t,s,i){this.type=2,this._$AH=G,this._$AN=void 0,this._$AA=e,this._$AB=t,this._$AM=s,this.options=i,this._$Cv=i?.isConnected??!0}get parentNode(){let e=this._$AA.parentNode;const t=this._$AM;return void 0!==t&&11===e?.nodeType&&(e=t.parentNode),e}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(e,t=this){e=K(this,e,t),N(e)?e===G||null==e||""===e?(this._$AH!==G&&this._$AR(),this._$AH=G):e!==this._$AH&&e!==F&&this._(e):void 0!==e._$litType$?this.$(e):void 0!==e.nodeType?this.T(e):(e=>E(e)||"function"==typeof e?.[Symbol.iterator])(e)?this.k(e):this._(e)}O(e){return this._$AA.parentNode.insertBefore(e,this._$AB)}T(e){this._$AH!==e&&(this._$AR(),this._$AH=this.O(e))}_(e){this._$AH!==G&&N(this._$AH)?this._$AA.nextSibling.data=e:this.T(D.createTextNode(e)),this._$AH=e}$(e){const{values:t,_$litType$:s}=e,i="number"==typeof s?this._$AC(e):(void 0===s.el&&(s.el=Q.createElement(B(s.h,s.h[0]),this.options)),s);if(this._$AH?._$AD===i)this._$AH.p(t);else{const e=new J(i,this),s=e.u(this.options);e.p(t),this.T(s),this._$AH=e}}_$AC(e){let t=U.get(e.strings);return void 0===t&&U.set(e.strings,t=new Q(e)),t}k(e){E(this._$AH)||(this._$AH=[],this._$AR());const t=this._$AH;let s,i=0;for(const a of e)i===t.length?t.push(s=new X(this.O(P()),this.O(P()),this,this.options)):s=t[i],s._$AI(a),i++;i<t.length&&(this._$AR(s&&s._$AB.nextSibling,i),t.length=i)}_$AR(e=this._$AA.nextSibling,t){for(this._$AP?.(!1,!0,t);e!==this._$AB;){const t=$(e).nextSibling;$(e).remove(),e=t}}setConnected(e){void 0===this._$AM&&(this._$Cv=e,this._$AP?.(e))}}class Y{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(e,t,s,i,a){this.type=1,this._$AH=G,this._$AN=void 0,this.element=e,this.name=t,this._$AM=i,this.options=a,s.length>2||""!==s[0]||""!==s[1]?(this._$AH=Array(s.length-1).fill(new String),this.strings=s):this._$AH=G}_$AI(e,t=this,s,i){const a=this.strings;let r=!1;if(void 0===a)e=K(this,e,t,0),r=!N(e)||e!==this._$AH&&e!==F,r&&(this._$AH=e);else{const i=e;let n,o;for(e=a[0],n=0;n<a.length-1;n++)o=K(this,i[s+n],t,n),o===F&&(o=this._$AH[n]),r||=!N(o)||o!==this._$AH[n],o===G?e=G:e!==G&&(e+=(o??"")+a[n+1]),this._$AH[n]=o}r&&!i&&this.j(e)}j(e){e===G?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,e??"")}}class ee extends Y{constructor(){super(...arguments),this.type=3}j(e){this.element[this.name]=e===G?void 0:e}}class te extends Y{constructor(){super(...arguments),this.type=4}j(e){this.element.toggleAttribute(this.name,!!e&&e!==G)}}class se extends Y{constructor(e,t,s,i,a){super(e,t,s,i,a),this.type=5}_$AI(e,t=this){if((e=K(this,e,t,0)??G)===F)return;const s=this._$AH,i=e===G&&s!==G||e.capture!==s.capture||e.once!==s.once||e.passive!==s.passive,a=e!==G&&(s===G||i);i&&this.element.removeEventListener(this.name,this,s),a&&this.element.addEventListener(this.name,this,e),this._$AH=e}handleEvent(e){"function"==typeof this._$AH?this._$AH.call(this.options?.host??this.element,e):this._$AH.handleEvent(e)}}class ie{constructor(e,t,s){this.element=e,this.type=6,this._$AN=void 0,this._$AM=t,this.options=s}get _$AU(){return this._$AM._$AU}_$AI(e){K(this,e)}}const ae=w.litHtmlPolyfillSupport;ae?.(Q,X),(w.litHtmlVersions??=[]).push("3.3.3");const re=globalThis;let ne=class extends k{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){const e=super.createRenderRoot();return this.renderOptions.renderBefore??=e.firstChild,e}update(e){const t=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(e),this._$Do=((e,t,s)=>{const i=s?.renderBefore??t;let a=i._$litPart$;if(void 0===a){const e=s?.renderBefore??null;i._$litPart$=a=new X(t.insertBefore(P(),e),e,void 0,s??{})}return a._$AI(e),a})(t,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return F}};ne._$litElement$=!0,ne.finalized=!0,re.litElementHydrateSupport?.({LitElement:ne});const oe=re.litElementPolyfillSupport;oe?.({LitElement:ne}),(re.litElementVersions??=[]).push("4.2.2");let ce=class{constructor(e){}get _$AU(){return this._$AM._$AU}_$AT(e,t,s){this._$Ct=e,this._$AM=t,this._$Ci=s}_$AS(e,t){return this.update(e,t)}update(e,t){return this.render(...t)}};const le={},de=(e=>(...t)=>({_$litDirective$:e,values:t}))(class extends ce{constructor(){super(...arguments),this.key=G}render(e,t){return this.key=e,t}update(e,[t,s]){return t!==this.key&&(((e,t=le)=>{e._$AH=t})(e),this.key=t),s}}),he=r`
   :host {
     display: block;
     color: var(--primary-text-color, #e8eef5);
@@ -1040,6 +1040,26 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     justify-content: flex-end;
   }
 
+  .zone-pages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0.75rem;
+  }
+
+  .zone-page {
+    min-width: 4.5rem;
+  }
+
+  .admin-structure {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--cctv-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
   .recording-total {
     margin-right: 0.25rem;
     color: var(--cctv-muted);
@@ -1279,7 +1299,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
   .card-inner {
     padding: 0.25rem 0.25rem 0.75rem;
   }
-`,ut=new Set(["unavailable","unknown","none",""]),pt=[{service:"turn_on",label:"Turn on",feature:1},{service:"turn_off",label:"Turn off",feature:1},{service:"toggle",label:"Toggle",feature:1},{service:"snapshot",label:"Snapshot"},{service:"enable_motion_detection",label:"Motion on",attr:"motion_detection",attrValue:!1},{service:"disable_motion_detection",label:"Motion off",attr:"motion_detection",attrValue:!0}];function mt(t,e){const s=e?.attributes??{};return{entityId:t,stateObj:e,state:e?.state??"unknown",name:s.friendly_name||t,brand:s.brand,model:s.model,frontendStreamType:s.frontend_stream_type,supportedFeatures:Number(s.supported_features||0),unavailable:!e||ut.has(String(e.state).trim().toLowerCase())}}function _t(t){return Boolean(2&t?.supportedFeatures)}async function gt(t,e){if(!t?.callWS)return null;try{return await t.callWS({type:"camera/capabilities",entity_id:e})}catch{return null}}async function ft(t,e){if(!t?.callWS)return"";const s=await t.callWS({type:"camera/stream",entity_id:e}),i=s?.url||"";return i?"function"==typeof t.hassUrl?t.hassUrl(i):i:""}async function yt(t,e,s,i={}){if(!t?.callService)throw new Error("hass.callService is unavailable");return t.callService("camera",e,{entity_id:s,...i})}function bt(t,e){const s=t?.services?.camera||{},i=Number(e?.supportedFeatures||0),a=e?.stateObj?.attributes||{};return pt.filter(t=>{if(!s[t.service])return!1;if(null!=t.feature&&i&&0===(i&t.feature))return!1;if(t.attr){if(!(t.attr in a))return!1;if(null!=t.attrValue&&Boolean(a[t.attr])!==t.attrValue)return!1}return!0}).map(({service:t,label:e})=>({service:t,label:e}))}function vt(t,e){if(!e)return;const s=new Event("hass-more-info",{bubbles:!0,composed:!0});s.detail={entityId:e},t.dispatchEvent(s)}function kt(t){return t?Array.isArray(t)?t.map(String).map(t=>t.trim()).filter(Boolean):String(t).split(",").map(t=>t.trim()).filter(Boolean):[]}const wt=[{id:"person",label:"Person",tokens:["person","people","human","pedestrian","face"]},{id:"car",label:"Car",tokens:["car","vehicle","automobile","auto"]},{id:"animal",label:"Animal",tokens:["animal","pet","dog","cat","wildlife"]},{id:"package",label:"Package",tokens:["package","parcel","delivery","amazon"]},{id:"bicycle",label:"Bicycle",tokens:["bicycle","bike","cyclist"]},{id:"motion",label:"Motion",tokens:["motion","occupancy","presence","moving"]},{id:"other",label:"Other",tokens:["detection","object","zone"]}],$t=new Set(["binary_sensor","sensor"]),St=new Set(["on","true","detected","active","1","home"]);function xt(t,e){return e.some(e=>new RegExp(`(^|[_\\s.-])${e}([_\\s.-]|$)`,"i").test(t))}function At(t,e){const s=`${t} ${e?.attributes?.friendly_name||""}`.toLowerCase();for(const t of wt)if("other"!==t.id&&xt(s,t.tokens))return{id:t.id,label:t.label};return{id:"other",label:"Other"}}function Ct(t){if(!t)return!1;const e=String(t.state??"").trim().toLowerCase();if(St.has(e))return!0;const s=Number(e);return Number.isFinite(s)&&s>0}function Mt(t,e,s){const i=String(t||"").replace(/^camera\./i,"").replace(/_(main|hi|high|primary)$/i,"").toLowerCase();if(!i)return 0;const a=String(e).toLowerCase(),r=String(s?.attributes?.friendly_name||"").toLowerCase(),n=`${a} ${r}`;let o=0;const c=a.replace(/^(binary_sensor|sensor)\./,"");if(c===i||c.startsWith(`${i}_`)?o+=50:c.includes(i)&&(o+=25),r.includes(i.replace(/_/g," "))&&(o+=15),o<=0)return 0;let l=o;return"other"!==At(e,s).id?l+=20:xt(n,["detection","object","zone","motion","occupancy"])&&(l+=8),a.startsWith("binary_sensor.")&&(l+=5),l}function It(t,e,s={}){const i=t?.states||{},a=s.limit??24,r=s.deviceIds,n=r?.get(e),o=[];for(const[t,s]of Object.entries(i)){const i=t.split(".")[0];if(!$t.has(i))continue;let a=Mt(e,t,s);if(n&&r?.get(t)===n&&(a+=40),a<20)continue;const c=At(t,s);o.push({entityId:t,name:s?.attributes?.friendly_name||t,kind:c,score:a,state:String(s?.state??"unknown"),active:Ct(s)})}return o.sort((t,e)=>e.score-t.score||t.name.localeCompare(e.name)),o.slice(0,a)}function Pt(t){if(!t||"object"!=typeof t||Array.isArray(t))return{};const e={};for(const[s,i]of Object.entries(t))String(s).startsWith("camera.")&&Array.isArray(i)&&(e[s]=[...new Set(i.map(String).filter(t=>$t.has(t.split(".")[0])))].slice(0,16));return e}function Dt(t){return{start:t.start,end:t.end,cameras:[...t.cameras||[]],sensors:[...t.sensors||[]]}}function Et(t,e){const s=new Set(t.cameras);for(const t of e.cameras||[])s.add(t);t.cameras=[...s];const i=new Map((t.sensors||[]).map(t=>[t.entityId,t]));for(const t of e.sensors||[])t?.entityId&&i.set(t.entityId,t);t.sensors=[...i.values()]}function Tt(t){const e=Math.max(0,Math.round(t/1e3));if(e<60)return`${e}s`;const s=Math.floor(e/60),i=e%60;if(s<60)return i?`${s}m ${i}s`:`${s}m`;const a=Math.floor(s/60),r=s%60;return r?`${a}h ${r}m`:`${a}h`}function Nt(t){try{return new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}catch{return""}}function Rt(t){if(!Array.isArray(t))return[];const e=[],s=new Set;for(const i of t){if(!i||"object"!=typeof i||Array.isArray(i))continue;const t=[];for(const e of i.members||[]){const i=String(e||"");if(i.startsWith("camera.")&&!s.has(i)&&!t.includes(i)&&(s.add(i),t.push(i),t.length>=8))break}if(t.length<2)continue;const a=String(i.id||"").trim(),r=a&&/^[a-zA-Z0-9._-]+$/.test(a)?a.slice(0,64):`grp_${t[0].replace(/^camera\./,"").slice(0,40)}`,n=String(i.name||"").trim().slice(0,64)||t[0].replace(/^camera\./,"").replace(/_/g," ");if(e.push({id:r,name:n,members:t}),e.length>=32)break}return e}function Lt(t,e){const s=String(e||"");if(!s.startsWith("camera."))return null;for(const e of t||[])if((e.members||[]).includes(s))return e;return null}function Ot(t,e){const s=Lt(t,e);if(s?.members?.length)return[...s.members];const i=String(e||"");return i.startsWith("camera.")?[i]:[]}const qt=["_fluent","_sub","_lq","_low","_sd","_substream"];function jt(t,e){const s=String(t||""),i=[...new Set((e||[]).map(String))].filter(t=>t.startsWith("camera.")&&t!==s),a=[],r=[];for(const t of i){const e=t.replace(/^camera\./,"");qt.some(t=>e.endsWith(t))?a.push(t):r.push(t)}return[...a,...r]}function Ht(t,e){const s={...t||{}};for(const t of e||[]){const e=(t.members||[]).filter(t=>String(t).startsWith("camera."));if(e.length<2)continue;const i=new Set;for(const t of e)for(const e of s[t]||[])e&&i.add(String(e));const a=[...i].slice(0,16);for(const t of e)a.length?s[t]=[...a]:delete s[t]}return s}function Wt(t,e,s){const i=String(s||"");if(!i)return[];const a=[];for(const[e,s]of Object.entries(t||{}))String(e).startsWith("camera.")&&(s||[]).map(String).includes(i)&&a.push(e);const r=new Set;for(const t of a)for(const s of Ot(e,t))r.add(s);return[...r].sort()}const Ft=[{value:"auto",label:"Auto",help:"High for detail, prefer low/substream in the mosaic when available."},{value:"high",label:"High",help:"Main camera entity; prefer WebRTC/HLS."},{value:"balanced",label:"Balanced",help:"Main entity; prefer HA native / WebRTC, then HLS/MJPEG."},{value:"low",label:"Low",help:"Substream entity when available, else MJPEG on the main camera."}],zt=["_sub","_lq","_low","_fluent","_sd","_substream"],Ut="cctv-dashboard:quality:",Vt=new Set(Ft.map(t=>t.value));function Bt(t){const e=String(t||"auto").toLowerCase();return Vt.has(e)?e:"auto"}function Gt(t){if(!t||"object"!=typeof t)return{};const e={};for(const[s,i]of Object.entries(t)){if(!String(s).startsWith("camera."))continue;const t=Bt(i);"auto"!==t&&(e[s]=t)}return e}function Qt(t,e){const s=t?.camera_settings||t?.cameras_settings||{},i=s?.[e]||s?.[e?.toLowerCase?.()]||{},a={};return t?.entity&&t.entity===e&&(t.low_entity&&(a.low_entity=t.low_entity),t.high_entity&&(a.high_entity=t.high_entity),t.substream_entity&&(a.substream_entity=t.substream_entity),t.main_entity&&(a.main_entity=t.main_entity)),{...a,...i}}function Kt(t){try{const e=localStorage.getItem(Ut+t);return e?Bt(e):null}catch{return null}}function Jt(t,e){try{localStorage.setItem(Ut+t,Bt(e))}catch{}}function Zt(t,e,s=null,i=null){if(s){const t=function(t,e,s=null){if(!t||"object"!=typeof t)return null;const i=String(e||"");if(t[i])return Bt(t[i]);for(const e of s||[])if(e&&e!==i&&t[e])return Bt(t[e]);return null}(s,e,i);if(t)return t}else{const t=Kt(e);if(t)return t;for(const t of i||[]){if(!t||t===e)continue;const s=Kt(t);if(s)return s}}const a=Qt(t,e);return a.quality?Bt(a.quality):t?.quality?Bt(t.quality):"auto"}function Xt(t,e,s,i,a="mosaic",r=null){const n=Bt(i),o=Qt(s,e.entityId),c=t?.states||{},l=o.high_entity||o.main_entity||e.entityId,d=o.low_entity||o.substream_entity||function(t,e){const s=String(e||""),i=[...new Set((t||[]).map(String))].filter(t=>t.startsWith("camera."));for(const t of qt){const e=i.find(e=>e!==s&&e.replace(/^camera\./,"").endsWith(t));if(e)return e}return i.find(t=>t!==s)||""}(r,e.entityId)||function(t,e,s){const i=t?.states||{},a=e.replace(/^camera\./,"");for(const t of s){const e=`camera.${a}${t}`;if(i[e])return e;const s=`camera.${a.replace(/_main$/,"")}${t}`;if(s!==e&&i[s])return s}return""}(t,e.entityId,zt)||"";let h=e.entityId;return h="high"===n?l:"low"===n?d||l:"auto"===n&&"mosaic"===a&&d?d:l,c[h]||(h=e.entityId),mt(h,c[h])}function Yt(t){return Ft.find(e=>e.value===Bt(t))?.help||""}const te=16/9,ee=[{value:"auto",label:"Auto (detect)",ratio:null},{value:"16:9",label:"16:9 landscape",ratio:16/9},{value:"9:16",label:"9:16 portrait",ratio:9/16},{value:"4:3",label:"4:3 landscape",ratio:4/3},{value:"3:4",label:"3:4 portrait",ratio:3/4},{value:"1:1",label:"1:1 square",ratio:1},{value:"3:2",label:"3:2 landscape",ratio:1.5},{value:"2:3",label:"2:3 portrait",ratio:2/3},{value:"custom",label:"Custom W:H…",ratio:null}],se=/^(\d+(?:\.\d+)?)[:x×*](\d+(?:\.\d+)?)$/i;function ie(t){let e=String(t||"").trim().toLowerCase().replace(/\s+/g,"").replace(/×/g,"x").replace(/\*/g,"x");if(!e||"auto"===e||"default"===e||"none"===e||"custom"===e)return"auto";if(ee.some(t=>t.value===e&&"custom"!==t.value))return e;const s=se.exec(e);if(!s)return"auto";const i=Number(s[1]),a=Number(s[2]);return!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0||i/a<.05||i/a>20?"auto":Number.isInteger(i)&&Number.isInteger(a)?`${i}:${a}`:`${Number(i.toPrecision(12))}:${Number(a.toPrecision(12))}`}function ae(t){const e=ie(t);if("auto"===e)return null;const s=ee.find(t=>t.value===e);if(s?.ratio)return s.ratio;const[i,a]=e.split(":").map(Number);return!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0?null:i/a}function re(t){const e=ie(t);return"auto"===e||ee.some(t=>t.value===e&&"custom"!==t.value)}function ne(t){const e=ie(t);return"auto"===e?"auto":re(e)?e:"custom"}function oe(t){if(!t||"object"!=typeof t)return{};const e={};for(const[s,i]of Object.entries(t)){if(!String(s).startsWith("camera."))continue;const t=ie(i);"auto"!==t&&(e[s]=t)}return e}function ce(t,e,s=null){if(!t||"object"!=typeof t)return"auto";const i=String(e||"");if(t[i])return ie(t[i]);for(const e of s||[])if(e&&e!==i&&t[e])return ie(t[e]);return"auto"}function le(t,e,s,i=null){const a=ie(s),r=[...new Set([...i||[],e].map(String).filter(t=>t.startsWith("camera.")))],n={...t||{}};for(const t of r)"auto"===a?delete n[t]:n[t]=a;return oe(n)}function de(t){const e=Number(t);return!Number.isFinite(e)||e<=.05||e>20?te:e}function he(t,e,s,i){if(!t.length||e<=0||s<=0)return null;const a=Math.max(0,t.length-1)*i,r=s-a;if(r<=0)return null;const n=t.map(t=>{const s=t.reduce((t,e)=>t+e.aspect,0),a=Math.max(0,t.length-1)*i,r=e-a;return s<=0||r<=0?0:r/s});if(n.some(t=>t<=0))return null;const o=n.reduce((t,e)=>t+e,0),c=Math.min(1,r/o),l=n.map(t=>t*c),d=[];let h=(s-(l.reduce((t,e)=>t+e,0)+a))/2;t.forEach((t,s)=>{const a=l[s],r=t.map(t=>t.aspect*a),n=r.reduce((t,e)=>t+e,0)+Math.max(0,t.length-1)*i;let o=(e-n)/2;t.forEach((t,e)=>{d.push({id:t.id,left:o,top:h,width:r[e],height:a,aspect:t.aspect}),o+=r[e]+i}),h+=a+i});const u=d.reduce((t,e)=>t+e.width*e.height,0);return{cells:d,totalArea:u}}function ue(t,e,s,i){const a=t.map(t=>t.map(t=>({id:t.id,aspect:1/t.aspect}))),r=he(a,s,e,i);return r?{totalArea:r.totalArea,cells:r.cells.map(t=>({id:t.id,left:t.top,top:t.left,width:t.height,height:t.width,aspect:1/t.aspect}))}:null}async function pe(t){if(!t?.callWS)return null;try{const e=await t.callWS({type:"cctv_dashboard/get_settings"});if(!e||"object"!=typeof e)return null;const s=Rt(e.stream_groups||[]),i=Ht(Pt(e.sensor_links||{}),s);return{...e,sensorLinks:i,streamGroups:s,forceAspect:oe(e.force_aspect||{}),cameraQuality:Gt(e.camera_quality||{})}}catch(t){return console.warn("CCTV: failed to load shared config",t),null}}async function me(t,e){if(!t?.callWS)return null;const s=Pt(e);return t.callWS({type:"cctv_dashboard/set_sensor_links",sensor_links:s})}async function _e(t,e){return t?.callWS?t.callWS({type:"cctv_dashboard/set_settings",...e}):null}async function ge(t,e=200){if(!t?.callWS)return[];try{const s=await t.callWS({type:"cctv_dashboard/list_recordings",limit:e});return s?.sessions||[]}catch(t){return console.warn("CCTV: failed to list recordings",t),[]}}function fe(t,e){return e?"function"==typeof t?.hassUrl?t.hassUrl(e):e:""}function ye(t){if(!t)return"";let e=String(t);try{/^https?:\/\//i.test(e)&&(e=new URL(e).pathname)}catch{}e=e.split("?")[0].split("#")[0],e.startsWith("/")||(e=`/${e}`);const s="/cctv_dashboard_recordings/";if(e.startsWith(s)){const t=e.slice(27).split("/").pop();t&&(e=`/api/cctv_dashboard/media/${t}`)}return e}function be(t){const e="/api/cctv_dashboard/media/",s=[t?.url,t?.path,t?.filePath];for(const t of s){if(!t)continue;let s=String(t);try{/^https?:\/\//i.test(s)&&(s=new URL(s).pathname)}catch{}if(s=s.split("?")[0].split("#")[0],s.includes(e)||s.includes("/cctv_dashboard_recordings/"))return ye(s)}for(const t of s){if(!t)continue;const s=String(t).split("?")[0].split("/").pop();if(s&&/\.(mp4|m4v|webm|jpg|jpeg|png|webp)$/i.test(s))return`${e}${s}`}return ye(t?.url||t?.path||"")}async function ve(t,e,s=3600){if(!e)return"";const i=ye(e);if(!i)return"";if(!t?.callWS)throw new Error("Home Assistant WebSocket unavailable for auth/sign_path");const a=await t.callWS({type:"auth/sign_path",path:i,expires:s}),r=a?.path;if("string"!=typeof r||!r.includes("authSig"))throw new Error(`auth/sign_path returned no authSig for ${i}`);return"function"==typeof t.hassUrl?t.hassUrl(r):r}const ke={person:"#5eb1ff",car:"#f0b45a",animal:"#7dcf8a",package:"#c9a0ff",bicycle:"#67d5c8",motion:"#e6d36a",other:"#8b9aab"};function we(t){const e=String(t||"").toLowerCase();return ke[e]||ke.other}function $e(t,e,s=null){const i=new Set((e||[]).map(String).filter(Boolean));if(!i.size)return[];if(s?.length){const e=new Set;for(const a of i)for(const i of Wt(t,s,a))e.add(i);return[...e]}const a=[];for(const[e,s]of Object.entries(t||{}))String(e).startsWith("camera.")&&(s||[]).some(t=>i.has(String(t)))&&a.push(e);return a}function Se(t,e,s,i=null,a=null){const r={},n=(t,e)=>{const s=String(t||"");if(!s.startsWith("camera.")||r[s])return;const i=String(e||"other").toLowerCase();r[s]={kindId:i,color:we(i)}},o=i?.kind?.id;if(o&&Array.isArray(i?.cameras))for(const t of i.cameras)n(t,o);const c=[...e?.trigger_sensors||[],...(i?.sensors||[]).map(t=>t?.entityId).filter(Boolean)];for(const e of c){const i=At(e,t?.states?.[e]);for(const t of $e(s,[e],a))n(t,i.id)}return r}function xe(t){const e=Number(t)||0;return e<1024?`${e} B`:e<1048576?`${(e/1024).toFixed(e<10240?1:0)} KB`:e<1073741824?`${(e/1048576).toFixed(e<10485760?1:0)} MB`:`${(e/1073741824).toFixed(1)} GB`}function Ae(t,e){const s=[],i=new Set;for(const a of e||[]){const e=t?.states?.[a],r=At(a,e);i.has(r.id)||(i.add(r.id),s.push(r.label))}return s.length?s:["Detection"]}function Ce(t){return Number.isFinite(t?.total_bytes)?Number(t.total_bytes):(t?.clips||[]).reduce((t,e)=>t+(Number(e.size)||0),0)}function Me(t){if(null==t||""===t)return NaN;if("number"==typeof t)return Number.isFinite(t)?t:NaN;if(t instanceof Date)return t.getTime();const e=String(t).trim(),s=e.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/i);if(s){const t=`${s[1]}-${s[2]}-${s[3]}T${s[4]}:${s[5]}:${s[6]}Z`;return Date.parse(t)}return Date.parse(e)}function Ie(t){return!!t&&(!("size"in(t||{})&&Number(t.size)<=0)&&("snapshot"===t.kind||(Number(t.size)>0||!("size"in(t||{})))))}function Pe(t){const e=Array.isArray(t)?t:[],s=e.filter(t=>t&&"snapshot"!==t.kind);return s.length?s:e}function De(t){return!!t&&(Ce(t)>0||!t.active&&(t.clips||[]).some(Ie))}function Ee(t,e,s=10){const i=Array.isArray(t)?t:[],a=Math.max(1,Number(s)||10),r=i.length,n=Math.max(1,Math.ceil(r/a)||1),o=Math.min(Math.max(1,Number(e)||1),n),c=(o-1)*a;return{page:o,pageCount:n,pageSize:a,total:r,items:i.slice(c,c+a)}}function Te(t){const e=String(t?.camera_id||"").trim();if(e.startsWith("camera."))return e;const s=String(t?.path||t?.url||"").split("?")[0].split("/").pop();if(!s)return"";const i=s.match(/^(\d{8}T\d{6}Z_[a-f0-9]{8})_(.+)_(\d{3})_(\d{8}T\d{6}Z)\.(?:mp4|jpg|jpeg|webp)$/i);return i?`camera.${i[2]}`:""}function Ne(t){const e=new Map;for(const s of t?.clips||[]){const t=Te(s);t&&!e.get(t)&&(Ie(s)&&e.set(t,!0))}const s=Array.isArray(t?.cameras)?t.cameras.map(String).filter(t=>e.has(t)):[];if(s.length){for(const t of e.keys())s.includes(t)||s.push(t);return s}return[...e.keys()]}function Re(t,e,s=null){const i=new Map;for(const t of e?.clips||[]){const e=Te(t);e&&(i.has(e)||i.set(e,[]),i.get(e).push(t))}let a;if(s&&s.length)a=s.map(String);else{const s=Ne(e);a=s.length?s:[...i.keys()].sort((e,s)=>{const i=t?.states?.[e]?.attributes?.friendly_name||e.replace(/^camera\./,""),a=t?.states?.[s]?.attributes?.friendly_name||s.replace(/^camera\./,"");return i.localeCompare(a)})}return a.map(e=>{const s=[...i.get(e)||[]].sort((t,e)=>Number(t.seq||0)-Number(e.seq||0));return{cameraId:e,name:t?.states?.[e]?.attributes?.friendly_name||e.replace(/^camera\./,""),items:Pe(s.filter(Ie)).map(e=>{const s=function(t){const e=Me(t?.started),s=Number(t?.duration),i=Number.isFinite(s)&&s>0?1e3*s:3e4;return{start:e,end:Number.isFinite(e)?e+i:NaN,durationMs:i}}(e),i=String(e.url||"");return{path:i,url:fe(t,i),kind:"snapshot"===e.kind?"snapshot":"video",size:Number(e.size)||0,seq:Number(e.seq)||0,started:e.started,startedMs:s.start,durationMs:s.durationMs,endMs:s.end,fallback_reason:e.fallback_reason||"",filePath:e.path||""}})}})}function Le(t,e){const s=t?.items||[];if(!s.length||!Number.isFinite(e))return{index:0,seekSec:0};for(let t=0;t<s.length;t+=1){const i=s[t],a=Number(i.startedMs),r=Number(i.endMs);if(Number.isFinite(a)){if(e<a)return{index:t,seekSec:0};if(!Number.isFinite(r)||e<r){return{index:t,seekSec:Math.max(0,(e-a)/1e3)}}}}return{index:Math.max(0,s.length-1),seekSec:0}}const Oe="cctv_dashboard";async function qe(t){if(!t?.callWS)return null;try{const e=await t.callWS({type:"frontend/get_user_data",key:Oe}),s=e?.value??e;if(!s||"object"!=typeof s)return null;const i=Array.isArray(s.selectedCameras)?s.selectedCameras.map(String).filter(t=>t.startsWith("camera.")):[];return{selectedCameras:i,legacySensorLinks:s.sensorLinks&&"object"==typeof s.sensorLinks?s.sensorLinks:null}}catch(t){return console.warn("CCTV: failed to load panel user data",t),null}}async function je(t,e,s={}){if(!t?.callWS)return;const i=[...new Set(e.map(String).filter(t=>t.startsWith("camera.")))].slice(0,4),a={selectedCameras:i};s.clearLegacySensorLinks;try{await t.callWS({type:"frontend/set_user_data",key:Oe,value:a})}catch(t){throw console.warn("CCTV: failed to save panel selection",t),t}return{selectedCameras:i}}const He=100,We=50;const Fe=new class{constructor(t=4){this.max=t,this.holders=new Map,this.queue=[]}setMax(t){const e=Math.max(1,Number(t)||4);if(e!==this.max)for(this.max=e,this._drain();this.holders.size>this.max;)this._revokeLowest()}activeCount(){return this.holders.size}has(t){return this.holders.has(t)}request(t,e,{onGrant:s,onRevoke:i}){if(!t)return!1;if(this.holders.has(t)){const s=this.holders.get(t);return s.priority=e,s.onRevoke=i,this.queue=this.queue.filter(e=>e.id!==t),!0}const a=this.queue.find(e=>e.id===t);if(a)return a.priority=e,a.onGrant=s,a.onRevoke=i,this._drain(),this.holders.has(t);if(this.holders.size<this.max)return this.holders.set(t,{priority:e,onRevoke:i}),!0;const r=this._lowestHolder();return r&&e>r.priority?(this._revoke(r.id),this.holders.set(t,{priority:e,onRevoke:i}),!0):(this.queue.push({id:t,priority:e,onGrant:s,onRevoke:i}),this.queue.sort((t,e)=>e.priority-t.priority),!1)}release(t){t&&(this.queue=this.queue.filter(e=>e.id!==t),this.holders.has(t)&&(this.holders.delete(t),this._drain()))}releaseAll(){this.holders.clear(),this.queue=[]}_lowestHolder(){let t=null;for(const[e,s]of this.holders)(!t||s.priority<t.priority)&&(t={id:e,priority:s.priority});return t}_revoke(t){const e=this.holders.get(t);if(e){this.holders.delete(t);try{e.onRevoke?.()}catch(t){console.warn("CCTV stream slot revoke failed",t)}}}_revokeLowest(){const t=this._lowestHolder();t&&this._revoke(t.id)}_drain(){for(;this.holders.size<this.max&&this.queue.length;){const t=this.queue.shift();this.holders.set(t.id,{priority:t.priority,onRevoke:t.onRevoke});try{t.onGrant?.()}catch(e){console.warn("CCTV stream slot grant failed",e),this.holders.delete(t.id)}}}}(4),ze="cctv_dashboard:tv_mode",Ue=16/9;function Ve(t=("undefined"!=typeof document?document:null)){let e=56,s=0;try{const i=t?.documentElement;if(i){const t=getComputedStyle(i);e=parseFloat(t.getPropertyValue("--app-header-height"))||e,s=parseFloat(t.getPropertyValue("--cctv-kiosk-inset"))||0}}catch{}return Math.max(0,e+0+0+s+56+12)}function Be(t){if(!t||"number"!=typeof t.clientWidth)return 0;let e=0;try{if("function"==typeof getComputedStyle){const s=getComputedStyle(t);e=(parseFloat(s.paddingLeft)||0)+(parseFloat(s.paddingRight)||0)}}catch{}return Math.max(0,t.clientWidth-e)}class Ge extends nt{static properties={hass:{attribute:!1},camera:{attribute:!1},config:{attribute:!1},quality:{type:String},context:{type:String},muted:{type:Boolean},controls:{type:Boolean},large:{type:Boolean,reflect:!0},mosaic:{type:Boolean,reflect:!0},eager:{type:Boolean},posterOnly:{type:Boolean,attribute:"poster-only"},active:{type:Boolean},failoverEntityIds:{attribute:!1},groupMembers:{attribute:!1},_mode:{state:!0},_error:{state:!0},_hlsUrl:{state:!0},_mjpegUrl:{state:!0},_stillUrl:{state:!0},_visible:{state:!0},_slotHeld:{state:!0},_queued:{state:!0},_tileAspect:{state:!0},_failoverEntityId:{state:!0}};static styles=r`
+`,ue=new Set(["unavailable","unknown","none",""]),pe=[{service:"turn_on",label:"Turn on",feature:1},{service:"turn_off",label:"Turn off",feature:1},{service:"toggle",label:"Toggle",feature:1},{service:"snapshot",label:"Snapshot"},{service:"enable_motion_detection",label:"Motion on",attr:"motion_detection",attrValue:!1},{service:"disable_motion_detection",label:"Motion off",attr:"motion_detection",attrValue:!0}];function me(e,t){const s=t?.attributes??{};return{entityId:e,stateObj:t,state:t?.state??"unknown",name:s.friendly_name||e,brand:s.brand,model:s.model,frontendStreamType:s.frontend_stream_type,supportedFeatures:Number(s.supported_features||0),unavailable:!t||ue.has(String(t.state).trim().toLowerCase())}}function _e(e){return Boolean(2&e?.supportedFeatures)}async function ge(e,t){if(!e?.callWS)return null;try{return await e.callWS({type:"camera/capabilities",entity_id:t})}catch{return null}}async function fe(e,t){if(!e?.callWS)return"";const s=await e.callWS({type:"camera/stream",entity_id:t}),i=s?.url||"";return i?"function"==typeof e.hassUrl?e.hassUrl(i):i:""}async function ye(e,t,s,i={}){if(!e?.callService)throw new Error("hass.callService is unavailable");return e.callService("camera",t,{entity_id:s,...i})}function be(e,t){const s=e?.services?.camera||{},i=Number(t?.supportedFeatures||0),a=t?.stateObj?.attributes||{};return pe.filter(e=>{if(!s[e.service])return!1;if(null!=e.feature&&i&&0===(i&e.feature))return!1;if(e.attr){if(!(e.attr in a))return!1;if(null!=e.attrValue&&Boolean(a[e.attr])!==e.attrValue)return!1}return!0}).map(({service:e,label:t})=>({service:e,label:t}))}function ve(e,t){if(!t)return;const s=new Event("hass-more-info",{bubbles:!0,composed:!0});s.detail={entityId:t},e.dispatchEvent(s)}function ke(e){return e?Array.isArray(e)?e.map(String).map(e=>e.trim()).filter(Boolean):String(e).split(",").map(e=>e.trim()).filter(Boolean):[]}const we=[{id:"person",label:"Person",tokens:["person","people","human","pedestrian","face"]},{id:"car",label:"Car",tokens:["car","vehicle","automobile","auto"]},{id:"animal",label:"Animal",tokens:["animal","pet","dog","cat","wildlife"]},{id:"package",label:"Package",tokens:["package","parcel","delivery","amazon"]},{id:"bicycle",label:"Bicycle",tokens:["bicycle","bike","cyclist"]},{id:"motion",label:"Motion",tokens:["motion","occupancy","presence","moving"]},{id:"other",label:"Other",tokens:["detection","object","zone"]}],$e=new Set(["binary_sensor","sensor"]),Se=new Set(["on","true","detected","active","1","home"]);function xe(e,t){return t.some(t=>new RegExp(`(^|[_\\s.-])${t}([_\\s.-]|$)`,"i").test(e))}function Ae(e,t){const s=`${e} ${t?.attributes?.friendly_name||""}`.toLowerCase();for(const e of we)if("other"!==e.id&&xe(s,e.tokens))return{id:e.id,label:e.label};return{id:"other",label:"Other"}}function Me(e){if(!e)return!1;const t=String(e.state??"").trim().toLowerCase();if(Se.has(t))return!0;const s=Number(t);return Number.isFinite(s)&&s>0}function Ce(e,t,s){const i=String(e||"").replace(/^camera\./i,"").replace(/_(main|hi|high|primary)$/i,"").toLowerCase();if(!i)return 0;const a=String(t).toLowerCase(),r=String(s?.attributes?.friendly_name||"").toLowerCase(),n=`${a} ${r}`;let o=0;const c=a.replace(/^(binary_sensor|sensor)\./,"");if(c===i||c.startsWith(`${i}_`)?o+=50:c.includes(i)&&(o+=25),r.includes(i.replace(/_/g," "))&&(o+=15),o<=0)return 0;let l=o;return"other"!==Ae(t,s).id?l+=20:xe(n,["detection","object","zone","motion","occupancy"])&&(l+=8),a.startsWith("binary_sensor.")&&(l+=5),l}function Ie(e,t,s={}){const i=e?.states||{},a=s.limit??24,r=s.deviceIds,n=r?.get(t),o=[];for(const[e,s]of Object.entries(i)){const i=e.split(".")[0];if(!$e.has(i))continue;let a=Ce(t,e,s);if(n&&r?.get(e)===n&&(a+=40),a<20)continue;const c=Ae(e,s);o.push({entityId:e,name:s?.attributes?.friendly_name||e,kind:c,score:a,state:String(s?.state??"unknown"),active:Me(s)})}return o.sort((e,t)=>t.score-e.score||e.name.localeCompare(t.name)),o.slice(0,a)}function De(e){if(!e||"object"!=typeof e||Array.isArray(e))return{};const t={};for(const[s,i]of Object.entries(e))String(s).startsWith("camera.")&&Array.isArray(i)&&(t[s]=[...new Set(i.map(String).filter(e=>$e.has(e.split(".")[0])))].slice(0,16));return t}function Pe(e){return{start:e.start,end:e.end,cameras:[...e.cameras||[]],sensors:[...e.sensors||[]]}}function Ne(e,t){const s=new Set(e.cameras);for(const e of t.cameras||[])s.add(e);e.cameras=[...s];const i=new Map((e.sensors||[]).map(e=>[e.entityId,e]));for(const e of t.sensors||[])e?.entityId&&i.set(e.entityId,e);e.sensors=[...i.values()]}function Ee(e){const t=Math.max(0,Math.round(e/1e3));if(t<60)return`${t}s`;const s=Math.floor(t/60),i=t%60;if(s<60)return i?`${s}m ${i}s`:`${s}m`;const a=Math.floor(s/60),r=s%60;return r?`${a}h ${r}m`:`${a}h`}function ze(e){try{return new Date(e).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}catch{return""}}function Te(e){if(!Array.isArray(e))return[];const t=[],s=new Set;for(const i of e){if(!i||"object"!=typeof i||Array.isArray(i))continue;const e=[];for(const t of i.members||[]){const i=String(t||"");if(i.startsWith("camera.")&&!s.has(i)&&!e.includes(i)&&(s.add(i),e.push(i),e.length>=8))break}if(e.length<2)continue;const a=String(i.id||"").trim(),r=a&&/^[a-zA-Z0-9._-]+$/.test(a)?a.slice(0,64):`grp_${e[0].replace(/^camera\./,"").slice(0,40)}`,n=String(i.name||"").trim().slice(0,64)||e[0].replace(/^camera\./,"").replace(/_/g," ");if(t.push({id:r,name:n,members:e}),t.length>=32)break}return t}function Oe(e,t){const s=String(t||"");if(!s.startsWith("camera."))return null;for(const t of e||[])if((t.members||[]).includes(s))return t;return null}function Re(e,t){const s=Oe(e,t);if(s?.members?.length)return[...s.members];const i=String(t||"");return i.startsWith("camera.")?[i]:[]}const Le=["_fluent","_sub","_lq","_low","_sd","_substream"];function qe(e,t){const s=String(e||""),i=[...new Set((t||[]).map(String))].filter(e=>e.startsWith("camera.")&&e!==s),a=[],r=[];for(const e of i){const t=e.replace(/^camera\./,"");Le.some(e=>t.endsWith(e))?a.push(e):r.push(e)}return[...a,...r]}const je=["high_resolution","high_res","_clear","_main"];function He(e){const t=[...new Set((e||[]).map(String))].filter(e=>e.startsWith("camera."));if(!t.length)return"";for(const e of je){const s=t.find(t=>t.replace(/^camera\./,"").includes(e));if(s)return s}return t.find(e=>{const t=e.replace(/^camera\./,"");return!Le.some(e=>t.endsWith(e))})||t[0]}function We(e,t){const s={...e||{}};for(const e of t||[]){const t=(e.members||[]).filter(e=>String(e).startsWith("camera."));if(t.length<2)continue;const i=new Set;for(const e of t)for(const t of s[e]||[])t&&i.add(String(t));const a=[...i].slice(0,16);for(const e of t)a.length?s[e]=[...a]:delete s[e]}return s}function Fe(e,t,s){const i=String(s||"");if(!i)return[];const a=[];for(const[t,s]of Object.entries(e||{}))String(t).startsWith("camera.")&&(s||[]).map(String).includes(i)&&a.push(t);const r=new Set;for(const e of a)for(const s of Re(t,e))r.add(s);return[...r].sort()}function Ge(e,t){const s=String(t||"");return Te((e||[]).filter(e=>e.id!==s))}const Ue=[{value:"auto",label:"Auto",help:"High for detail, prefer low/substream in the mosaic when available."},{value:"high",label:"High",help:"Main camera entity; prefer WebRTC/HLS."},{value:"balanced",label:"Balanced",help:"Main entity; prefer HA native / WebRTC, then HLS/MJPEG."},{value:"low",label:"Low",help:"Substream entity when available, else MJPEG on the main camera."}],Ve=["_sub","_lq","_low","_fluent","_sd","_substream"],Be="cctv-dashboard:quality:",Ze=new Set(Ue.map(e=>e.value));function Qe(e){const t=String(e||"auto").toLowerCase();return Ze.has(t)?t:"auto"}function Ke(e){if(!e||"object"!=typeof e)return{};const t={};for(const[s,i]of Object.entries(e)){if(!String(s).startsWith("camera."))continue;const e=Qe(i);"auto"!==e&&(t[s]=e)}return t}function Je(e,t){const s=e?.camera_settings||e?.cameras_settings||{},i=s?.[t]||s?.[t?.toLowerCase?.()]||{},a={};return e?.entity&&e.entity===t&&(e.low_entity&&(a.low_entity=e.low_entity),e.high_entity&&(a.high_entity=e.high_entity),e.substream_entity&&(a.substream_entity=e.substream_entity),e.main_entity&&(a.main_entity=e.main_entity)),{...a,...i}}function Xe(e){try{const t=localStorage.getItem(Be+e);return t?Qe(t):null}catch{return null}}function Ye(e,t){try{localStorage.setItem(Be+e,Qe(t))}catch{}}function et(e,t,s=null,i=null){if(s){const e=function(e,t,s=null){if(!e||"object"!=typeof e)return null;const i=String(t||"");if(e[i])return Qe(e[i]);for(const t of s||[])if(t&&t!==i&&e[t])return Qe(e[t]);return null}(s,t,i);if(e)return e}else{const e=Xe(t);if(e)return e;for(const e of i||[]){if(!e||e===t)continue;const s=Xe(e);if(s)return s}}const a=Je(e,t);return a.quality?Qe(a.quality):e?.quality?Qe(e.quality):"auto"}function tt(e,t,s,i,a="mosaic",r=null){const n=Qe(i),o=Je(s,t.entityId),c=e?.states||{},l=o.high_entity||o.main_entity||t.entityId,d=o.low_entity||o.substream_entity||function(e,t){const s=String(t||""),i=[...new Set((e||[]).map(String))].filter(e=>e.startsWith("camera."));for(const e of Le){const t=i.find(t=>t!==s&&t.replace(/^camera\./,"").endsWith(e));if(t)return t}return i.find(e=>e!==s)||""}(r,t.entityId)||function(e,t,s){const i=e?.states||{},a=t.replace(/^camera\./,"");for(const e of s){const t=`camera.${a}${e}`;if(i[t])return t;const s=`camera.${a.replace(/_main$/,"")}${e}`;if(s!==t&&i[s])return s}return""}(e,t.entityId,Ve)||"";let h=t.entityId;return h="high"===n?l:"low"===n?d||l:"auto"===n&&"mosaic"===a&&d?d:l,c[h]||(h=t.entityId),me(h,c[h])}function st(e){return Ue.find(t=>t.value===Qe(e))?.help||""}const it=16/9,at=[{value:"auto",label:"Auto (detect)",ratio:null},{value:"16:9",label:"16:9 landscape",ratio:16/9},{value:"9:16",label:"9:16 portrait",ratio:9/16},{value:"4:3",label:"4:3 landscape",ratio:4/3},{value:"3:4",label:"3:4 portrait",ratio:3/4},{value:"1:1",label:"1:1 square",ratio:1},{value:"3:2",label:"3:2 landscape",ratio:1.5},{value:"2:3",label:"2:3 portrait",ratio:2/3},{value:"custom",label:"Custom W:H…",ratio:null}],rt=/^(\d+(?:\.\d+)?)[:x×*](\d+(?:\.\d+)?)$/i;function nt(e){let t=String(e||"").trim().toLowerCase().replace(/\s+/g,"").replace(/×/g,"x").replace(/\*/g,"x");if(!t||"auto"===t||"default"===t||"none"===t||"custom"===t)return"auto";if(at.some(e=>e.value===t&&"custom"!==e.value))return t;const s=rt.exec(t);if(!s)return"auto";const i=Number(s[1]),a=Number(s[2]);return!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0||i/a<.05||i/a>20?"auto":Number.isInteger(i)&&Number.isInteger(a)?`${i}:${a}`:`${Number(i.toPrecision(12))}:${Number(a.toPrecision(12))}`}function ot(e){const t=nt(e);if("auto"===t)return null;const s=at.find(e=>e.value===t);if(s?.ratio)return s.ratio;const[i,a]=t.split(":").map(Number);return!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0?null:i/a}function ct(e){const t=nt(e);return"auto"===t||at.some(e=>e.value===t&&"custom"!==e.value)}function lt(e){const t=nt(e);return"auto"===t?"auto":ct(t)?t:"custom"}function dt(e){if(!e||"object"!=typeof e)return{};const t={};for(const[s,i]of Object.entries(e)){if(!String(s).startsWith("camera."))continue;const e=nt(i);"auto"!==e&&(t[s]=e)}return t}function ht(e,t,s=null){if(!e||"object"!=typeof e)return"auto";const i=String(t||"");if(e[i])return nt(e[i]);for(const t of s||[])if(t&&t!==i&&e[t])return nt(e[t]);return"auto"}function ut(e,t,s,i=null){const a=nt(s),r=[...new Set([...i||[],t].map(String).filter(e=>e.startsWith("camera.")))],n={...e||{}};for(const e of r)"auto"===a?delete n[e]:n[e]=a;return dt(n)}function pt(e){const t=Number(e);return!Number.isFinite(t)||t<=.05||t>20?it:t}function mt(e,t,s,i){if(!e.length||t<=0||s<=0)return null;const a=Math.max(0,e.length-1)*i,r=s-a;if(r<=0)return null;const n=e.map(e=>{const s=e.reduce((e,t)=>e+t.aspect,0),a=Math.max(0,e.length-1)*i,r=t-a;return s<=0||r<=0?0:r/s});if(n.some(e=>e<=0))return null;const o=n.reduce((e,t)=>e+t,0),c=Math.min(1,r/o),l=n.map(e=>e*c),d=[];let h=(s-(l.reduce((e,t)=>e+t,0)+a))/2;e.forEach((e,s)=>{const a=l[s],r=e.map(e=>e.aspect*a),n=r.reduce((e,t)=>e+t,0)+Math.max(0,e.length-1)*i;let o=(t-n)/2;e.forEach((e,t)=>{d.push({id:e.id,left:o,top:h,width:r[t],height:a,aspect:e.aspect}),o+=r[t]+i}),h+=a+i});const u=d.reduce((e,t)=>e+t.width*t.height,0);return{cells:d,totalArea:u}}function _t(e,t,s,i){const a=e.map(e=>e.map(e=>({id:e.id,aspect:1/e.aspect}))),r=mt(a,s,t,i);return r?{totalArea:r.totalArea,cells:r.cells.map(e=>({id:e.id,left:e.top,top:e.left,width:e.height,height:e.width,aspect:1/e.aspect}))}:null}function gt(e,t=null){const s=new Set((t||[]).map(e=>String(e?.id||"")).filter(Boolean));if(!Array.isArray(e))return[];const i=[],a=new Set;for(const t of e){if(!t||"object"!=typeof t||Array.isArray(t))continue;const e=[];for(const i of t.group_ids||t.groups||[]){const t=String(i||"").trim();if(t&&!e.includes(t)&&((!s.size||s.has(t))&&(e.push(t),e.length>=32)))break}const r=String(t.id||"").trim(),n=r&&/^[a-zA-Z0-9._-]+$/.test(r)?r.slice(0,64):`zone_${String(t.name||"zone").replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,40)}`;if(a.has(n))continue;a.add(n);const o=String(t.name||"").trim().slice(0,64)||n.replace(/^zone_/,"").replace(/_/g," ")||"Zone";if(i.push({id:n,name:o,group_ids:e}),i.length>=32)break}return i}function ft(e,t){const s=String(t||"");return s&&(e||[]).find(e=>e.id===s)||null}async function yt(e){if(!e?.callWS)return null;try{const t=await e.callWS({type:"cctv_dashboard/get_settings"});if(!t||"object"!=typeof t)return null;const s=Te(t.stream_groups||[]),i=gt(t.zones||[],s),a=We(De(t.sensor_links||{}),s);return{...t,sensorLinks:a,streamGroups:s,zones:i,forceAspect:dt(t.force_aspect||{}),cameraQuality:Ke(t.camera_quality||{})}}catch(e){return console.warn("CCTV: failed to load shared config",e),null}}async function bt(e,t){if(!e?.callWS)return null;const s=De(t);return e.callWS({type:"cctv_dashboard/set_sensor_links",sensor_links:s})}async function vt(e,t){return e?.callWS?e.callWS({type:"cctv_dashboard/set_settings",...t}):null}async function kt(e,t=200){if(!e?.callWS)return[];try{const s=await e.callWS({type:"cctv_dashboard/list_recordings",limit:t});return s?.sessions||[]}catch(e){return console.warn("CCTV: failed to list recordings",e),[]}}function wt(e,t){return t?"function"==typeof e?.hassUrl?e.hassUrl(t):t:""}function $t(e){if(!e)return"";let t=String(e);try{/^https?:\/\//i.test(t)&&(t=new URL(t).pathname)}catch{}t=t.split("?")[0].split("#")[0],t.startsWith("/")||(t=`/${t}`);const s="/cctv_dashboard_recordings/";if(t.startsWith(s)){const e=t.slice(27).split("/").pop();e&&(t=`/api/cctv_dashboard/media/${e}`)}return t}function St(e){const t="/api/cctv_dashboard/media/",s=[e?.url,e?.path,e?.filePath];for(const e of s){if(!e)continue;let s=String(e);try{/^https?:\/\//i.test(s)&&(s=new URL(s).pathname)}catch{}if(s=s.split("?")[0].split("#")[0],s.includes(t)||s.includes("/cctv_dashboard_recordings/"))return $t(s)}for(const e of s){if(!e)continue;const s=String(e).split("?")[0].split("/").pop();if(s&&/\.(mp4|m4v|webm|jpg|jpeg|png|webp)$/i.test(s))return`${t}${s}`}return $t(e?.url||e?.path||"")}async function xt(e,t,s=3600){if(!t)return"";const i=$t(t);if(!i)return"";if(!e?.callWS)throw new Error("Home Assistant WebSocket unavailable for auth/sign_path");const a=await e.callWS({type:"auth/sign_path",path:i,expires:s}),r=a?.path;if("string"!=typeof r||!r.includes("authSig"))throw new Error(`auth/sign_path returned no authSig for ${i}`);return"function"==typeof e.hassUrl?e.hassUrl(r):r}const At={person:"#5eb1ff",car:"#f0b45a",animal:"#7dcf8a",package:"#c9a0ff",bicycle:"#67d5c8",motion:"#e6d36a",other:"#8b9aab"};function Mt(e){const t=String(e||"").toLowerCase();return At[t]||At.other}function Ct(e,t,s=null){const i=new Set((t||[]).map(String).filter(Boolean));if(!i.size)return[];if(s?.length){const t=new Set;for(const a of i)for(const i of Fe(e,s,a))t.add(i);return[...t]}const a=[];for(const[t,s]of Object.entries(e||{}))String(t).startsWith("camera.")&&(s||[]).some(e=>i.has(String(e)))&&a.push(t);return a}function It(e,t,s,i=null,a=null){const r={},n=(e,t)=>{const s=String(e||"");if(!s.startsWith("camera.")||r[s])return;const i=String(t||"other").toLowerCase();r[s]={kindId:i,color:Mt(i)}},o=i?.kind?.id;if(o&&Array.isArray(i?.cameras))for(const e of i.cameras)n(e,o);const c=[...t?.trigger_sensors||[],...(i?.sensors||[]).map(e=>e?.entityId).filter(Boolean)];for(const t of c){const i=Ae(t,e?.states?.[t]);for(const e of Ct(s,[t],a))n(e,i.id)}return r}function Dt(e){const t=Number(e)||0;return t<1024?`${t} B`:t<1048576?`${(t/1024).toFixed(t<10240?1:0)} KB`:t<1073741824?`${(t/1048576).toFixed(t<10485760?1:0)} MB`:`${(t/1073741824).toFixed(1)} GB`}function Pt(e,t){const s=[],i=new Set;for(const a of t||[]){const t=e?.states?.[a],r=Ae(a,t);i.has(r.id)||(i.add(r.id),s.push(r.label))}return s.length?s:["Detection"]}function Nt(e){return Number.isFinite(e?.total_bytes)?Number(e.total_bytes):(e?.clips||[]).reduce((e,t)=>e+(Number(t.size)||0),0)}function Et(e){if(null==e||""===e)return NaN;if("number"==typeof e)return Number.isFinite(e)?e:NaN;if(e instanceof Date)return e.getTime();const t=String(e).trim(),s=t.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/i);if(s){const e=`${s[1]}-${s[2]}-${s[3]}T${s[4]}:${s[5]}:${s[6]}Z`;return Date.parse(e)}return Date.parse(t)}function zt(e){return!!e&&(!("size"in(e||{})&&Number(e.size)<=0)&&("snapshot"===e.kind||(Number(e.size)>0||!("size"in(e||{})))))}function Tt(e){const t=Array.isArray(e)?e:[],s=t.filter(e=>e&&"snapshot"!==e.kind);return s.length?s:t}function Ot(e){return!!e&&(Nt(e)>0||!e.active&&(e.clips||[]).some(zt))}function Rt(e,t,s=10){const i=Array.isArray(e)?e:[],a=Math.max(1,Number(s)||10),r=i.length,n=Math.max(1,Math.ceil(r/a)||1),o=Math.min(Math.max(1,Number(t)||1),n),c=(o-1)*a;return{page:o,pageCount:n,pageSize:a,total:r,items:i.slice(c,c+a)}}function Lt(e){const t=String(e?.camera_id||"").trim();if(t.startsWith("camera."))return t;const s=String(e?.path||e?.url||"").split("?")[0].split("/").pop();if(!s)return"";const i=s.match(/^(\d{8}T\d{6}Z_[a-f0-9]{8})_(.+)_(\d{3})_(\d{8}T\d{6}Z)\.(?:mp4|jpg|jpeg|webp)$/i);return i?`camera.${i[2]}`:""}function qt(e){const t=new Map;for(const s of e?.clips||[]){const e=Lt(s);e&&!t.get(e)&&(zt(s)&&t.set(e,!0))}const s=Array.isArray(e?.cameras)?e.cameras.map(String).filter(e=>t.has(e)):[];if(s.length){for(const e of t.keys())s.includes(e)||s.push(e);return s}return[...t.keys()]}function jt(e,t,s=null){const i=new Map;for(const e of t?.clips||[]){const t=Lt(e);t&&(i.has(t)||i.set(t,[]),i.get(t).push(e))}let a;if(s&&s.length)a=s.map(String);else{const s=qt(t);a=s.length?s:[...i.keys()].sort((t,s)=>{const i=e?.states?.[t]?.attributes?.friendly_name||t.replace(/^camera\./,""),a=e?.states?.[s]?.attributes?.friendly_name||s.replace(/^camera\./,"");return i.localeCompare(a)})}return a.map(t=>{const s=[...i.get(t)||[]].sort((e,t)=>Number(e.seq||0)-Number(t.seq||0));return{cameraId:t,name:e?.states?.[t]?.attributes?.friendly_name||t.replace(/^camera\./,""),items:Tt(s.filter(zt)).map(t=>{const s=function(e){const t=Et(e?.started),s=Number(e?.duration),i=Number.isFinite(s)&&s>0?1e3*s:3e4;return{start:t,end:Number.isFinite(t)?t+i:NaN,durationMs:i}}(t),i=String(t.url||"");return{path:i,url:wt(e,i),kind:"snapshot"===t.kind?"snapshot":"video",size:Number(t.size)||0,seq:Number(t.seq)||0,started:t.started,startedMs:s.start,durationMs:s.durationMs,endMs:s.end,fallback_reason:t.fallback_reason||"",filePath:t.path||""}})}})}function Ht(e,t){const s=e?.items||[];if(!s.length||!Number.isFinite(t))return{index:0,seekSec:0};for(let e=0;e<s.length;e+=1){const i=s[e],a=Number(i.startedMs),r=Number(i.endMs);if(Number.isFinite(a)){if(t<a)return{index:e,seekSec:0};if(!Number.isFinite(r)||t<r){return{index:e,seekSec:Math.max(0,(t-a)/1e3)}}}}return{index:Math.max(0,s.length-1),seekSec:0}}const Wt="cctv_dashboard";async function Ft(e){if(!e?.callWS)return null;try{const t=await e.callWS({type:"frontend/get_user_data",key:Wt}),s=t?.value??t;if(!s||"object"!=typeof s)return null;const i=Array.isArray(s.selectedCameras)?s.selectedCameras.map(String).filter(e=>e.startsWith("camera.")):[],a=String(s.selectedZone||"").trim();return{selectedCameras:i,selectedZone:a,legacySensorLinks:s.sensorLinks&&"object"==typeof s.sensorLinks?s.sensorLinks:null}}catch(e){return console.warn("CCTV: failed to load panel user data",e),null}}async function Gt(e,t,s={}){if(!e?.callWS)return;const i=[...new Set(t.map(String).filter(e=>e.startsWith("camera.")))].slice(0,4),a=String(s.selectedZone||"").trim(),r={selectedCameras:i};a&&(r.selectedZone=a),s.clearLegacySensorLinks;try{await e.callWS({type:"frontend/set_user_data",key:Wt,value:r})}catch(e){throw console.warn("CCTV: failed to save panel selection",e),e}return{selectedCameras:i,selectedZone:a}}const Ut=100,Vt=50;const Bt=new class{constructor(e=4){this.max=e,this.holders=new Map,this.queue=[]}setMax(e){const t=Math.max(1,Number(e)||4);if(t!==this.max)for(this.max=t,this._drain();this.holders.size>this.max;)this._revokeLowest()}activeCount(){return this.holders.size}has(e){return this.holders.has(e)}request(e,t,{onGrant:s,onRevoke:i}){if(!e)return!1;if(this.holders.has(e)){const s=this.holders.get(e);return s.priority=t,s.onRevoke=i,this.queue=this.queue.filter(t=>t.id!==e),!0}const a=this.queue.find(t=>t.id===e);if(a)return a.priority=t,a.onGrant=s,a.onRevoke=i,this._drain(),this.holders.has(e);if(this.holders.size<this.max)return this.holders.set(e,{priority:t,onRevoke:i}),!0;const r=this._lowestHolder();return r&&t>r.priority?(this._revoke(r.id),this.holders.set(e,{priority:t,onRevoke:i}),!0):(this.queue.push({id:e,priority:t,onGrant:s,onRevoke:i}),this.queue.sort((e,t)=>t.priority-e.priority),!1)}release(e){e&&(this.queue=this.queue.filter(t=>t.id!==e),this.holders.has(e)&&(this.holders.delete(e),this._drain()))}releaseAll(){this.holders.clear(),this.queue=[]}_lowestHolder(){let e=null;for(const[t,s]of this.holders)(!e||s.priority<e.priority)&&(e={id:t,priority:s.priority});return e}_revoke(e){const t=this.holders.get(e);if(t){this.holders.delete(e);try{t.onRevoke?.()}catch(e){console.warn("CCTV stream slot revoke failed",e)}}}_revokeLowest(){const e=this._lowestHolder();e&&this._revoke(e.id)}_drain(){for(;this.holders.size<this.max&&this.queue.length;){const e=this.queue.shift();this.holders.set(e.id,{priority:e.priority,onRevoke:e.onRevoke});try{e.onGrant?.()}catch(t){console.warn("CCTV stream slot grant failed",t),this.holders.delete(e.id)}}}}(4),Zt="cctv_dashboard:tv_mode",Qt=16/9;function Kt(e=("undefined"!=typeof document?document:null)){let t=56,s=0;try{const i=e?.documentElement;if(i){const e=getComputedStyle(i);t=parseFloat(e.getPropertyValue("--app-header-height"))||t,s=parseFloat(e.getPropertyValue("--cctv-kiosk-inset"))||0}}catch{}return Math.max(0,t+0+0+s+56+12)}function Jt(e){if(!e||"number"!=typeof e.clientWidth)return 0;let t=0;try{if("function"==typeof getComputedStyle){const s=getComputedStyle(e);t=(parseFloat(s.paddingLeft)||0)+(parseFloat(s.paddingRight)||0)}}catch{}return Math.max(0,e.clientWidth-t)}class Xt extends ne{static properties={hass:{attribute:!1},camera:{attribute:!1},config:{attribute:!1},quality:{type:String},context:{type:String},muted:{type:Boolean},controls:{type:Boolean},large:{type:Boolean,reflect:!0},mosaic:{type:Boolean,reflect:!0},eager:{type:Boolean},posterOnly:{type:Boolean,attribute:"poster-only"},active:{type:Boolean},failoverEntityIds:{attribute:!1},groupMembers:{attribute:!1},_mode:{state:!0},_error:{state:!0},_hlsUrl:{state:!0},_mjpegUrl:{state:!0},_stillUrl:{state:!0},_visible:{state:!0},_slotHeld:{state:!0},_queued:{state:!0},_tileAspect:{state:!0},_failoverEntityId:{state:!0}};static styles=r`
     :host {
       display: block;
       position: relative;
@@ -1387,21 +1407,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
       text-align: center;
       font-size: 0.85rem;
     }
-  `;constructor(){super(),this.config={},this.quality="",this.context="mosaic",this.muted=!0,this.controls=!1,this.large=!1,this.mosaic=!1,this.eager=!1,this.posterOnly=!1,this.active=!0,this.failoverEntityIds=[],this.groupMembers=[],this._mode="loading",this._error="",this._hlsUrl="",this._mjpegUrl="",this._stillUrl="",this._visible=!1,this._slotHeld=!1,this._queued=!1,this._failoverEntityId="",this._failoverTried=new Set,this._pc=null,this._unsubWebRtc=null,this._sessionId=null,this._startToken=0,this._observer=null,this._hostRo=null,this._slotId="",this._streamCamera=null,this._stableStateObj=null,this._tileAspect=0,this._lastEmittedAspect=0}connectedCallback(){super.connectedCallback(),this._bindObserver(),this._bindHostResize(),this._bindDocumentVisibility(),this.active?this._reconcilePlayback():this._unloadCompletely()}disconnectedCallback(){super.disconnectedCallback(),this._unbindObserver(),this._unbindHostResize(),this._unbindDocumentVisibility(),this._unloadCompletely()}_bindDocumentVisibility(){this._unbindDocumentVisibility(),"undefined"!=typeof document&&(this._onDocVisibility=()=>{this.active&&this._reconcilePlayback()},document.addEventListener("visibilitychange",this._onDocVisibility))}_unbindDocumentVisibility(){this._onDocVisibility&&"undefined"!=typeof document&&document.removeEventListener("visibilitychange",this._onDocVisibility),this._onDocVisibility=null}shouldUpdate(t){for(const e of t.keys()){if(e.startsWith("_"))return!0;if(!["hass","camera","config"].includes(e))return!0}return!(!t.has("hass")||!this._cameraHassChanged(t.get("hass"),this.hass))||(!(!t.has("camera")||!this._cameraMeaningful(t.get("camera"),this.camera))||!(!t.has("config")||!this._configMeaningful(t.get("config"),this.config)))}updated(t){if((t.has("eager")||t.has("posterOnly"))&&this._bindObserver(),(t.has("large")||t.has("mosaic"))&&this._bindHostResize(),t.has("active")&&!this.active)return void this._unloadCompletely();const e=t.has("hass")&&this._cameraHassChanged(t.get("hass"),this.hass),s=t.has("camera")&&this._cameraMeaningful(t.get("camera"),this.camera),i=t.has("config")&&this._configMeaningful(t.get("config"),this.config);if((t.has("camera")||t.has("failoverEntityIds")||t.has("groupMembers"))&&(this._failoverTried=new Set,this._failoverEntityId=""),(e||s||i||t.has("quality")||t.has("context")||t.has("eager")||t.has("posterOnly")||t.has("failoverEntityIds")||t.has("groupMembers")||t.has("active")&&this.active)&&this._reconcilePlayback(),t.has("muted")){const t=this.renderRoot?.querySelector("video");t&&(t.muted=this.muted)}(t.has("_mode")||s||t.has("_tileAspect"))&&this.updateComplete.then(()=>{this._probeMediaSize(),this._forceNestedContain()})}_cameraHassChanged(t,e){const s=this._streamCamera?.entityId||this.camera?.entityId;if(!s)return!0;const i=t?.states?.[s],a=e?.states?.[s];if(i===a)return!1;if(!i||!a)return!0;const r=t=>!t||["unavailable","unknown"].includes(String(t.state).trim().toLowerCase());return r(i)!==r(a)||i.attributes?.access_token!==a.attributes?.access_token}_cameraMeaningful(t,e){return t!==e&&(!t||!e||(t.entityId!==e.entityId||Boolean(t.unavailable)!==Boolean(e.unavailable)||t.stateObj?.attributes?.access_token!==e.stateObj?.attributes?.access_token))}_configMeaningful(t,e){return t!==e&&(!t||!e||(t.max_streams!==e.max_streams||t.quality!==e.quality||JSON.stringify(t.camera_settings||null)!==JSON.stringify(e.camera_settings||null)||JSON.stringify(t.cameras_settings||null)!==JSON.stringify(e.cameras_settings||null)))}_bindHostResize(){this._unbindHostResize(),this._updateTileAspect(),"undefined"!=typeof ResizeObserver&&(this._hostRo=new ResizeObserver(()=>this._updateTileAspect()),this._hostRo.observe(this))}_unbindHostResize(){this._hostRo&&(this._hostRo.disconnect(),this._hostRo=null)}_updateTileAspect(){const t=this.clientWidth,e=this.clientHeight;if(!Number.isFinite(t)||!Number.isFinite(e)||t<2||e<2)return;const s=t/e;this._tileAspect&&Math.abs(this._tileAspect-s)<.005||(this._tileAspect=s)}_forceNestedContain(){if(!this.mosaic&&!this.large||"ha"!==this._mode)return;const t=this.renderRoot?.querySelector("ha-camera-stream"),e=t?.shadowRoot;e&&e.querySelectorAll("video, img").forEach(t=>{t.style.objectFit="contain",t.style.objectPosition="center",t.style.width="100%",t.style.height="100%",t.style.maxWidth="100%",t.style.maxHeight="100%"})}get _effectiveQuality(){return this.quality?this.quality:Zt(this.config,this.camera?.entityId)}get _priority(){return this.eager?He:We}_bindObserver(){this._unbindObserver(),this.eager||this.posterOnly?this._visible=!0:"undefined"!=typeof IntersectionObserver?(this._observer=new IntersectionObserver(t=>{const e=t.some(t=>t.isIntersecting);e!==this._visible&&(this._visible=e,this._reconcilePlayback())},{root:null,rootMargin:"120px 0px",threshold:.15}),this._observer.observe(this)):this._visible=!0}_unbindObserver(){this._observer&&(this._observer.disconnect(),this._observer=null)}_wantsLive(){return!!this.active&&(("undefined"==typeof document||!document.hidden)&&(!this.posterOnly&&(!!this.eager||this._visible)))}_refreshPosterUrls(t,{cacheBust:e=!1}={}){const s=t||this.camera;if(!this.hass||!s?.stateObj)return this._stillUrl="",void(this._mjpegUrl="");const i=function(t,e,s=!0){if(!t||!e?.stateObj)return"";const i=e.stateObj.attributes||{};let a=i.entity_picture;if(!a&&i.access_token&&(a=`/api/camera_proxy/${e.entityId}?token=${i.access_token}`),!a)return"";const r="function"==typeof t.hassUrl?t.hassUrl(a):a;if(!s)return r;const n=r.includes("?")?"&":"?";return`${r}${n}t=${Date.now()}`}(this.hass,s,e),a=function(t,e){const s=e?.stateObj?.attributes?.access_token;if(!t||!e?.entityId||!s)return"";const i=`/api/camera_proxy_stream/${e.entityId}?token=${s}`;return"function"==typeof t.hassUrl?t.hassUrl(i):i}(this.hass,s);this._stillUrl!==i&&(this._stillUrl=i),this._mjpegUrl!==a&&(this._mjpegUrl=a)}_syncStableStreamCamera(t){const e=t?.stateObj||null,s=this._stableStateObj,i=t=>!t||["unavailable","unknown"].includes(String(t.state).trim().toLowerCase());!s||!e||s.entity_id!==e.entity_id||s.attributes?.access_token!==e.attributes?.access_token||i(s)!==i(e)?(this._stableStateObj=e,this._streamCamera=t):this._streamCamera||(this._streamCamera=t)}_clearMediaElements(){const t=this.renderRoot;t&&(t.querySelectorAll("video").forEach(t=>{try{t.pause?.();const e=t.srcObject;e&&"function"==typeof e.getTracks&&e.getTracks().forEach(t=>{try{t.stop()}catch{}}),t.srcObject=null,t.removeAttribute("src"),t.load?.()}catch{}}),t.querySelectorAll("img.media").forEach(t=>{try{t.removeAttribute("src"),t.src=""}catch{}}))}_stopLive(){if(this._startToken+=1,this._unsubWebRtc){try{this._unsubWebRtc()}catch{}this._unsubWebRtc=null}if(this._pc){try{this._pc.getSenders?.().forEach(t=>{try{t.track?.stop?.()}catch{}}),this._pc.getReceivers?.().forEach(t=>{try{t.track?.stop?.()}catch{}}),this._pc.close()}catch{}this._pc=null}this._sessionId=null,this._hlsUrl="",this._clearMediaElements()}_releaseSlot(){this._slotId&&Fe.release(this._slotId),this._slotHeld=!1,this._queued=!1}_unloadCompletely(){this._releaseSlot(),this._stopLive(),this._stillUrl="",this._mjpegUrl="",this._mode="empty",this._error="",this._playKey="",this._idleReason="suspended",this._queued=!1,this._stableStateObj=null,this._streamCamera=null,this._failoverEntityId="",this._failoverTried=new Set}_showIdle(t="idle"){if(this._stopLive(),!this.active||"undefined"!=typeof document&&document.hidden)return this._stillUrl="",this._mjpegUrl="",this._mode="empty",this._error="",void(this._idleReason=t);this._refreshPosterUrls(this._streamCamera||this.camera,{cacheBust:!0}),this.hass&&this.camera?.stateObj?(this._mode=this._stillUrl?"still":"empty",this._error=this._stillUrl?"":"No preview",this._idleReason=t):this._mode="empty"}_reconcilePlayback(){if(!this.active||"undefined"!=typeof document&&document.hidden)return void this._unloadCompletely();const t=Number(this.config?.max_streams);if(Number.isFinite(t)&&t>0&&Fe.setMax(t),!this.hass||!this.camera?.stateObj)return this._releaseSlot(),this._stopLive(),this._mode="empty",this._playKey="",void(this._stableStateObj=null);const e=[...new Set([...this.groupMembers||[],...this.failoverEntityIds||[],this.camera?.entityId].filter(Boolean))];if(this._failoverEntityId&&this.hass?.states?.[this._failoverEntityId])this._syncStableStreamCamera(mt(this._failoverEntityId,this.hass.states[this._failoverEntityId]));else{const t=Xt(this.hass,this.camera,this.config,this._effectiveQuality,this.context,e);this._syncStableStreamCamera(t)}const s=this._streamCamera?.entityId||this.camera.entityId;this._slotId&&s&&this._slotId!==s&&(Fe.release(this._slotId),this._slotHeld=!1,this._queued=!1,this._playKey=""),this._slotId=s;const i=this._wantsLive(),a=[i?"live":"idle",this._slotId,this._effectiveQuality,this.context,this.eager?"eager":"lazy"].join("|");if(!i)return this._releaseSlot(),this._showIdle("idle"),void(this._playKey=a);if(this._slotHeld&&this._playKey===a&&"loading"!==this._mode&&"empty"!==this._mode&&("still"!==this._mode||!this._queued))return;this._refreshPosterUrls(this._streamCamera,{cacheBust:!1});const r=()=>{this._slotHeld=!0,this._queued=!1,this._playKey=a,this._startLive()},n=()=>{if(this._slotHeld=!1,this._queued=this._wantsLive(),this._playKey="",this._showIdle("queued"),this._wantsLive()){Fe.request(this._slotId,this._priority,{onGrant:r,onRevoke:n})&&r()}};Fe.request(this._slotId,this._priority,{onGrant:r,onRevoke:n})?r():(this._slotHeld=!1,this._queued=!0,this._playKey=a,this._showIdle("queued"))}async _startLive(){this._stopLive();const t=this._startToken;this._error="",this._mode="loading",this._idleReason="";const e=this._streamCamera||this.camera;this._refreshPosterUrls(e,{cacheBust:!1});const s=function(t,e="mosaic"){const s=Bt(t);return"low"===s?["mjpeg","ha","webrtc","hls"]:"high"===s?["webrtc","ha","hls","mjpeg"]:"balanced"===s?["ha","webrtc","hls","mjpeg"]:"mosaic"===e?["mjpeg","ha","webrtc","hls"]:["webrtc","ha","hls","mjpeg"]}(this._effectiveQuality,this.context);for(const i of s){if(t!==this._startToken||!this._slotHeld)return;if("ha"===i&&customElements.get("ha-camera-stream"))return void(this._mode="ha");if("webrtc"===i&&"undefined"!=typeof RTCPeerConnection){const s=await gt(this.hass,e.entityId);if(t!==this._startToken||!this._slotHeld)return;const i=s?.frontend_stream_types||[],a=e.frontendStreamType;if(i.includes("web_rtc")||"web_rtc"===a||_t(e)||!i.length)try{if(await this._startWebRtc(t,e),t!==this._startToken||!this._slotHeld)return;return void(this._mode="webrtc")}catch(t){console.warn("CCTV WebRTC failed, falling back",t)}}if("hls"===i)try{const s=await ft(this.hass,e.entityId);if(t!==this._startToken||!this._slotHeld)return;if(s&&this._canPlayHlsNatively())return this._hlsUrl=s,void(this._mode="hls")}catch(t){console.warn("CCTV HLS failed, falling back",t)}if("mjpeg"===i&&this._mjpegUrl)return void(this._mode="mjpeg")}await this._tryGroupFailover(t)||(this._mode=this._stillUrl?"still":"empty",this._stillUrl||(this._error="No stream or preview available"))}async _tryGroupFailover(t){const e=this.camera?.entityId||"",s=[...new Set([...this.failoverEntityIds||[],...this.groupMembers||[]].map(String).filter(t=>t.startsWith("camera.")))].filter(t=>t!==e),i=[],a=[];for(const t of s){const e=t.replace(/^camera\./,"");["_fluent","_sub","_lq","_low","_sd","_substream"].some(t=>e.endsWith(t))?i.push(t):a.push(t)}const r=[...i,...a];this._failoverTried||(this._failoverTried=new Set);const n=this._failoverEntityId||this._streamCamera?.entityId||e;n&&this._failoverTried.add(n);for(const s of r){if(t!==this._startToken||!this._slotHeld)return!1;if(this._failoverTried.has(s))continue;if(!this.hass?.states?.[s])continue;this._failoverTried.add(s);const i=mt(s,this.hass.states[s]);if(!i?.stateObj)continue;this._slotId&&this._slotId!==s&&(Fe.release(this._slotId),this._slotHeld=!1),this._failoverEntityId=s,this._streamCamera=i,this._stableStateObj=i.stateObj,this._slotId=s,this._playKey="";if(!Fe.request(s,this._priority,{onGrant:()=>{this._slotHeld=!0,this._queued=!1},onRevoke:()=>{this._slotHeld=!1,this._queued=this._wantsLive(),this._playKey="",this._showIdle("queued")}}))return this._queued=!0,this._showIdle("queued"),!1;if(this._slotHeld=!0,this.dispatchEvent(new CustomEvent("cctv-stream-failover",{detail:{from:e,to:s,groupMembers:this.groupMembers||[]},bubbles:!0,composed:!0})),await this._startLive(),t!==this._startToken)return!1;if("ha"===this._mode||"webrtc"===this._mode||"hls"===this._mode||"mjpeg"===this._mode)return!0}return!1}_canPlayHlsNatively(){const t=document.createElement("video");return""!==t.canPlayType("application/vnd.apple.mpegurl")||""!==t.canPlayType("application/x-mpegURL")}async _startWebRtc(t,e){const s=await async function(t,e){if(!t?.callWS)return null;try{return await t.callWS({type:"camera/webrtc/get_client_config",entity_id:e})}catch{return null}}(this.hass,e.entityId)||{};if(t!==this._startToken)return;const i=new RTCPeerConnection(s.configuration||{});this._pc=i,i.addTransceiver("video",{direction:"recvonly"});try{i.addTransceiver("audio",{direction:"recvonly"})}catch{}i.ontrack=t=>{const e=this.renderRoot?.querySelector("video#webrtc");if(!e)return;const[s]=t.streams;e.srcObject=s||new MediaStream([t.track]),e.muted=this.muted,e.play?.().catch(()=>{})},i.onicecandidate=t=>{t.candidate&&this._sessionId&&async function(t,e,s,i){t?.callWS&&await t.callWS({type:"camera/webrtc/candidate",entity_id:e,session_id:s,candidate:i})}(this.hass,e.entityId,this._sessionId,t.candidate.toJSON()).catch(()=>{})};const a=await i.createOffer({offerToReceiveVideo:!0,offerToReceiveAudio:!0});await i.setLocalDescription(a),this._unsubWebRtc=await function(t,e,s,i){if(!t?.connection?.subscribeMessage)throw new Error("WebSocket connection unavailable");return t.connection.subscribeMessage(i,{type:"camera/webrtc/offer",entity_id:e,offer:s})}(this.hass,e.entityId,a.sdp,async e=>{if(t===this._startToken&&this._pc)if("session"!==e.type)if("answer"!==e.type)if("candidate"===e.type&&e.candidate)try{await this._pc.addIceCandidate(e.candidate)}catch{}else"error"===e.type&&(this._error=e.message||e.code||"WebRTC error",this._mode=this._mjpegUrl?"mjpeg":this._stillUrl?"still":"empty");else await this._pc.setRemoteDescription({type:"answer",sdp:e.answer});else this._sessionId=e.session_id})}_emitMediaAspect(t,e){const s=this.camera?.entityId,i=Number(t),a=Number(e);if(!s||!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0)return;const r=i/a;this._lastEmittedAspect&&Math.abs(this._lastEmittedAspect-r)<.01||(this._lastEmittedAspect=r,this.dispatchEvent(new CustomEvent("cctv-media-aspect",{detail:{entityId:s,width:i,height:a,aspect:r},bubbles:!0,composed:!0})))}_probeMediaSize(){const t=this.renderRoot;if(!t)return;const e=t.querySelector("video");if(e)return void(e.videoWidth&&e.videoHeight&&this._emitMediaAspect(e.videoWidth,e.videoHeight));const s=t.querySelector("img.media");if(s&&s.naturalWidth&&s.naturalHeight)return void this._emitMediaAspect(s.naturalWidth,s.naturalHeight);const i=t.querySelector("ha-camera-stream"),a=i?.shadowRoot?.querySelector?.("video");if(a?.videoWidth&&a?.videoHeight)return void this._emitMediaAspect(a.videoWidth,a.videoHeight);const r=i?.shadowRoot?.querySelector?.("img");r?.naturalWidth&&r?.naturalHeight&&this._emitMediaAspect(r.naturalWidth,r.naturalHeight)}render(){if("loading"===this._mode)return F`<div class="placeholder">Connecting…</div>`;if("empty"===this._mode)return F`<div class="error">${this._error||"No preview"}</div>`;let t=this._mode;return this._queued?t="queued":this._slotHeld||"still"!==this._mode?!this._failoverEntityId||this._failoverEntityId===this.camera?.entityId||"ha"!==this._mode&&"webrtc"!==this._mode&&"hls"!==this._mode&&"mjpeg"!==this._mode||(t="failover"):t=this._idleReason||"idle",F`
+  `;constructor(){super(),this.config={},this.quality="",this.context="mosaic",this.muted=!0,this.controls=!1,this.large=!1,this.mosaic=!1,this.eager=!1,this.posterOnly=!1,this.active=!0,this.failoverEntityIds=[],this.groupMembers=[],this._mode="loading",this._error="",this._hlsUrl="",this._mjpegUrl="",this._stillUrl="",this._visible=!1,this._slotHeld=!1,this._queued=!1,this._failoverEntityId="",this._failoverTried=new Set,this._pc=null,this._unsubWebRtc=null,this._sessionId=null,this._startToken=0,this._observer=null,this._hostRo=null,this._slotId="",this._streamCamera=null,this._stableStateObj=null,this._tileAspect=0,this._lastEmittedAspect=0}connectedCallback(){super.connectedCallback(),this._bindObserver(),this._bindHostResize(),this._bindDocumentVisibility(),this.active?this._reconcilePlayback():this._unloadCompletely()}disconnectedCallback(){super.disconnectedCallback(),this._unbindObserver(),this._unbindHostResize(),this._unbindDocumentVisibility(),this._unloadCompletely()}_bindDocumentVisibility(){this._unbindDocumentVisibility(),"undefined"!=typeof document&&(this._onDocVisibility=()=>{this.active&&this._reconcilePlayback()},document.addEventListener("visibilitychange",this._onDocVisibility))}_unbindDocumentVisibility(){this._onDocVisibility&&"undefined"!=typeof document&&document.removeEventListener("visibilitychange",this._onDocVisibility),this._onDocVisibility=null}shouldUpdate(e){for(const t of e.keys()){if(t.startsWith("_"))return!0;if(!["hass","camera","config"].includes(t))return!0}return!(!e.has("hass")||!this._cameraHassChanged(e.get("hass"),this.hass))||(!(!e.has("camera")||!this._cameraMeaningful(e.get("camera"),this.camera))||!(!e.has("config")||!this._configMeaningful(e.get("config"),this.config)))}updated(e){if((e.has("eager")||e.has("posterOnly"))&&this._bindObserver(),(e.has("large")||e.has("mosaic"))&&this._bindHostResize(),e.has("active")&&!this.active)return void this._unloadCompletely();const t=e.has("hass")&&this._cameraHassChanged(e.get("hass"),this.hass),s=e.has("camera")&&this._cameraMeaningful(e.get("camera"),this.camera),i=e.has("config")&&this._configMeaningful(e.get("config"),this.config);if((e.has("camera")||e.has("failoverEntityIds")||e.has("groupMembers"))&&(this._failoverTried=new Set,this._failoverEntityId=""),(t||s||i||e.has("quality")||e.has("context")||e.has("eager")||e.has("posterOnly")||e.has("failoverEntityIds")||e.has("groupMembers")||e.has("active")&&this.active)&&this._reconcilePlayback(),e.has("muted")){const e=this.renderRoot?.querySelector("video");e&&(e.muted=this.muted)}(e.has("_mode")||s||e.has("_tileAspect"))&&this.updateComplete.then(()=>{this._probeMediaSize(),this._forceNestedContain()})}_cameraHassChanged(e,t){const s=this._streamCamera?.entityId||this.camera?.entityId;if(!s)return!0;const i=e?.states?.[s],a=t?.states?.[s];if(i===a)return!1;if(!i||!a)return!0;const r=e=>!e||["unavailable","unknown"].includes(String(e.state).trim().toLowerCase());return r(i)!==r(a)||i.attributes?.access_token!==a.attributes?.access_token}_cameraMeaningful(e,t){return e!==t&&(!e||!t||(e.entityId!==t.entityId||Boolean(e.unavailable)!==Boolean(t.unavailable)||e.stateObj?.attributes?.access_token!==t.stateObj?.attributes?.access_token))}_configMeaningful(e,t){return e!==t&&(!e||!t||(e.max_streams!==t.max_streams||e.quality!==t.quality||JSON.stringify(e.camera_settings||null)!==JSON.stringify(t.camera_settings||null)||JSON.stringify(e.cameras_settings||null)!==JSON.stringify(t.cameras_settings||null)))}_bindHostResize(){this._unbindHostResize(),this._updateTileAspect(),"undefined"!=typeof ResizeObserver&&(this._hostRo=new ResizeObserver(()=>this._updateTileAspect()),this._hostRo.observe(this))}_unbindHostResize(){this._hostRo&&(this._hostRo.disconnect(),this._hostRo=null)}_updateTileAspect(){const e=this.clientWidth,t=this.clientHeight;if(!Number.isFinite(e)||!Number.isFinite(t)||e<2||t<2)return;const s=e/t;this._tileAspect&&Math.abs(this._tileAspect-s)<.005||(this._tileAspect=s)}_forceNestedContain(){if(!this.mosaic&&!this.large||"ha"!==this._mode)return;const e=this.renderRoot?.querySelector("ha-camera-stream"),t=e?.shadowRoot;t&&t.querySelectorAll("video, img").forEach(e=>{e.style.objectFit="contain",e.style.objectPosition="center",e.style.width="100%",e.style.height="100%",e.style.maxWidth="100%",e.style.maxHeight="100%"})}get _effectiveQuality(){return this.quality?this.quality:et(this.config,this.camera?.entityId)}get _priority(){return this.eager?Ut:Vt}_bindObserver(){this._unbindObserver(),this.eager||this.posterOnly?this._visible=!0:"undefined"!=typeof IntersectionObserver?(this._observer=new IntersectionObserver(e=>{const t=e.some(e=>e.isIntersecting);t!==this._visible&&(this._visible=t,this._reconcilePlayback())},{root:null,rootMargin:"120px 0px",threshold:.15}),this._observer.observe(this)):this._visible=!0}_unbindObserver(){this._observer&&(this._observer.disconnect(),this._observer=null)}_wantsLive(){return!!this.active&&(("undefined"==typeof document||!document.hidden)&&(!this.posterOnly&&(!!this.eager||this._visible)))}_refreshPosterUrls(e,{cacheBust:t=!1}={}){const s=e||this.camera;if(!this.hass||!s?.stateObj)return this._stillUrl="",void(this._mjpegUrl="");const i=function(e,t,s=!0){if(!e||!t?.stateObj)return"";const i=t.stateObj.attributes||{};let a=i.entity_picture;if(!a&&i.access_token&&(a=`/api/camera_proxy/${t.entityId}?token=${i.access_token}`),!a)return"";const r="function"==typeof e.hassUrl?e.hassUrl(a):a;if(!s)return r;const n=r.includes("?")?"&":"?";return`${r}${n}t=${Date.now()}`}(this.hass,s,t),a=function(e,t){const s=t?.stateObj?.attributes?.access_token;if(!e||!t?.entityId||!s)return"";const i=`/api/camera_proxy_stream/${t.entityId}?token=${s}`;return"function"==typeof e.hassUrl?e.hassUrl(i):i}(this.hass,s);this._stillUrl!==i&&(this._stillUrl=i),this._mjpegUrl!==a&&(this._mjpegUrl=a)}_syncStableStreamCamera(e){const t=e?.stateObj||null,s=this._stableStateObj,i=e=>!e||["unavailable","unknown"].includes(String(e.state).trim().toLowerCase());!s||!t||s.entity_id!==t.entity_id||s.attributes?.access_token!==t.attributes?.access_token||i(s)!==i(t)?(this._stableStateObj=t,this._streamCamera=e):this._streamCamera||(this._streamCamera=e)}_clearMediaElements(){const e=this.renderRoot;e&&(e.querySelectorAll("video").forEach(e=>{try{e.pause?.();const t=e.srcObject;t&&"function"==typeof t.getTracks&&t.getTracks().forEach(e=>{try{e.stop()}catch{}}),e.srcObject=null,e.removeAttribute("src"),e.load?.()}catch{}}),e.querySelectorAll("img.media").forEach(e=>{try{e.removeAttribute("src"),e.src=""}catch{}}))}_stopLive(){if(this._startToken+=1,this._unsubWebRtc){try{this._unsubWebRtc()}catch{}this._unsubWebRtc=null}if(this._pc){try{this._pc.getSenders?.().forEach(e=>{try{e.track?.stop?.()}catch{}}),this._pc.getReceivers?.().forEach(e=>{try{e.track?.stop?.()}catch{}}),this._pc.close()}catch{}this._pc=null}this._sessionId=null,this._hlsUrl="",this._clearMediaElements()}_releaseSlot(){this._slotId&&Bt.release(this._slotId),this._slotHeld=!1,this._queued=!1}_unloadCompletely(){this._releaseSlot(),this._stopLive(),this._stillUrl="",this._mjpegUrl="",this._mode="empty",this._error="",this._playKey="",this._idleReason="suspended",this._queued=!1,this._stableStateObj=null,this._streamCamera=null,this._failoverEntityId="",this._failoverTried=new Set}_showIdle(e="idle"){if(this._stopLive(),!this.active||"undefined"!=typeof document&&document.hidden)return this._stillUrl="",this._mjpegUrl="",this._mode="empty",this._error="",void(this._idleReason=e);this._refreshPosterUrls(this._streamCamera||this.camera,{cacheBust:!0}),this.hass&&this.camera?.stateObj?(this._mode=this._stillUrl?"still":"empty",this._error=this._stillUrl?"":"No preview",this._idleReason=e):this._mode="empty"}_reconcilePlayback(){if(!this.active||"undefined"!=typeof document&&document.hidden)return void this._unloadCompletely();const e=Number(this.config?.max_streams);if(Number.isFinite(e)&&e>0&&Bt.setMax(e),!this.hass||!this.camera?.stateObj)return this._releaseSlot(),this._stopLive(),this._mode="empty",this._playKey="",void(this._stableStateObj=null);const t=[...new Set([...this.groupMembers||[],...this.failoverEntityIds||[],this.camera?.entityId].filter(Boolean))];if(this._failoverEntityId&&this.hass?.states?.[this._failoverEntityId])this._syncStableStreamCamera(me(this._failoverEntityId,this.hass.states[this._failoverEntityId]));else{const e=tt(this.hass,this.camera,this.config,this._effectiveQuality,this.context,t);this._syncStableStreamCamera(e)}const s=this._streamCamera?.entityId||this.camera.entityId;this._slotId&&s&&this._slotId!==s&&(Bt.release(this._slotId),this._slotHeld=!1,this._queued=!1,this._playKey=""),this._slotId=s;const i=this._wantsLive(),a=[i?"live":"idle",this._slotId,this._effectiveQuality,this.context,this.eager?"eager":"lazy"].join("|");if(!i)return this._releaseSlot(),this._showIdle("idle"),void(this._playKey=a);if(this._slotHeld&&this._playKey===a&&"loading"!==this._mode&&"empty"!==this._mode&&("still"!==this._mode||!this._queued))return;this._refreshPosterUrls(this._streamCamera,{cacheBust:!1});const r=()=>{this._slotHeld=!0,this._queued=!1,this._playKey=a,this._startLive()},n=()=>{if(this._slotHeld=!1,this._queued=this._wantsLive(),this._playKey="",this._showIdle("queued"),this._wantsLive()){Bt.request(this._slotId,this._priority,{onGrant:r,onRevoke:n})&&r()}};Bt.request(this._slotId,this._priority,{onGrant:r,onRevoke:n})?r():(this._slotHeld=!1,this._queued=!0,this._playKey=a,this._showIdle("queued"))}async _startLive(){this._stopLive();const e=this._startToken;this._error="",this._mode="loading",this._idleReason="";const t=this._streamCamera||this.camera;this._refreshPosterUrls(t,{cacheBust:!1});const s=function(e,t="mosaic"){const s=Qe(e);return"low"===s?["mjpeg","ha","webrtc","hls"]:"high"===s?["webrtc","ha","hls","mjpeg"]:"balanced"===s?["ha","webrtc","hls","mjpeg"]:"mosaic"===t?["mjpeg","ha","webrtc","hls"]:["webrtc","ha","hls","mjpeg"]}(this._effectiveQuality,this.context);for(const i of s){if(e!==this._startToken||!this._slotHeld)return;if("ha"===i&&customElements.get("ha-camera-stream"))return void(this._mode="ha");if("webrtc"===i&&"undefined"!=typeof RTCPeerConnection){const s=await ge(this.hass,t.entityId);if(e!==this._startToken||!this._slotHeld)return;const i=s?.frontend_stream_types||[],a=t.frontendStreamType;if(i.includes("web_rtc")||"web_rtc"===a||_e(t)||!i.length)try{if(await this._startWebRtc(e,t),e!==this._startToken||!this._slotHeld)return;return void(this._mode="webrtc")}catch(e){console.warn("CCTV WebRTC failed, falling back",e)}}if("hls"===i)try{const s=await fe(this.hass,t.entityId);if(e!==this._startToken||!this._slotHeld)return;if(s&&this._canPlayHlsNatively())return this._hlsUrl=s,void(this._mode="hls")}catch(e){console.warn("CCTV HLS failed, falling back",e)}if("mjpeg"===i&&this._mjpegUrl)return void(this._mode="mjpeg")}await this._tryGroupFailover(e)||(this._mode=this._stillUrl?"still":"empty",this._stillUrl||(this._error="No stream or preview available"))}async _tryGroupFailover(e){const t=this.camera?.entityId||"",s=[...new Set([...this.failoverEntityIds||[],...this.groupMembers||[]].map(String).filter(e=>e.startsWith("camera.")))].filter(e=>e!==t),i=[],a=[];for(const e of s){const t=e.replace(/^camera\./,"");["_fluent","_sub","_lq","_low","_sd","_substream"].some(e=>t.endsWith(e))?i.push(e):a.push(e)}const r=[...i,...a];this._failoverTried||(this._failoverTried=new Set);const n=this._failoverEntityId||this._streamCamera?.entityId||t;n&&this._failoverTried.add(n);for(const s of r){if(e!==this._startToken||!this._slotHeld)return!1;if(this._failoverTried.has(s))continue;if(!this.hass?.states?.[s])continue;this._failoverTried.add(s);const i=me(s,this.hass.states[s]);if(!i?.stateObj)continue;this._slotId&&this._slotId!==s&&(Bt.release(this._slotId),this._slotHeld=!1),this._failoverEntityId=s,this._streamCamera=i,this._stableStateObj=i.stateObj,this._slotId=s,this._playKey="";if(!Bt.request(s,this._priority,{onGrant:()=>{this._slotHeld=!0,this._queued=!1},onRevoke:()=>{this._slotHeld=!1,this._queued=this._wantsLive(),this._playKey="",this._showIdle("queued")}}))return this._queued=!0,this._showIdle("queued"),!1;if(this._slotHeld=!0,this.dispatchEvent(new CustomEvent("cctv-stream-failover",{detail:{from:t,to:s,groupMembers:this.groupMembers||[]},bubbles:!0,composed:!0})),await this._startLive(),e!==this._startToken)return!1;if("ha"===this._mode||"webrtc"===this._mode||"hls"===this._mode||"mjpeg"===this._mode)return!0}return!1}_canPlayHlsNatively(){const e=document.createElement("video");return""!==e.canPlayType("application/vnd.apple.mpegurl")||""!==e.canPlayType("application/x-mpegURL")}async _startWebRtc(e,t){const s=await async function(e,t){if(!e?.callWS)return null;try{return await e.callWS({type:"camera/webrtc/get_client_config",entity_id:t})}catch{return null}}(this.hass,t.entityId)||{};if(e!==this._startToken)return;const i=new RTCPeerConnection(s.configuration||{});this._pc=i,i.addTransceiver("video",{direction:"recvonly"});try{i.addTransceiver("audio",{direction:"recvonly"})}catch{}i.ontrack=e=>{const t=this.renderRoot?.querySelector("video#webrtc");if(!t)return;const[s]=e.streams;t.srcObject=s||new MediaStream([e.track]),t.muted=this.muted,t.play?.().catch(()=>{})},i.onicecandidate=e=>{e.candidate&&this._sessionId&&async function(e,t,s,i){e?.callWS&&await e.callWS({type:"camera/webrtc/candidate",entity_id:t,session_id:s,candidate:i})}(this.hass,t.entityId,this._sessionId,e.candidate.toJSON()).catch(()=>{})};const a=await i.createOffer({offerToReceiveVideo:!0,offerToReceiveAudio:!0});await i.setLocalDescription(a),this._unsubWebRtc=await function(e,t,s,i){if(!e?.connection?.subscribeMessage)throw new Error("WebSocket connection unavailable");return e.connection.subscribeMessage(i,{type:"camera/webrtc/offer",entity_id:t,offer:s})}(this.hass,t.entityId,a.sdp,async t=>{if(e===this._startToken&&this._pc)if("session"!==t.type)if("answer"!==t.type)if("candidate"===t.type&&t.candidate)try{await this._pc.addIceCandidate(t.candidate)}catch{}else"error"===t.type&&(this._error=t.message||t.code||"WebRTC error",this._mode=this._mjpegUrl?"mjpeg":this._stillUrl?"still":"empty");else await this._pc.setRemoteDescription({type:"answer",sdp:t.answer});else this._sessionId=t.session_id})}_emitMediaAspect(e,t){const s=this.camera?.entityId,i=Number(e),a=Number(t);if(!s||!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0)return;const r=i/a;this._lastEmittedAspect&&Math.abs(this._lastEmittedAspect-r)<.01||(this._lastEmittedAspect=r,this.dispatchEvent(new CustomEvent("cctv-media-aspect",{detail:{entityId:s,width:i,height:a,aspect:r},bubbles:!0,composed:!0})))}_probeMediaSize(){const e=this.renderRoot;if(!e)return;const t=e.querySelector("video");if(t)return void(t.videoWidth&&t.videoHeight&&this._emitMediaAspect(t.videoWidth,t.videoHeight));const s=e.querySelector("img.media");if(s&&s.naturalWidth&&s.naturalHeight)return void this._emitMediaAspect(s.naturalWidth,s.naturalHeight);const i=e.querySelector("ha-camera-stream"),a=i?.shadowRoot?.querySelector?.("video");if(a?.videoWidth&&a?.videoHeight)return void this._emitMediaAspect(a.videoWidth,a.videoHeight);const r=i?.shadowRoot?.querySelector?.("img");r?.naturalWidth&&r?.naturalHeight&&this._emitMediaAspect(r.naturalWidth,r.naturalHeight)}render(){if("loading"===this._mode)return W`<div class="placeholder">Connecting…</div>`;if("empty"===this._mode)return W`<div class="error">${this._error||"No preview"}</div>`;let e=this._mode;return this._queued?e="queued":this._slotHeld||"still"!==this._mode?!this._failoverEntityId||this._failoverEntityId===this.camera?.entityId||"ha"!==this._mode&&"webrtc"!==this._mode&&"hls"!==this._mode&&"mjpeg"!==this._mode||(e="failover"):e=this._idleReason||"idle",W`
       ${this._renderMedia()}
-      <span class="badge">${t}</span>
-    `}_renderMedia(){const t=this._streamCamera||this.camera;if("ha"===this._mode){const e=this.mosaic||this.large?"contain":"cover",s=this._tileAspect>0?this._tileAspect:this.clientWidth>1&&this.clientHeight>1?this.clientWidth/this.clientHeight:void 0,i=this._stableStateObj||t?.stateObj;return F`
+      <span class="badge">${e}</span>
+    `}_renderMedia(){const e=this._streamCamera||this.camera;if("ha"===this._mode){const t=this.mosaic||this.large?"contain":"cover",s=this._tileAspect>0?this._tileAspect:this.clientWidth>1&&this.clientHeight>1?this.clientWidth/this.clientHeight:void 0,i=this._stableStateObj||e?.stateObj;return W`
         <ha-camera-stream
           class="media"
           .hass=${this.hass}
           .stateObj=${i}
           .muted=${this.muted}
           .controls=${this.controls}
-          .fitMode=${e}
+          .fitMode=${t}
           .aspectRatio=${s}
           @loadeddata=${()=>{this._probeMediaSize(),this._forceNestedContain()}}
         ></ha-camera-stream>
-      `}return"webrtc"===this._mode?F`
+      `}return"webrtc"===this._mode?W`
         <video
           id="webrtc"
           class="media"
@@ -1409,9 +1429,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           playsinline
           .muted=${this.muted}
           ?controls=${this.controls}
-          @loadedmetadata=${t=>this._emitMediaAspect(t.target.videoWidth,t.target.videoHeight)}
+          @loadedmetadata=${e=>this._emitMediaAspect(e.target.videoWidth,e.target.videoHeight)}
         ></video>
-      `:"hls"===this._mode?F`
+      `:"hls"===this._mode?W`
         <video
           class="media"
           src=${this._hlsUrl}
@@ -1419,69 +1439,69 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           playsinline
           .muted=${this.muted}
           ?controls=${this.controls}
-          @loadedmetadata=${t=>this._emitMediaAspect(t.target.videoWidth,t.target.videoHeight)}
+          @loadedmetadata=${e=>this._emitMediaAspect(e.target.videoWidth,e.target.videoHeight)}
         ></video>
-      `:"mjpeg"===this._mode?F`
+      `:"mjpeg"===this._mode?W`
         <img
           class="media"
           alt=""
           src=${this._mjpegUrl}
-          @load=${t=>this._emitMediaAspect(t.target.naturalWidth,t.target.naturalHeight)}
+          @load=${e=>this._emitMediaAspect(e.target.naturalWidth,e.target.naturalHeight)}
         />
-      `:"still"===this._mode?F`
+      `:"still"===this._mode?W`
         <img
           class="media"
           alt=""
           src=${this._stillUrl}
-          @load=${t=>this._emitMediaAspect(t.target.naturalWidth,t.target.naturalHeight)}
+          @load=${e=>this._emitMediaAspect(e.target.naturalWidth,e.target.naturalHeight)}
         />
-      `:U}}customElements.get("cctv-stream-player")||customElements.define("cctv-stream-player",Ge);const Qe=[{value:9e5,label:"15m"},{value:36e5,label:"1h"},{value:216e5,label:"6h"},{value:864e5,label:"24h"}];class Ke extends nt{static properties={hass:{attribute:!1},cameras:{attribute:!1},sensorLinks:{attribute:!1},cameraNames:{attribute:!1},active:{type:Boolean},_windowMs:{state:!0},_loading:{state:!0},_error:{state:!0},_rows:{state:!0},_now:{state:!0},_selected:{state:!0}};createRenderRoot(){return this}constructor(){super(),this.cameras=[],this.sensorLinks={},this.cameraNames={},this.active=!0,this._windowMs=36e5,this._loading=!1,this._error="",this._rows=[],this._now=Date.now(),this._selected=null,this._timer=null,this._fetchToken=0,this._quietRefreshTimer=0,this._lastEntityKey="",this._onVisibility=null}connectedCallback(){super.connectedCallback(),this._onVisibility=()=>{"undefined"!=typeof document&&document.hidden?this._pausePolling():this.active&&this._scheduleQuietRefresh()},"undefined"!=typeof document&&document.addEventListener("visibilitychange",this._onVisibility),this.active&&this._startPolling()}disconnectedCallback(){super.disconnectedCallback(),this._stopPolling(),this._onVisibility&&"undefined"!=typeof document&&document.removeEventListener("visibilitychange",this._onVisibility)}updated(t){if(t.has("active")&&(this.active?this._startPolling():this._stopPolling()),this.active)return t.has("cameras")||t.has("sensorLinks")||t.has("_windowMs")?(this._selected=null,void this._refresh({showLoading:!0})):void(t.has("hass")&&this._scheduleQuietRefresh())}_startPolling(){this._pausePolling(),this.active&&("undefined"!=typeof document&&document.hidden||(this._timer=window.setInterval(()=>this._scheduleQuietRefresh(),9e4),this._refresh({showLoading:!this._rows.length})))}_pausePolling(){this._timer&&(window.clearInterval(this._timer),this._timer=null),this._quietRefreshTimer&&(window.clearTimeout(this._quietRefreshTimer),this._quietRefreshTimer=0)}_stopPolling(){this._pausePolling(),this._fetchToken+=1,this._loading=!1}_scheduleQuietRefresh(){this.active&&("undefined"!=typeof document&&document.hidden||this._quietRefreshTimer||(this._quietRefreshTimer=window.setTimeout(()=>{this._quietRefreshTimer=0,this._refresh({showLoading:!1})},2500)))}reload(){return this._selected=null,this._refresh({showLoading:!0})}async _refresh(t={}){if(!this.active)return;if("undefined"!=typeof document&&document.hidden)return;const e=Boolean(t.showLoading),s=[...this.cameras||[]],i=`${s.join(",")}|${this._windowMs}`;if(!this.hass)return this._rows=[],this._error="",this._selected=null,void(this._lastEntityKey=i);const a=++this._fetchToken;(e||i!==this._lastEntityKey)&&(this._loading=!0),this._error="";const r=Date.now(),n=r-this._windowMs;try{const t=await async function(t,e={}){if(!t?.callWS)return[];try{const s=await t.callWS({type:"cctv_dashboard/list_detections",start:e.start,end:e.end,cameras:e.cameras,limit:e.limit??500});return s?.events||[]}catch(t){return console.warn("CCTV: failed to list detections",t),[]}}(this.hass,{start:n,end:r,cameras:s.length?s:void 0,limit:500});if(a!==this._fetchToken||!this.active)return;this._lastEntityKey=i,this._rows=this._buildRowsFromEvents(t,n,r),this._now=r,this._syncSelected()}catch(t){if(a!==this._fetchToken||!this.active)return;this._error=t?.message||"Could not load saved detections",this._rows=this._buildRowsFromEvents([],n,r),this._syncSelected()}finally{a===this._fetchToken&&(this._loading=!1)}}_syncSelected(){if(!this._selected)return;const t=this._rows.flatMap(t=>t.events).find(t=>t.id===this._selected.id);this._selected=t||null}_linkedEntityIds(){const t=[];for(const e of this.cameras||[])for(const s of this.sensorLinks?.[e]||[])t.push(s);return[...new Set(t)]}_sensorName(t){return this.hass?.states?.[t]?.attributes?.friendly_name||String(t||"").replace(/^[^.]+\./,"")||t}_buildRowsFromEvents(t,e,s){const i=new Map,a=new Set(this.cameras||[]);for(const r of t||[]){const t=r.kind||"other",n=wt.find(e=>e.id===t)||wt[wt.length-1],o={id:n.id,label:r.kind_label||n.label},c=Date.parse(r.start),l=r.end?Date.parse(r.end):s;if(!Number.isFinite(c))continue;const d=Math.max(e,c),h=Math.min(s,Number.isFinite(l)?l:s);if(h<=d)continue;let u=(r.cameras||[]).map(String);if(a.size&&(u=u.filter(t=>a.has(t)),!u.length&&(r.cameras||[]).length))continue;let p=i.get(o.id);p||(p={kind:o,raw:[],active:!1},i.set(o.id,p)),p.raw.push({start:d,end:h,cameras:u,sensors:r.sensor_id?[{entityId:r.sensor_id,name:this._sensorName(r.sensor_id)}]:[],sourceId:r.id,active:Boolean(r.active||null==r.end)}),(r.active||null==r.end)&&(p.active=!0)}for(const t of this.cameras||[])for(const e of this.sensorLinks?.[t]||[]){const t=this.hass?.states?.[e],s=`${e} ${t?.attributes?.friendly_name||""}`.toLowerCase(),a=wt.find(t=>"other"!==t.id&&t.tokens.some(t=>new RegExp(`(^|[_\\s.-])${t}([_\\s.-]|$)`,"i").test(s)))||wt[wt.length-1];i.has(a.id)||i.set(a.id,{kind:{id:a.id,label:a.label},raw:[],active:!1})}const r=new Map(wt.map((t,e)=>[t.id,e]));return[...i.values()].map(t=>{const e=function(t,e=0){if(!Array.isArray(t)||!t.length)return[];const s=t.map(t=>({start:Number(t.start),end:Number(t.end),cameras:Array.isArray(t.cameras)?[...t.cameras]:[],sensors:Array.isArray(t.sensors)?[...t.sensors]:[]})).filter(t=>Number.isFinite(t.start)&&Number.isFinite(t.end)&&t.end>t.start).sort((t,e)=>t.start-e.start||t.end-e.end);if(!s.length)return[];const i=[Dt(s[0])];for(let t=1;t<s.length;t+=1){const a=s[t],r=i[i.length-1];a.start<=r.end+e?(r.end=Math.max(r.end,a.end),Et(r,a)):i.push(Dt(a))}return i}(t.raw,1e3),i=e.map((e,i)=>{const a=e.cameras||[];return{id:e.sourceId||`${t.kind.id}:${e.start}:${e.end}:${i}`,kind:t.kind,start:e.start,end:e.end,durationMs:Math.max(0,e.end-e.start),cameras:a,cameraNames:a.map(t=>this.cameraNames?.[t]||t),sensors:e.sensors||[],active:Boolean(t.active&&e.end>=s-5e3)}});return{kind:t.kind,events:i,totalMs:i.reduce((t,e)=>t+e.durationMs,0),active:t.active}}).filter(t=>t.events.length||t.active||this._linkedEntityIds().length).sort((t,e)=>(r.get(t.kind.id)??99)-(r.get(e.kind.id)??99)||t.kind.label.localeCompare(e.kind.label))}_setWindow(t){this._windowMs=t}_selectEvent(t,e){e?.stopPropagation?.(),this._selected=this._selected?.id===t.id?null:t}_clearSelected(){this._selected=null}_requestPlay(t,e){e?.stopPropagation?.(),this.dispatchEvent(new CustomEvent("cctv-play-detection",{detail:{start:t.start,end:t.end,kind:t.kind,sensors:t.sensors||[],cameras:t.cameras||[]},bubbles:!0,composed:!0}))}_tickMarks(){const t=this._now-this._windowMs,e=this._windowMs<=9e5?4:this._windowMs<=36e5?6:8,s=[];for(let i=0;i<=e;i+=1){const a=t+this._windowMs*i/e;s.push({t:a,label:Nt(a),pct:i/e*100})}return s}render(){const t=this._linkedEntityIds().length;if(!(this.cameras||[]).length)return U;const e=this._now-this._windowMs,s=Math.max(1,this._windowMs),i=this._tickMarks();return F`
+      `:G}}customElements.get("cctv-stream-player")||customElements.define("cctv-stream-player",Xt);const Yt=[{value:9e5,label:"15m"},{value:36e5,label:"1h"},{value:216e5,label:"6h"},{value:864e5,label:"24h"}];class es extends ne{static properties={hass:{attribute:!1},cameras:{attribute:!1},sensorLinks:{attribute:!1},cameraNames:{attribute:!1},active:{type:Boolean},_windowMs:{state:!0},_loading:{state:!0},_error:{state:!0},_rows:{state:!0},_now:{state:!0},_selected:{state:!0}};createRenderRoot(){return this}constructor(){super(),this.cameras=[],this.sensorLinks={},this.cameraNames={},this.active=!0,this._windowMs=36e5,this._loading=!1,this._error="",this._rows=[],this._now=Date.now(),this._selected=null,this._timer=null,this._fetchToken=0,this._quietRefreshTimer=0,this._lastEntityKey="",this._onVisibility=null}connectedCallback(){super.connectedCallback(),this._onVisibility=()=>{"undefined"!=typeof document&&document.hidden?this._pausePolling():this.active&&this._scheduleQuietRefresh()},"undefined"!=typeof document&&document.addEventListener("visibilitychange",this._onVisibility),this.active&&this._startPolling()}disconnectedCallback(){super.disconnectedCallback(),this._stopPolling(),this._onVisibility&&"undefined"!=typeof document&&document.removeEventListener("visibilitychange",this._onVisibility)}updated(e){if(e.has("active")&&(this.active?this._startPolling():this._stopPolling()),this.active)return e.has("cameras")||e.has("sensorLinks")||e.has("_windowMs")?(this._selected=null,void this._refresh({showLoading:!0})):void(e.has("hass")&&this._scheduleQuietRefresh())}_startPolling(){this._pausePolling(),this.active&&("undefined"!=typeof document&&document.hidden||(this._timer=window.setInterval(()=>this._scheduleQuietRefresh(),9e4),this._refresh({showLoading:!this._rows.length})))}_pausePolling(){this._timer&&(window.clearInterval(this._timer),this._timer=null),this._quietRefreshTimer&&(window.clearTimeout(this._quietRefreshTimer),this._quietRefreshTimer=0)}_stopPolling(){this._pausePolling(),this._fetchToken+=1,this._loading=!1}_scheduleQuietRefresh(){this.active&&("undefined"!=typeof document&&document.hidden||this._quietRefreshTimer||(this._quietRefreshTimer=window.setTimeout(()=>{this._quietRefreshTimer=0,this._refresh({showLoading:!1})},2500)))}reload(){return this._selected=null,this._refresh({showLoading:!0})}async _refresh(e={}){if(!this.active)return;if("undefined"!=typeof document&&document.hidden)return;const t=Boolean(e.showLoading),s=[...this.cameras||[]],i=`${s.join(",")}|${this._windowMs}`;if(!this.hass)return this._rows=[],this._error="",this._selected=null,void(this._lastEntityKey=i);const a=++this._fetchToken;(t||i!==this._lastEntityKey)&&(this._loading=!0),this._error="";const r=Date.now(),n=r-this._windowMs;try{const e=await async function(e,t={}){if(!e?.callWS)return[];try{const s=await e.callWS({type:"cctv_dashboard/list_detections",start:t.start,end:t.end,cameras:t.cameras,limit:t.limit??500});return s?.events||[]}catch(e){return console.warn("CCTV: failed to list detections",e),[]}}(this.hass,{start:n,end:r,cameras:s.length?s:void 0,limit:500});if(a!==this._fetchToken||!this.active)return;this._lastEntityKey=i,this._rows=this._buildRowsFromEvents(e,n,r),this._now=r,this._syncSelected()}catch(e){if(a!==this._fetchToken||!this.active)return;this._error=e?.message||"Could not load saved detections",this._rows=this._buildRowsFromEvents([],n,r),this._syncSelected()}finally{a===this._fetchToken&&(this._loading=!1)}}_syncSelected(){if(!this._selected)return;const e=this._rows.flatMap(e=>e.events).find(e=>e.id===this._selected.id);this._selected=e||null}_linkedEntityIds(){const e=[];for(const t of this.cameras||[])for(const s of this.sensorLinks?.[t]||[])e.push(s);return[...new Set(e)]}_sensorName(e){return this.hass?.states?.[e]?.attributes?.friendly_name||String(e||"").replace(/^[^.]+\./,"")||e}_buildRowsFromEvents(e,t,s){const i=new Map,a=new Set(this.cameras||[]);for(const r of e||[]){const e=r.kind||"other",n=we.find(t=>t.id===e)||we[we.length-1],o={id:n.id,label:r.kind_label||n.label},c=Date.parse(r.start),l=r.end?Date.parse(r.end):s;if(!Number.isFinite(c))continue;const d=Math.max(t,c),h=Math.min(s,Number.isFinite(l)?l:s);if(h<=d)continue;let u=(r.cameras||[]).map(String);if(a.size&&(u=u.filter(e=>a.has(e)),!u.length&&(r.cameras||[]).length))continue;let p=i.get(o.id);p||(p={kind:o,raw:[],active:!1},i.set(o.id,p)),p.raw.push({start:d,end:h,cameras:u,sensors:r.sensor_id?[{entityId:r.sensor_id,name:this._sensorName(r.sensor_id)}]:[],sourceId:r.id,active:Boolean(r.active||null==r.end)}),(r.active||null==r.end)&&(p.active=!0)}for(const e of this.cameras||[])for(const t of this.sensorLinks?.[e]||[]){const e=this.hass?.states?.[t],s=`${t} ${e?.attributes?.friendly_name||""}`.toLowerCase(),a=we.find(e=>"other"!==e.id&&e.tokens.some(e=>new RegExp(`(^|[_\\s.-])${e}([_\\s.-]|$)`,"i").test(s)))||we[we.length-1];i.has(a.id)||i.set(a.id,{kind:{id:a.id,label:a.label},raw:[],active:!1})}const r=new Map(we.map((e,t)=>[e.id,t]));return[...i.values()].map(e=>{const t=function(e,t=0){if(!Array.isArray(e)||!e.length)return[];const s=e.map(e=>({start:Number(e.start),end:Number(e.end),cameras:Array.isArray(e.cameras)?[...e.cameras]:[],sensors:Array.isArray(e.sensors)?[...e.sensors]:[]})).filter(e=>Number.isFinite(e.start)&&Number.isFinite(e.end)&&e.end>e.start).sort((e,t)=>e.start-t.start||e.end-t.end);if(!s.length)return[];const i=[Pe(s[0])];for(let e=1;e<s.length;e+=1){const a=s[e],r=i[i.length-1];a.start<=r.end+t?(r.end=Math.max(r.end,a.end),Ne(r,a)):i.push(Pe(a))}return i}(e.raw,1e3),i=t.map((t,i)=>{const a=t.cameras||[];return{id:t.sourceId||`${e.kind.id}:${t.start}:${t.end}:${i}`,kind:e.kind,start:t.start,end:t.end,durationMs:Math.max(0,t.end-t.start),cameras:a,cameraNames:a.map(e=>this.cameraNames?.[e]||e),sensors:t.sensors||[],active:Boolean(e.active&&t.end>=s-5e3)}});return{kind:e.kind,events:i,totalMs:i.reduce((e,t)=>e+t.durationMs,0),active:e.active}}).filter(e=>e.events.length||e.active||this._linkedEntityIds().length).sort((e,t)=>(r.get(e.kind.id)??99)-(r.get(t.kind.id)??99)||e.kind.label.localeCompare(t.kind.label))}_setWindow(e){this._windowMs=e}_selectEvent(e,t){t?.stopPropagation?.(),this._selected=this._selected?.id===e.id?null:e}_clearSelected(){this._selected=null}_requestPlay(e,t){t?.stopPropagation?.(),this.dispatchEvent(new CustomEvent("cctv-play-detection",{detail:{start:e.start,end:e.end,kind:e.kind,sensors:e.sensors||[],cameras:e.cameras||[]},bubbles:!0,composed:!0}))}_tickMarks(){const e=this._now-this._windowMs,t=this._windowMs<=9e5?4:this._windowMs<=36e5?6:8,s=[];for(let i=0;i<=t;i+=1){const a=e+this._windowMs*i/t;s.push({t:a,label:ze(a),pct:i/t*100})}return s}render(){const e=this._linkedEntityIds().length;if(!(this.cameras||[]).length)return G;const t=this._now-this._windowMs,s=Math.max(1,this._windowMs),i=this._tickMarks();return W`
       <section class="timeline" aria-label="Detection timeline">
         <div class="timeline-head">
           <div>
             <strong>Detection timeline</strong>
             <span class="hint">
-              ${t?"Shared for all users — survives reboot; kept for retention days":"Link detection sensors in a camera’s settings to see events here"}
+              ${e?"Shared for all users — survives reboot; kept for retention days":"Link detection sensors in a camera’s settings to see events here"}
             </span>
           </div>
           <div class="timeline-windows">
-            ${Qe.map(t=>F`
+            ${Yt.map(e=>W`
                 <button
                   type="button"
-                  class="btn ${this._windowMs===t.value?"primary":""}"
-                  @click=${()=>this._setWindow(t.value)}
+                  class="btn ${this._windowMs===e.value?"primary":""}"
+                  @click=${()=>this._setWindow(e.value)}
                 >
-                  ${t.label}
+                  ${e.label}
                 </button>
               `)}
           </div>
         </div>
 
-        ${this._error?F`<p class="timeline-error">${this._error}</p>`:U}
-        ${t?0===this._rows.length?F`<p class="empty">No linked sensors for the current selection.</p>`:F`
+        ${this._error?W`<p class="timeline-error">${this._error}</p>`:G}
+        ${e?0===this._rows.length?W`<p class="empty">No linked sensors for the current selection.</p>`:W`
                 <div class="timeline-board" @click=${this._clearSelected}>
                   <div class="timeline-ruler" aria-hidden="true">
-                    ${i.map(t=>F`
-                        <span class="timeline-tick" style="left:${t.pct}%">
+                    ${i.map(e=>W`
+                        <span class="timeline-tick" style="left:${e.pct}%">
                           <span class="timeline-tick-line"></span>
-                          <span class="timeline-tick-label">${t.label}</span>
+                          <span class="timeline-tick-label">${e.label}</span>
                         </span>
                       `)}
                   </div>
                   <div class="timeline-lanes">
-                    ${this._rows.map(t=>this._renderLane(t,e,s))}
+                    ${this._rows.map(e=>this._renderLane(e,t,s))}
                   </div>
                 </div>
-                ${this._selected?this._renderDetail(this._selected):F`<p class="hint timeline-hint">Select a highlighted event on the timeline.</p>`}
-                ${this._loading?F`<p class="hint timeline-loading">Refreshing…</p>`:U}
-              `:F`<p class="empty">No detection sensors linked yet.</p>`}
+                ${this._selected?this._renderDetail(this._selected):W`<p class="hint timeline-hint">Select a highlighted event on the timeline.</p>`}
+                ${this._loading?W`<p class="hint timeline-loading">Refreshing…</p>`:G}
+              `:W`<p class="empty">No detection sensors linked yet.</p>`}
       </section>
-    `}_renderLane(t,e,s){const i=wt.find(e=>e.id===t.kind.id)||wt[wt.length-1];return F`
+    `}_renderLane(e,t,s){const i=we.find(t=>t.id===e.kind.id)||we[we.length-1];return W`
       <div class="timeline-lane">
         <div class="timeline-lane-label">
           <span class="timeline-kind kind-${i.id}">${i.label}</span>
           <span class="timeline-total">
-            ${t.events.length?`${t.events.length} event${1===t.events.length?"":"s"} · ${Tt(t.totalMs)}`:t.active?"active now":"quiet"}
+            ${e.events.length?`${e.events.length} event${1===e.events.length?"":"s"} · ${Ee(e.totalMs)}`:e.active?"active now":"quiet"}
           </span>
         </div>
         <div
@@ -1489,31 +1509,31 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           role="listbox"
           aria-label="${i.label} events"
         >
-          ${t.events.map(t=>{const a=(t.start-e)/s*100,r=Math.max(.6,(t.end-t.start)/s*100),n=this._selected?.id===t.id;return F`
+          ${e.events.map(e=>{const a=(e.start-t)/s*100,r=Math.max(.6,(e.end-e.start)/s*100),n=this._selected?.id===e.id;return W`
               <button
                 type="button"
-                class="timeline-event kind-${i.id} ${n?"selected":""} ${t.active?"live":""}"
+                class="timeline-event kind-${i.id} ${n?"selected":""} ${e.active?"live":""}"
                 style="left:${a}%;width:${r}%"
-                title="${i.label}: ${Nt(t.start)}–${Nt(t.end)}"
+                title="${i.label}: ${ze(e.start)}–${ze(e.end)}"
                 aria-pressed=${n?"true":"false"}
-                @click=${e=>this._selectEvent(t,e)}
+                @click=${t=>this._selectEvent(e,t)}
               >
                 <span class="timeline-event-mark"></span>
               </button>
             `})}
         </div>
       </div>
-    `}_renderDetail(t){const e=wt.find(e=>e.id===t.kind.id)||wt[wt.length-1],s=t.cameraNames?.length?t.cameraNames.join(", "):"—",i=t.sensors?.length?t.sensors:[];return F`
+    `}_renderDetail(e){const t=we.find(t=>t.id===e.kind.id)||we[we.length-1],s=e.cameraNames?.length?e.cameraNames.join(", "):"—",i=e.sensors?.length?e.sensors:[];return W`
       <aside class="timeline-detail" aria-live="polite">
         <div class="timeline-detail-head">
-          <span class="timeline-kind kind-${e.id}">${e.label}</span>
-          ${t.active?F`<span class="timeline-live-badge">Live</span>`:U}
+          <span class="timeline-kind kind-${t.id}">${t.label}</span>
+          ${e.active?W`<span class="timeline-live-badge">Live</span>`:G}
           <div class="timeline-detail-actions">
-            ${t.active?U:F`
+            ${e.active?G:W`
                   <button
                     class="btn primary"
                     type="button"
-                    @click=${e=>this._requestPlay(t,e)}
+                    @click=${t=>this._requestPlay(e,t)}
                   >
                     Play
                   </button>
@@ -1526,21 +1546,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         <dl class="timeline-detail-grid">
           <dt>When</dt>
           <dd>
-            ${Nt(t.start)} – ${Nt(t.end)}
-            <span class="hint">(${new Date(t.start).toLocaleString()} → ${new Date(t.end).toLocaleString()})</span>
+            ${ze(e.start)} – ${ze(e.end)}
+            <span class="hint">(${new Date(e.start).toLocaleString()} → ${new Date(e.end).toLocaleString()})</span>
           </dd>
           <dt>Duration</dt>
-          <dd>${Tt(t.durationMs)}${t.active?" (ongoing)":""}</dd>
+          <dd>${Ee(e.durationMs)}${e.active?" (ongoing)":""}</dd>
           <dt>Cameras</dt>
           <dd>${s}</dd>
           <dt>Sensors</dt>
           <dd>
-            ${i.length?F`
+            ${i.length?W`
                   <ul class="timeline-detail-sensors">
-                    ${i.map(t=>F`
+                    ${i.map(e=>W`
                         <li>
-                          <strong>${t.name||t.entityId}</strong>
-                          <span class="hint">${t.entityId}</span>
+                          <strong>${e.name||e.entityId}</strong>
+                          <span class="hint">${e.entityId}</span>
                         </li>
                       `)}
                   </ul>
@@ -1548,29 +1568,29 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           </dd>
         </dl>
       </aside>
-    `}}customElements.get("cctv-detection-timeline")||customElements.define("cctv-detection-timeline",Ke);class Je extends nt{static properties={hass:{attribute:!1},config:{attribute:!1},panelMode:{type:Boolean,attribute:"panel-mode"},panelUrlPath:{type:String,attribute:"panel-url-path"},_detailId:{state:!0},_status:{state:!0},_qualityTick:{state:!0},_visibleIds:{state:!0},_sensorLinks:{state:!0},_streamGroups:{state:!0},_groupDraftMembers:{state:!0},_groupDraftName:{state:!0},_forceAspect:{state:!0},_savedForceAspect:{state:!0},_cameraQuality:{state:!0},_savedCameraQuality:{state:!0},_customAspectDraft:{state:!0},_prefsDirty:{state:!0},_pickerOpen:{state:!0},_settingsOpen:{state:!0},_selectionReady:{state:!0},_saving:{state:!0},_sensorFilter:{state:!0},_deviceMapReady:{state:!0},_retentionDays:{state:!0},_recordOnDetection:{state:!0},_recordDetectionKinds:{state:!0},_notifyOnDetection:{state:!0},_sessions:{state:!0},_recordingsPage:{state:!0},_recordDir:{state:!0},_recordingDebug:{state:!0},_recordingDebugSummary:{state:!0},_isDesktop:{state:!0},_tvMode:{state:!0},_aspectById:{state:!0},_packStyles:{state:!0},_tvStage:{state:!0},_playback:{state:!0},_panelActive:{state:!0},_liveMountGen:{state:!0},_playbackMountGen:{state:!0}};static styles=ht;constructor(){super(),this.config={},this.panelMode=!1,this.panelUrlPath="cctv",this._detailId=null,this._status="",this._qualityTick=0,this._visibleIds=[],this._sensorLinks={},this._streamGroups=[],this._groupDraftMembers=[],this._groupDraftName="",this._forceAspect={},this._savedForceAspect={},this._cameraQuality={},this._savedCameraQuality={},this._customAspectDraft="",this._prefsDirty=!1,this._pickerOpen=!0,this._settingsOpen=!1,this._selectionReady=!1,this._saving=!1,this._sensorFilter="",this._deviceMapReady=!1,this._retentionDays=1,this._recordOnDetection=!0,this._recordDetectionKinds=wt.map(t=>t.id),this._notifyOnDetection=!1,this._sessions=[],this._recordingsPage=1,this._recordDir="",this._recordingDebug="",this._recordingDebugSummary="",this._loadedForUser=null,this._isDesktop=!1,this._tvMode=!1,this._aspectById={},this._packStyles={},this._tvStage={width:0,height:0},this._playback=null,this._panelActive=!0,this._liveMountGen=0,this._playbackMountGen=0,this._deviceMap=new Map,this._packObserver=null,this._packObservedEl=null,this._mq=null,this._onMq=null,this._packRaf=0,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map,this._cameraNamesCache={},this._cameraNamesKey="",this._lastHassSig="",this._onDocVisibility=null,this._onLocationChange=null,this._loadToken=0}shouldUpdate(t){if(this.panelMode&&!this._panelActive&&!t.has("_panelActive")&&t.has("hass")&&1===t.size)return!1;if(!t.has("hass"))return!0;if(t.size>1)return!0;const e=t.get("hass"),s=this.hass;return!e||!s||this._hassRelevantChanged(e,s)}_hassRelevantChanged(t,e){const s=this._watchedEntityIds();for(const i of s){const s=t.states?.[i],a=e.states?.[i];if(s!==a){if(!s||!a)return!0;if(s.state!==a.state)return!0;if(s.attributes?.access_token!==a.attributes?.access_token)return!0;if(s.attributes?.friendly_name!==a.attributes?.friendly_name)return!0}}return(t.user?.id||"")!==(e.user?.id||"")}_watchedEntityIds(){const t=new Set(this._visibleIds||[]);if(this._pickerOpen||this._settingsOpen)for(const e of this._cameras())t.add(e.entityId);return t}connectedCallback(){super.connectedCallback(),this._tvMode=function(){try{return"undefined"!=typeof localStorage&&"1"===localStorage.getItem(ze)}catch{return!1}}(),this._syncTvModeAttr(),"undefined"!=typeof window&&window.matchMedia&&(this._mq=window.matchMedia("(min-width: 801px)"),this._onMq=()=>{this._panelActive&&(this._isDesktop=this._mq.matches,this._refreshTvStage(),this._schedulePack())},this._isDesktop=this._mq.matches,this._mq.addEventListener?this._mq.addEventListener("change",this._onMq):this._mq.addListener(this._onMq)),this._bindTvViewport(),this._bindPanelVisibility(),!this._isCctvLocation()||"undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this._setPanelActive(!0),this._refreshTvStage()}disconnectedCallback(){super.disconnectedCallback(),this._panelActive&&(this._panelActive=!1,this._suspendResources()),this._unbindTvViewport(),this._unbindPanelVisibility(),this._mq&&this._onMq&&(this._mq.removeEventListener?this._mq.removeEventListener("change",this._onMq):this._mq.removeListener(this._onMq)),this._tearDownObservers()}_syncTvModeAttr(){const t=Boolean(this.panelMode&&this._tvMode);this.toggleAttribute("tv-mode",t)}_bindTvViewport(){"undefined"!=typeof window&&(this._unbindTvViewport(),this._onTvResize=()=>{this._panelActive&&(this._refreshTvStage(),this._schedulePack())},window.addEventListener("resize",this._onTvResize))}_unbindTvViewport(){"undefined"!=typeof window&&this._onTvResize&&(window.removeEventListener("resize",this._onTvResize),this._onTvResize=null)}_refreshTvStage(){if(!this._tvMode||!this.panelMode)return void((this._tvStage?.width||this._tvStage?.height)&&(this._tvStage={width:0,height:0}));const t=Ve(),e=this.renderRoot?.querySelector?.(".panel-wrap"),s=this.renderRoot?.querySelector?.(".layout-pack-tv");let i=Be(e);i<8&&(i=Be(s)),i<8&&"number"==typeof this.clientWidth&&(i=Math.max(0,this.clientWidth)),i<8&&"undefined"!=typeof window&&(i=Math.max(0,(Number(window.innerWidth)||0)-256-40));const a="undefined"!=typeof window&&Number(window.innerHeight)||0,{stage:r,offsetTop:n}=function(t,e,s){const i=Math.max(0,Number(t)||0),a=Math.max(0,Number(e)||0),r=Number.isFinite(s)?Number(s):Ve(),n=Math.max(0,a-r),o=i>0?i/Ue:0;return{availW:i,availH:n,offsetTop:Math.max(0,(n-o)/2),stage:{width:i,height:o}}}(i,a,t),o={width:Math.round(r.width),height:Math.round(r.height)};o.width<8?this.style.setProperty("--cctv-tv-chrome",`${t}px`):(o.width===this._tvStage?.width&&o.height===this._tvStage?.height||(this._tvStage=o),this.style.setProperty("--cctv-tv-stage-w",`${o.width}px`),this.style.setProperty("--cctv-tv-stage-h",`${o.height}px`),this.style.setProperty("--cctv-tv-chrome",`${t}px`),this.style.setProperty("--cctv-tv-stage-offset",`${Math.round(n)}px`))}_bindPanelVisibility(){this.panelMode&&(this._unbindPanelVisibility(),this._onDocVisibility=()=>{"undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this.isConnected&&this._isCctvLocation()&&this._setPanelActive(!0)},this._onLocationChange=()=>{this.isConnected&&("undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this._isCctvLocation()?this._panelActive||this._setPanelActive(!0):this._setPanelActive(!1))},"undefined"!=typeof document&&document.addEventListener("visibilitychange",this._onDocVisibility),"undefined"!=typeof window&&(window.addEventListener("location-changed",this._onLocationChange),window.addEventListener("popstate",this._onLocationChange)))}_unbindPanelVisibility(){this._onDocVisibility&&"undefined"!=typeof document&&(document.removeEventListener("visibilitychange",this._onDocVisibility),this._onDocVisibility=null),this._onLocationChange&&"undefined"!=typeof window&&(window.removeEventListener("location-changed",this._onLocationChange),window.removeEventListener("popstate",this._onLocationChange),this._onLocationChange=null)}_isCctvLocation(){if("undefined"==typeof location)return!0;const t=location.pathname||"",e=(String(this.panelUrlPath||"cctv").trim().replace(/^\/+|\/+$/g,"")||"cctv").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");return new RegExp(`(?:^|/)${e}(?:/|$)`).test(t)}_setPanelActive(t){const e=Boolean(t);this._panelActive!==e&&(this._panelActive=e,e?(this._status="Suspended — streams unloaded"===this._status?"":this._status,this._schedulePack()):this._suspendResources())}_suspendResources(){this._loadToken+=1,this._teardownPlaybackMedia({clearSrc:!0}),this._playback=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map,this._tearDownObservers(),this._resetLiveStreamSlots(),this._liveMountGen+=1,this.panelMode&&(this._status="Suspended — streams unloaded")}_tearDownObservers(){this._packObserver&&(this._packObserver.disconnect(),this._packObserver=null,this._packObservedEl=null),this._packRaf&&(cancelAnimationFrame(this._packRaf),this._packRaf=0)}_unloadStreamPlayers(){const t=this.renderRoot||this;t.querySelectorAll?.("cctv-stream-player").forEach(t=>{try{t.active=!1,t._unloadCompletely?.()}catch{}})}updated(t){(this._panelActive||!this.panelMode||t.has("_panelActive")&&this._panelActive)&&(this.panelMode&&this._panelActive&&(t.has("hass")||t.has("panelMode")||t.has("_panelActive"))&&this._ensureSelectionLoaded(),(t.has("_tvMode")||t.has("panelMode"))&&(this._syncTvModeAttr(),this._refreshTvStage()),this.panelMode&&this._panelActive&&(t.has("_visibleIds")||t.has("_isDesktop")||t.has("_detailId")||t.has("_pickerOpen")||t.has("_settingsOpen")||t.has("_aspectById")||t.has("_forceAspect")||t.has("_playback")||t.has("_tvMode")||t.has("_tvStage")||t.has("_panelActive"))&&(this._schedulePack(),this.updateComplete.then(()=>{this._tvMode&&!this._playback?.playing&&this._refreshTvStage(),this._bindPackObserver()})))}firstUpdated(){this._tvMode&&this.panelMode&&this.updateComplete.then(()=>{this._refreshTvStage(),this._schedulePack(),this._bindPackObserver()})}_bindPackObserver(){const t=this.renderRoot?.querySelector?.(".layout-pack");t?this._packObserver&&this._packObservedEl===t?this._recomputePack():(this._packObserver&&this._packObserver.disconnect(),this._packObservedEl=t,"undefined"!=typeof ResizeObserver?(this._packObserver=new ResizeObserver(()=>this._schedulePack()),this._packObserver.observe(t),this._recomputePack()):this._recomputePack()):this._packObserver&&(this._packObserver.disconnect(),this._packObserver=null,this._packObservedEl=null)}_schedulePack(){this._panelActive&&(this._packRaf&&cancelAnimationFrame(this._packRaf),this._packRaf=requestAnimationFrame(()=>{this._packRaf=0,this._recomputePack()}))}_recomputePack(){if(!this._isDesktop||!this.panelMode||this._detailId)return void(Object.keys(this._packStyles).length&&(this._packStyles={}));this._tvMode&&!this._playback?.playing&&this._refreshTvStage();const t=this.renderRoot?.querySelector?.(".layout-pack");if(!t)return;const e=t.getBoundingClientRect();let s=Math.max(0,e.width),i=Math.max(0,e.height);if(this._tvMode&&this._tvStage?.width>=8&&this._tvStage?.height>=8&&(s=this._tvStage.width,i=this._tvStage.height),s<8||i<8)return;const a=this._layoutCameras(this._cameras()).slice(0,4).map(t=>({id:t.entityId,aspect:this._effectiveAspect(t.entityId)}));var r;const n=function(t,e,s,i=10){const a=(t||[]).map(t=>({id:String(t.id),aspect:de(t.aspect)}));if(!a.length||e<=1||s<=1)return[];let r=null,n=-1;for(const t of function(t){const e=t.length;if(!e)return[];const s=[];return function i(a,r){if(a!==e)for(let s=a+1;s<=e;s+=1)r.push(t.slice(a,s)),i(s,r),r.pop();else s.push(r.map(t=>t.slice()))}(0,[]),s}(a))for(const a of[he(t,e,s,i),ue(t,e,s,i)])a&&a.totalArea>n&&(n=a.totalArea,r=a.cells);return r||[]}(a,s,i,this._tvMode?(r=a.length,(Number(r)||0)<=2?6:8):10),o=function(t,e,s){if(!e||!s)return{};const i={};for(const a of t)i[a.id]=[`left:${a.left/e*100}%`,`top:${a.top/s*100}%`,`width:${a.width/e*100}%`,`height:${a.height/s*100}%`].join(";");return i}(n,s,i);this._packStylesEqual(this._packStyles,o)||(this._packStyles=o)}_effectiveAspect(t){const e=ae(this._forceAspectLabel(t));return de(e||(this._aspectById[t]||te))}_groupMembers(t){return Ot(this._streamGroups,t)}_forceAspectLabel(t){return ce(this._forceAspect,t,this._groupMembers(t))}_packStylesEqual(t,e){const s=Object.keys(t||{}),i=Object.keys(e||{});if(s.length!==i.length)return!1;for(const i of s)if(t[i]!==e[i])return!1;return!0}_onMediaAspect(t){const e=t?.detail?.entityId,s=de(t?.detail?.aspect);e&&(ae(this._forceAspect?.[e])||Math.abs((this._aspectById[e]||0)-s)<.01||(this._aspectById={...this._aspectById,[e]:s}))}_onPlaybackMediaSize(t,e,s){const i=Number(e),a=Number(s);!t||!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0||this._onMediaAspect({detail:{entityId:t,aspect:i/a}})}async _ensureSelectionLoaded(){if(!this._panelActive)return;const t=this.hass?.user?.id||"default";if(!this.hass||this._loadedForUser===t)return;this._loadedForUser=t,this._selectionReady=!1;const e=++this._loadToken,[s,i]=await Promise.all([qe(this.hass),pe(this.hass)]);if(e!==this._loadToken||!this._panelActive)return;const a=this._cameras().map(t=>t.entityId);s?.selectedCameras?.length?(this._visibleIds=s.selectedCameras.filter(t=>a.includes(t)).slice(0,this._maxStreams()),this._pickerOpen=0===this._visibleIds.length):(this._visibleIds=[],this._pickerOpen=!0);let r=i?.sensorLinks||{};const n=s?.legacySensorLinks;if(n&&"object"==typeof n&&Object.keys(n).length&&!Object.keys(r).length)try{const t=await me(this.hass,n);if(e!==this._loadToken||!this._panelActive)return;r=t?.sensor_links?Object.fromEntries(Object.entries(t.sensor_links).map(([t,e])=>[t,e])):n,await je(this.hass,this._visibleIds),this._status="Detection sensor links moved to shared settings"}catch(t){console.warn("CCTV: legacy sensor-link migration failed",t),r=n}this._streamGroups=Rt(i?.streamGroups||[]),this._sensorLinks=Ht(r,this._streamGroups),i?(this._retentionDays=Number(i.retention_days)||1,this._recordOnDetection=!1!==i.record_on_detection,this._recordDetectionKinds=this._normalizeRecordKinds(i.record_detection_kinds),this._notifyOnDetection=Boolean(i.notify_on_detection),this._recordDir=i.record_dir||"",this._recordingDebug=String(i.recording_debug||""),this._recordingDebugSummary=String(i.recording_debug_summary||""),this._applySharedCameraPrefs(i)):this.config?.retention_days&&(this._retentionDays=Number(this.config.retention_days)||1,this._recordOnDetection=!1!==this.config.record_on_detection),this._selectionReady=!0,this._loadDeviceMap(),this._sessions?.length||(this._sessions=await ge(this.hass),e===this._loadToken&&this._panelActive)}async _loadDeviceMap(){this.hass&&!this._deviceMapReady&&(this._deviceMap=await async function(t){const e=new Map;if(!t?.callWS)return e;try{const s=await t.callWS({type:"config/entity_registry/list"});if(!Array.isArray(s))return e;for(const t of s)t?.entity_id&&t?.device_id&&e.set(String(t.entity_id),String(t.device_id))}catch(t){console.warn("CCTV: entity registry unavailable for sensor linking",t)}return e}(this.hass),this._deviceMapReady=!0)}async _loadRecordingUi(){if(!this.hass)return;const t=await pe(this.hass);t?(this._retentionDays=Number(t.retention_days)||1,this._recordOnDetection=!1!==t.record_on_detection,this._recordDetectionKinds=this._normalizeRecordKinds(t.record_detection_kinds),this._notifyOnDetection=Boolean(t.notify_on_detection),this._recordDir=t.record_dir||"",this._recordingDebug=String(t.recording_debug||""),this._recordingDebugSummary=String(t.recording_debug_summary||""),t.streamGroups&&(this._streamGroups=Rt(t.streamGroups)),t.sensorLinks&&(this._sensorLinks=Ht(t.sensorLinks,this._streamGroups)),this._prefsDirty||this._applySharedCameraPrefs(t)):this.config?.retention_days&&(this._retentionDays=Number(this.config.retention_days)||1,this._recordOnDetection=!1!==this.config.record_on_detection),this._sessions=await ge(this.hass)}async _copyRecordingDebug(){const t=this._recordingDebug||"No recording session debug yet. Trigger a detection to populate.";try{if(navigator?.clipboard?.writeText)return await navigator.clipboard.writeText(t),void(this._status="Recording debug copied")}catch(t){console.warn("CCTV: clipboard copy failed",t)}this._status="Could not copy — select the debug text manually"}_normalizeRecordKinds(t){const e=new Set(wt.map(t=>t.id));if(!Array.isArray(t))return wt.map(t=>t.id);const s=[],i=new Set;for(const a of t){const t=String(a||"").trim().toLowerCase();e.has(t)&&!i.has(t)&&(i.add(t),s.push(t))}return s}_applySharedCameraPrefs(t){const e=oe(t?.forceAspect||t?.force_aspect||{}),s=Gt(t?.cameraQuality||t?.camera_quality||{});if(this._forceAspect={...e},this._savedForceAspect={...e},this._cameraQuality={...s},this._savedCameraQuality={...s},this._prefsDirty=!1,this._detailId){const t=ce(e,this._detailId,this._groupMembers(this._detailId));this._customAspectDraft=t&&"auto"!==t&&!re(t)?t:""}else this._customAspectDraft="";this._qualityTick+=1}_prefsMapsEqual(t,e){const s=t||{},i=e||{},a=new Set([...Object.keys(s),...Object.keys(i)]);for(const t of a)if((s[t]||"")!==(i[t]||""))return!1;return!0}_syncPrefsDirty(){this._prefsDirty=!this._prefsMapsEqual(this._forceAspect,this._savedForceAspect)||!this._prefsMapsEqual(this._cameraQuality,this._savedCameraQuality)}_qualityFor(t){return Zt(this.config,t,this.panelMode?this._cameraQuality:null,this._groupMembers(t))}_cameras(){return function(t,e={}){const s=t?.states??{},i=kt(e.cameras),a=new Set(kt(e.exclude).map(t=>t.toLowerCase()));let r=Object.keys(s).filter(t=>t.startsWith("camera."));if(i.length){const t=new Set(i.map(t=>t.toLowerCase()));r=r.filter(e=>t.has(e.toLowerCase()))}return r=r.filter(t=>!a.has(t.toLowerCase())),r.map(t=>mt(t,s[t])).sort((t,e)=>t.name.localeCompare(e.name,void 0,{sensitivity:"base"}))}(this.hass,this.config)}_maxStreams(){const t=Number(this.config?.max_streams);return Number.isFinite(t)&&t>0?t:4}_visibleCameras(t){return this._visibleIds.map(e=>t.find(t=>t.entityId===e)).filter(Boolean)}_layoutCameras(t){const e=this._playback?.playing?this._playback.tracks:null;if(!e?.length)return this._visibleCameras(t);const s=new Map(t.map(t=>[t.entityId,t]));return e.map(t=>s.has(t.cameraId)?s.get(t.cameraId):mt(t.cameraId,this.hass?.states?.[t.cameraId]))}_resetLiveStreamSlots(){try{Fe.releaseAll()}catch(t){console.warn("CCTV: stream slot reset failed",t)}this._unloadStreamPlayers()}_linksFor(t){return this._sensorLinks?.[t]||[]}_groupFor(t){return Lt(this._streamGroups,t)}_applyStreamGroupsResult(t){t&&"object"==typeof t&&(Array.isArray(t.stream_groups)&&(this._streamGroups=Rt(t.stream_groups)),t.sensor_links&&(this._sensorLinks=Ht(t.sensor_links,this._streamGroups)))}async _toggleVisible(t,e){const s=this._maxStreams();let i=[...this._visibleIds];const a=Lt(this._streamGroups,t),r=new Set(a?.members||[]);if(e){if(i.includes(t))return;if(r.size){const e=i.find(t=>r.has(t));if(e)i=i.map(s=>s===e?t:s);else{if(i.length>=s)return void(this._status=`Select at most ${s} cameras`);i.push(t)}}else{if(i.length>=s)return void(this._status=`Select at most ${s} cameras`);i.push(t)}}else i=i.filter(e=>e!==t);this._visibleIds=i,this._detailId&&!i.includes(this._detailId)&&(this._detailId=null),this._playback&&this._returnToLive(),await this._persistSelection(i)}async _setPreferredStream(t,e){const s=String(t||""),i=String(e||"");if(!i.startsWith("camera.")||s===i)return;const a=Lt(this._streamGroups,s);if(a&&!a.members.includes(i))return;let r=[...this._visibleIds];const n=r.indexOf(s);if(n>=0)r[n]=i;else if(!r.includes(i)){if(r.length>=this._maxStreams())return void(this._status=`Select at most ${this._maxStreams()} cameras`);r.push(i)}a&&(r=r.filter(t=>t===i||!a.members.includes(t))),this._visibleIds=r,this._playback&&this._returnToLive(),await this._persistSelection(r)}async _persistSelection(t){this._saving=!0;try{const e=await je(this.hass,t);e?.selectedCameras&&(this._visibleIds=e.selectedCameras);const s=e?.selectedCameras||t;this._status=s.length?`${s.length} camera${1===s.length?"":"s"} on screen`:"No cameras selected"}catch(t){this._status=t?.message||"Could not save camera selection"}finally{this._saving=!1}}async _persistSensorLinks(t){this._saving=!0;const e=Ht(t,this._streamGroups);this._sensorLinks=e;try{const t=await me(this.hass,e);t?.sensor_links&&(this._sensorLinks=Ht(t.sensor_links,this._streamGroups)),this._status="Detection sensors saved for all users"}catch(t){this._status=t?.message||"Could not save detection sensors"}finally{this._saving=!1}}_setForceAspect(t,e){const s=this._groupMembers(t);if("custom"===e){const e=this._forceAspectLabel(t);this._customAspectDraft=e&&!re(e)?e:"1920:2560";const i=ie(this._customAspectDraft);return this._forceAspect=le(this._forceAspect,t,i,s),this._syncPrefsDirty(),void this._schedulePack()}const i=ie(e);this._forceAspect=le(this._forceAspect,t,i,s),(re(i)||"auto"===i)&&(this._customAspectDraft=""),this._syncPrefsDirty(),this._schedulePack()}_setCustomForceAspect(t,e){this._customAspectDraft=e;const s=ie(e);this._forceAspect=le(this._forceAspect,t,s,this._groupMembers(t)),this._syncPrefsDirty(),this._schedulePack()}async _saveCameraPrefs(){this._saving=!0;try{const t=await async function(t,e){if(!t?.callWS)return null;const s={type:"cctv_dashboard/set_camera_prefs"};return void 0!==e.cameraQuality&&(s.camera_quality=Gt(e.cameraQuality)),void 0!==e.forceAspect&&(s.force_aspect=oe(e.forceAspect)),t.callWS(s)}(this.hass,{cameraQuality:this._cameraQuality,forceAspect:this._forceAspect});t?this._applySharedCameraPrefs({force_aspect:t.force_aspect,camera_quality:t.camera_quality}):(this._savedForceAspect={...this._forceAspect},this._savedCameraQuality={...this._cameraQuality},this._prefsDirty=!1),this._status="Quality & aspect saved for all users",this._schedulePack()}catch(t){this._status=t?.message||"Could not save camera preferences"}finally{this._saving=!1}}async _setSensorLinked(t,e,s){const i=Lt(this._streamGroups,t)?.members||[t],a=new Set(this._linksFor(t));s?a.add(e):a.delete(e);const r=[...a],n={...this._sensorLinks};for(const t of i)r.length?n[t]=[...r]:delete n[t];await this._persistSensorLinks(Ht(n,this._streamGroups))}async _applySuggestions(t){const e=It(this.hass,t,{deviceIds:this._deviceMap,limit:8});if(!e.length)return void(this._status="No related detection sensors found");const s=Lt(this._streamGroups,t)?.members||[t],i=[...new Set([...this._linksFor(t),...e.map(t=>t.entityId)])].slice(0,16),a={...this._sensorLinks};for(const t of s)a[t]=[...i];await this._persistSensorLinks(Ht(a,this._streamGroups)),this._status=`Linked ${e.length} suggested sensor${1===e.length?"":"s"} (all users)`}async _persistStreamGroups(t){this._saving=!0;try{const e=Rt(t),s=Ht(this._sensorLinks,e),i=await async function(t,e){if(!t?.callWS)return null;const s=Rt(e);return t.callWS({type:"cctv_dashboard/set_stream_groups",stream_groups:s})}(this.hass,e);this._applyStreamGroupsResult(i),i?.stream_groups?null==i?.sensor_links&&Object.keys(s).length&&await this._persistSensorLinks(s):(this._streamGroups=e,await this._persistSensorLinks(s)),this._status="Stream groups saved for all users"}catch(t){this._status=t?.message||"Could not save stream groups"}finally{this._saving=!1}}_syncGroupDraftFromCamera(t){const e=Lt(this._streamGroups,t);if(e)return this._groupDraftMembers=[...e.members],void(this._groupDraftName=e.name||"");this._groupDraftMembers=[t],this._groupDraftName=""}_toggleGroupDraftMember(t,e,s){const i=String(t),a=String(e);let r=[...this._groupDraftMembers||[]];r.includes(i)||r.unshift(i),s?r.includes(a)||r.push(a):(r=r.filter(t=>t!==a),r.includes(i)||r.unshift(i)),this._groupDraftMembers=[...new Set(r)].slice(0,8)}async _saveGroupDraft(t){const e=[...new Set([t,...this._groupDraftMembers||[]])].filter(t=>String(t).startsWith("camera.")).slice(0,8);if(e.length<2)return void(this._status="Add at least one other stream to form a physical camera");const s=Lt(this._streamGroups,t),i=function(t,e){const s=[...new Set((e.members||[]).map(String).filter(t=>t.startsWith("camera.")))].slice(0,8);if(s.length<2){const s=String(e.id||"");return Rt((t||[]).filter(t=>t.id!==s))}const i=String(e.id||"").trim()||`grp_${s[0].replace(/^camera\./,"").slice(0,40)}`,a=String(e.name||"").trim().slice(0,64)||s[0].replace(/^camera\./,"").replace(/_/g," "),r=(t||[]).map(t=>({...t,members:(t.members||[]).filter(t=>!s.includes(t))})).filter(t=>t.members.length>=2&&t.id!==i);return Rt([...r,{id:i,name:a,members:s}])}(this._streamGroups,{id:s?.id,name:this._groupDraftName,members:e});await this._persistStreamGroups(i),this._syncGroupDraftFromCamera(t)}async _suggestGroupFromDevice(t){await this._loadDeviceMap();const e=function(t,e={}){const s=String(t||"");if(!s.startsWith("camera."))return[];const i=e.deviceMap;let a=null;if(i instanceof Map?a=i.get(s)||null:i&&"object"==typeof i&&(a=i[s]||null),!a)return[];const r=Lt(e.groups,s),n=new Set;for(const t of e.groups||[])if(!r||t.id!==r.id)for(const e of t.members||[])n.add(e);const o=new Set((e.cameras||[]).map(t=>String(t?.entityId||t||"")).filter(t=>t.startsWith("camera."))),c=[],l=i instanceof Map?i.entries():Object.entries(i||{});for(const[t,e]of l){const i=String(t);i.startsWith("camera.")&&i!==s&&String(e)===String(a)&&(n.has(i)||o.size&&!o.has(i)||c.push(i))}return c.sort()}(t,{cameras:this._cameras(),deviceMap:this._deviceMap,groups:this._streamGroups});e.length?(this._groupDraftMembers=[...new Set([t,...this._groupDraftMembers,...e])].slice(0,8),this._groupDraftName||(this._groupDraftName=t.replace(/^camera\./,"").replace(/_high_resolution_channel$/,"").replace(/_/g," ")),this._status=`Suggested ${e.length} stream${1===e.length?"":"s"} from the same device`):this._status="No same-device camera streams found to group"}async _ungroupCamera(t){const e=Lt(this._streamGroups,t);e?(await this._persistStreamGroups(function(t,e){const s=String(e||"");return Rt((t||[]).filter(t=>t.id!==s))}(this._streamGroups,e.id)),this._syncGroupDraftFromCamera(t)):this._status="This stream is not in a group"}_openDetail(t){this._detailId=t,this._sensorFilter="";const e=this._forceAspectLabel(t);this._customAspectDraft=e&&"auto"!==e&&!re(e)?e:"",this._syncGroupDraftFromCamera(t)}_back(){this._detailId=null,this._sensorFilter="",this._customAspectDraft="",this._groupDraftMembers=[],this._groupDraftName=""}_setQuality(t,e){if(!this.panelMode){const s=this._groupMembers(t);Jt(t,e);for(const i of s)i!==t&&Jt(i,e);return void(this._qualityTick+=1)}this._cameraQuality=function(t,e,s,i=null){const a=Bt(s),r=[...new Set([...i||[],e].map(String).filter(t=>t.startsWith("camera.")))],n={...t||{}};for(const t of r)"auto"===a?delete n[t]:n[t]=a;return Gt(n)}(this._cameraQuality,t,e,this._groupMembers(t)),this._syncPrefsDirty(),this._qualityTick+=1}async _setPickerQuality(t,e){if(this._setQuality(t,e),this.panelMode)try{await this._saveCameraPrefs()}catch(t){this._status=t?.message||"Could not save quality"}}async _setPickerForceAspect(t,e){if(this._setForceAspect(t,e),this.panelMode)try{await this._saveCameraPrefs()}catch(t){this._status=t?.message||"Could not save aspect"}}async _run(t,e){this._status=`Calling ${t}…`;try{await yt(this.hass,t,e),this._status=`${t} ok`}catch(t){this._status=t?.message||String(t)}}async _saveRetentionDays(t){const e=Math.max(1,Math.min(30,Number(t)||1));this._retentionDays=e,this._saving=!0;try{await _e(this.hass,{retention_days:e}),this._status=`Retention set to ${e} day${1===e?"":"s"}`}catch(t){this._status=t?.message||"Could not save retention"}finally{this._saving=!1}}async _toggleRecordOnDetection(t){this._recordOnDetection=t,this._saving=!0;try{await _e(this.hass,{record_on_detection:t}),this._status=t?"Detection recording enabled":"Detection recording paused"}catch(t){this._status=t?.message||"Could not save recording setting"}finally{this._saving=!1}}async _toggleNotifyOnDetection(t){this._notifyOnDetection=t,this._saving=!0;try{await async function(t,e){return t?.callWS?t.callWS({type:"cctv_dashboard/set_user_notify",notify_on_detection:Boolean(e)}):null}(this.hass,t),this._status=t?"You will be notified when a detection is recorded (this account only)":"Detection notifications disabled for your account"}catch(t){this._status=t?.message||"Could not save notification preference",await this._loadRecordingUi()}finally{this._saving=!1}}_toggleTvMode(t){this._tvMode=Boolean(t),function(t){try{if("undefined"==typeof localStorage)return;localStorage.setItem(ze,t?"1":"0")}catch{}}(this._tvMode),this._syncTvModeAttr(),this._tvMode&&(this._pickerOpen=!1,this._settingsOpen=!1),this._refreshTvStage(),this._status=this._tvMode?"TV mode on — 16:9 mosaic fills this display width (saved on this device)":"TV mode off",this._schedulePack(),this.updateComplete.then(()=>this._bindPackObserver())}async _toggleRecordKind(t,e){const s=String(t||""),i=new Set(this._recordDetectionKinds||[]);e?i.add(s):i.delete(s);const a=wt.map(t=>t.id).filter(t=>i.has(t));this._recordDetectionKinds=a,this._saving=!0;try{await _e(this.hass,{record_detection_kinds:a});const t=wt.filter(t=>a.includes(t.id)).map(t=>t.label);this._status=a.length?`Saving video for: ${t.join(", ")}`:"Video save disabled for all detection types (timeline still logs events)"}catch(t){this._status=t?.message||"Could not save detection-type filter",await this._loadRecordingUi()}finally{this._saving=!1}}async _refreshSessions(){this._sessions=await ge(this.hass),this._setRecordingsPage(this._recordingsPage),this._status="Recordings refreshed"}_refreshTimeline(){const t=this.renderRoot?.querySelector?.("cctv-detection-timeline");t?.reload?.()}_isAdmin(){return Boolean(this.hass?.user?.is_admin)}async _deleteSession(t,e,s=null){if(e?.stopPropagation?.(),e?.preventDefault?.(),!this._isAdmin())return void(this._status="Only Home Assistant admins can delete saved detections");const i=Boolean(s?.active),a=i?"Stop and delete this in-progress recording for all users?":"Delete this saved detection’s recordings for all users?";if("undefined"==typeof window||window.confirm(a))try{const e=await async function(t,e){if(!t?.callWS)return!1;const s=await t.callWS({type:"cctv_dashboard/delete_recording",session_id:e});return Boolean(s?.deleted)}(this.hass,t);this._sessions=await ge(this.hass),this._playback?.session?.session_id===t&&this._returnToLive(),this._status=e?i?"In-progress recording stopped and deleted":"Saved detection deleted for all users":"Recording was already removed"}catch(t){this._status=t?.message||"Could not delete recording"}}_setRecordingsPage(t){const e=this._savedDetectionSessions(),{page:s}=Ee(e,t,10);this._recordingsPage=s}_savedDetectionSessions(){return(this._sessions||[]).filter(t=>t.active||De(t))}async _clearAllDetections(t){if(t?.stopPropagation?.(),t?.preventDefault?.(),this._isAdmin()){if("undefined"==typeof window||window.confirm("Delete ALL saved detections and reset the detection timeline for every Home Assistant user? This cannot be undone.")){this._saving=!0;try{const t=await async function(t){return t?.callWS?t.callWS({type:"cctv_dashboard/clear_detections"}):null}(this.hass);this._sessions=await ge(this.hass),this._refreshTimeline(),this._playback&&this._returnToLive();const e=Number(t?.sessions_cleared)||0,s=Number(t?.events_cleared)||0;this._status=`Cleared ${e} recording${1===e?"":"s"} and ${s} timeline event${1===s?"":"s"} for all users`}catch(t){this._status=t?.message||"Could not clear detections"}finally{this._saving=!1}}}else this._status="Only Home Assistant admins can clear saved detections"}async _selectPlaybackSession(t,e=null){if(!De(t))return this._status="No playable recording for that detection",!1;const s=Ae(this.hass,t.trigger_sensors||[]),i=this._maxStreams(),a=this._visibleIds.slice(0,i),r=function(t,e,s=4){const i=Math.max(1,Number(s)||4),a=Ne(t),r=new Set(a),n=(e||[]).map(String).filter(t=>t.startsWith("camera."));if(n.length){const t=n.filter(t=>r.has(t)).slice(0,i);return t.length?{cameraIds:t,usedFallback:!1,reason:""}:{cameraIds:a.slice(0,i),usedFallback:!0,reason:"no-selected-clips"}}return{cameraIds:a.slice(0,i),usedFallback:!0,reason:"empty-selection"}}(t,a,i);if(!r.cameraIds.length)return this._status=a.length?"No playable clips for this detection (files missing or empty)":"No playable clips for this detection — select cameras or wait for recordings",!1;const n=Re(this.hass,t,r.cameraIds),o=n.some(t=>(t.items||[]).some(t=>"video"===t.kind||"snapshot"===t.kind));if(!o)return this._status="No playable clips for this detection (files missing or empty)",!1;const c=function(t,e=null){const s=Number(e?.start),i=Number(e?.end),a=Me(t?.started),r=Me(t?.ended||t?.started),n=Number.isFinite(s)?s:a;let o=Number.isFinite(i)?i:r;return!Number.isFinite(o)&&Number.isFinite(n)&&(o=n+6e4),Number.isFinite(n)&&Number.isFinite(o)&&o<n&&(o=n),{start:n,end:o}}(t,e);this._detailId=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map;for(const t of n){const e=Le(t,c.start);this._playbackIndex.set(t.cameraId,e.index),this._playbackSeek.set(t.cameraId,e.seekSec),this._playbackDone.set(t.cameraId,!t.items.length)}this._playback={session:t,labels:s,playing:!1,paused:!1,tracks:n,windowStart:c.start,windowEnd:c.end,eventDetail:e,triggerHighlights:Se(this.hass,t,this._sensorLinks,e,this._streamGroups)};const l=r.cameraIds.length;return"empty-selection"===r.reason?this._status=`No mosaic selection — playing ${l} camera${1===l?"":"s"} with clips`:"no-selected-clips"===r.reason?this._status=`Selected mosaic cams had no clips — playing ${l} camera${1===l?"":"s"} with recordings`:this._status=`Selected ${s.join(", ")} — Play replaces live mosaic for ${l} cam${1===l?"":"s"}`,this._schedulePack(),!0}async _freshPlaybackSession(t){if(!t?.session_id||!this.hass)return t;try{const e=await ge(this.hass);this._sessions=e;const s=e.find(e=>e.session_id===t.session_id);return s||t}catch(e){return console.warn("CCTV: could not refresh recordings before Play",e),t}}async _playSavedDetection(t,e=null){e?.stopPropagation?.(),e?.preventDefault?.();const s=await this._freshPlaybackSession(t);await this._selectPlaybackSession(s)&&this._playback&&this._playback.session?.session_id===s.session_id&&!this._playback.playing&&await this._startPlayback()}_onPlayDetection(t){const e=t?.detail,s=function(t,e){if(!t?.length||!e)return null;const s=Number(e.start),i=Number(e.end);if(!Number.isFinite(s)||!Number.isFinite(i))return null;const a=new Set((e.sensors||[]).map(t=>t.entityId).filter(Boolean));let r=null,n=-1;for(const e of t){if(e.active)continue;if(!(e.clips||[]).length)continue;const t=Date.parse(e.started),o=Date.parse(e.ended||e.started);if(!Number.isFinite(t)||!Number.isFinite(o))continue;const c=Math.min(i,o)-Math.max(s,t);if(c<=0)continue;let l=c;const d=e.trigger_sensors||[];a.size&&d.some(t=>a.has(t))&&(l+=6e4),l>n&&(n=l,r=e)}return r}(this._sessions||[],e);s?this._selectPlaybackSession(s,e):this._status="No saved recording overlaps that timeline event"}async _startPlayback(){if(!this._playback?.tracks?.length)return;this._status="Signing recording URLs…";try{await async function(t,e){const s=[];for(const i of e||[]){const e=[];for(const a of i.items||[])0!==Number(a.size)||"video"!==a.kind?(e.push(a),s.push((async()=>{null==a.filePath&&a.path&&!String(a.path).includes("/api/")&&(a.filePath=a.path),a.path=be(a),a.url=await ve(t,a.path)})())):console.warn("CCTV: skipping empty video clip",a.path||a.url);i.items=e}return await Promise.all(s),e}(this.hass,this._playback.tracks)}catch(t){return console.warn("CCTV: could not sign playback URLs",t),void(this._status=t?.message||"Could not sign recording URLs (auth/sign_path failed)")}const t=this._playback.tracks.some(t=>(t.items||[]).some(t=>"video"===t.kind||"snapshot"===t.kind));t?(this._resetLiveStreamSlots(),this._playback={...this._playback,playing:!0,paused:!1},this._status=`Playing ${this._playback.labels.join(", ")} (synced)`,this.requestUpdate(),await this.updateComplete,await this._waitForPlaybackMedia(),await this._kickPlaybackVideos()):this._status="No playable clips (files missing or empty)"}async _togglePlaybackPause(){this._playback&&(this._playback.playing?this._playback.paused?await this._resumePlayback():this._pausePlaybackClips():await this._startPlayback())}_pausePlaybackClips(){if(!this._playback?.playing)return;const t=this.renderRoot;t?.querySelectorAll?.("video.playback-media").forEach(t=>{try{t.pause?.()}catch{}}),this._playback={...this._playback,paused:!0},this._status=`Paused ${this._playback.labels.join(", ")}`}async _resumePlayback(){if(!this._playback?.playing)return void await this._startPlayback();this._playback={...this._playback,paused:!1},this._status=`Playing ${this._playback.labels.join(", ")} (synced)`;const{videos:t}=this._playbackMediaEls();t.length?await Promise.all(t.map(async t=>{try{t.muted=!0,t.playsInline=!0,await t.play()}catch(t){console.warn("CCTV resume play() failed",t)}})):await this._kickPlaybackVideos()}async _restartPlayback(){if(!this._playback?.tracks?.length)return;const t=Number(this._playback.windowStart);this._playbackDone=new Map,this._playbackIndex=new Map,this._playbackSeek=new Map;for(const e of this._playback.tracks){const s=Le(e,t);this._playbackIndex.set(e.cameraId,s.index),this._playbackSeek.set(e.cameraId,s.seekSec),this._playbackDone.set(e.cameraId,!e.items.length)}this._teardownPlaybackMedia({clearSrc:!0}),this._playbackMountGen+=1,this._playback={...this._playback,playing:!0,paused:!1},this._status=`Restarting ${this._playback.labels.join(", ")}…`,this.requestUpdate(),await this.updateComplete,await this._waitForPlaybackMedia(),await this._kickPlaybackVideos(),this._playback?.playing&&!this._playback?.paused&&(this._status=`Playing ${this._playback.labels.join(", ")} (restarted)`)}_returnToLive(){this._teardownPlaybackMedia({clearSrc:!0}),this._playback=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map;try{Fe.releaseAll()}catch(t){console.warn("CCTV: stream slot reset failed",t)}this._unloadStreamPlayers(),this._liveMountGen+=1,this._status="Live mosaic",this._schedulePack(),this.updateComplete.then(()=>{this._wakeLiveStreamPlayers(),this._tvMode&&this._refreshTvStage()})}_stopPlayback(){this._returnToLive()}_wakeLiveStreamPlayers(){const t=this.renderRoot;t?.querySelectorAll&&t.querySelectorAll("cctv-stream-player").forEach(t=>{try{t.active=!0,t._idleReason="",t._reconcilePlayback?.()}catch{}})}_teardownPlaybackMedia(t={}){const e=!1!==t.clearSrc,s=this.renderRoot;s&&s.querySelectorAll("video.playback-media").forEach(t=>{try{t.pause?.(),e&&(t.removeAttribute("src"),t.load?.())}catch{}})}_playbackMediaEls(){const t=this.renderRoot;return t?.querySelectorAll?{videos:[...t.querySelectorAll("video.playback-media")],snapshots:[...t.querySelectorAll("img.playback-media")],empty:[...t.querySelectorAll(".playback-empty")]}:{videos:[],snapshots:[],empty:[]}}_playbackHasVideoClips(){return(this._playback?.tracks||[]).some(t=>(t.items||[]).some(t=>"video"===t.kind))}async _waitForPlaybackMedia(t={}){const e=Number(t.timeoutMs)>0?Number(t.timeoutMs):2500,s=Date.now()+e;let i=0;for(;this._playback?.playing&&Date.now()<s;){const t=this._playbackMediaEls();if(t.videos.length||t.snapshots.length||t.empty.length)return t;i+=1,i%3==0&&(this.requestUpdate(),await this.updateComplete),await new Promise(t=>requestAnimationFrame(()=>t()))}return this._playbackMediaEls()}async _kickPlaybackVideos(){if(!this._playback?.playing||this._playback?.paused)return;let{videos:t}=this._playbackMediaEls();if(t.length||({videos:t}=await this._waitForPlaybackMedia({timeoutMs:1500})),!t.length){const t=this._playbackMediaEls();return t.snapshots.length&&!this._playbackHasVideoClips()?void(this._status=`Playing ${this._playback.labels.join(", ")} (snapshots)`):!t.empty.length||t.snapshots.length||this._playbackHasVideoClips()?void(this._status="Playback ready but no video elements found"):void(this._status="No recording tiles for the selected cameras")}const e=await Promise.all(t.map(t=>this._startOnePlaybackVideo(t))),s=e.filter(t=>!t.ok);s.length&&s.length===e.length?this._status=`Playback failed to start (${s[0].reason||"media error"})`:s.length&&(this._status=`Playing ${e.length-s.length}/${e.length} cameras`)}_startOnePlaybackVideo(t){const e=t.getAttribute("data-camera")||"",s=Number(this._playbackSeek.get(e))||0,i=this._trackForCamera(e),a=i?this._currentPlaybackItem(i):null;if(t.muted=!0,t.defaultMuted=!0,t.playsInline=!0,t.setAttribute("muted",""),t.setAttribute("playsinline",""),t.setAttribute("webkit-playsinline",""),t.preload="auto","video"===a?.kind&&a.url){const e=t.getAttribute("src")||t.currentSrc||"";if(!e||e!==a.url){t.setAttribute("src",a.url),t.src=a.url;try{t.load?.()}catch{}}}const r=async()=>{try{try{Number.isFinite(s)&&Math.abs((t.currentTime||0)-s)>.05?t.currentTime=s:0===s&&(t.currentTime||0)>.05&&(t.currentTime=0)}catch{}return await t.play(),{ok:!0,cameraId:e}}catch(s){const i=s?.name||s?.message||"play() rejected";console.warn("CCTV playback play() failed",e,s);try{return t.muted=!0,await t.play(),{ok:!0,cameraId:e}}catch(t){return console.warn("CCTV playback retry failed",e,t),{ok:!1,cameraId:e,reason:i}}}};return new Promise(s=>{if(t.readyState>=2)r().then(s);else{t.addEventListener("loadeddata",()=>{r().then(s)},{once:!0}),t.addEventListener("error",()=>{const i=t.error?.code,a=4===i?"unsupported/unauthorized media (check signed URL)":2===i?"network error loading clip":`media error ${i||""}`.trim();console.warn("CCTV playback media error",e,t.error,t.currentSrc),s({ok:!1,cameraId:e,reason:a})},{once:!0});try{t.load()}catch{r().then(s)}}})}_playbackVideoEl(t){const e=String(t).replace(/\\/g,"\\\\").replace(/"/g,'\\"');return this.renderRoot?.querySelector?.(`video.playback-media[data-camera="${e}"]`)}_onPlaybackEnded(t){if(!this._playback?.playing||this._playback?.paused)return;const e=this._playback.tracks.find(e=>e.cameraId===t);if(!e)return;const s=(this._playbackIndex.get(t)||0)+1,i=Number(this._playback.windowEnd);if(s<e.items.length){const a=e.items[s];return Number.isFinite(i)&&Number.isFinite(a.startedMs)&&a.startedMs>=i?void this._markPlaybackCameraDone(t):(this._playbackIndex.set(t,s),this._playbackSeek.set(t,0),"snapshot"===a.kind?void this.requestUpdate():void this._advancePlaybackVideo(t,a))}this._markPlaybackCameraDone(t)}async _advancePlaybackVideo(t,e){const s=this._playbackVideoEl(t);if(s)try{e.path=be(e),e.url=await ve(this.hass,e.path),s.muted=!0,s.playsInline=!0,s.src=e.url,s.load?.(),await this._startOnePlaybackVideo(s)}catch(e){console.warn("CCTV chunk advance failed",t,e),this._markPlaybackCameraDone(t)}else this._markPlaybackCameraDone(t)}_markPlaybackCameraDone(t){this._playbackDone.set(t,!0);const e=(this._playback?.tracks||[]).every(t=>!t.items.length||(!!t.items.every(t=>"snapshot"===t.kind)||this._playbackDone.get(t.cameraId)));e&&this._playback?.playing&&(this._pausePlaybackClips(),this._status=`Finished ${this._playback.labels.join(", ")} — Restart or Back to live`)}_trackForCamera(t){return this._playback?.tracks?.find(e=>e.cameraId===t)||null}_currentPlaybackItem(t){if(!t?.items?.length)return null;const e=Math.min(this._playbackIndex.get(t.cameraId)||0,Math.max(0,t.items.length-1));return t.items[e]||null}_stableCameraNames(t){const e=t.map(t=>`${t.entityId}:${t.name}`).join("|");return e===this._cameraNamesKey||(this._cameraNamesKey=e,this._cameraNamesCache=Object.fromEntries(t.map(t=>[t.entityId,t.name]))),this._cameraNamesCache}render(){if(!this.hass)return F`<div class="wrap placeholder">Waiting for Home Assistant…</div>`;this._qualityTick,this._deviceMapReady;const t=this._cameras(),e=this._maxStreams();Fe.setMax(e);const s=this.config?.title||"CCTV";if(this.panelMode&&!this._selectionReady)return F`
+    `}}customElements.get("cctv-detection-timeline")||customElements.define("cctv-detection-timeline",es);class ts extends ne{static properties={hass:{attribute:!1},config:{attribute:!1},panelMode:{type:Boolean,attribute:"panel-mode"},panelUrlPath:{type:String,attribute:"panel-url-path"},_detailId:{state:!0},_status:{state:!0},_qualityTick:{state:!0},_visibleIds:{state:!0},_sensorLinks:{state:!0},_streamGroups:{state:!0},_zones:{state:!0},_selectedZoneId:{state:!0},_manageGroupsOpen:{state:!0},_manageZonesOpen:{state:!0},_groupDraftMembers:{state:!0},_groupDraftName:{state:!0},_groupDraftId:{state:!0},_zoneDraftId:{state:!0},_zoneDraftName:{state:!0},_zoneDraftGroupIds:{state:!0},_forceAspect:{state:!0},_savedForceAspect:{state:!0},_cameraQuality:{state:!0},_savedCameraQuality:{state:!0},_customAspectDraft:{state:!0},_prefsDirty:{state:!0},_pickerOpen:{state:!0},_settingsOpen:{state:!0},_selectionReady:{state:!0},_saving:{state:!0},_sensorFilter:{state:!0},_deviceMapReady:{state:!0},_retentionDays:{state:!0},_recordOnDetection:{state:!0},_recordDetectionKinds:{state:!0},_notifyOnDetection:{state:!0},_sessions:{state:!0},_recordingsPage:{state:!0},_recordDir:{state:!0},_recordingDebug:{state:!0},_recordingDebugSummary:{state:!0},_isDesktop:{state:!0},_tvMode:{state:!0},_aspectById:{state:!0},_packStyles:{state:!0},_tvStage:{state:!0},_playback:{state:!0},_panelActive:{state:!0},_liveMountGen:{state:!0},_playbackMountGen:{state:!0}};static styles=he;constructor(){super(),this.config={},this.panelMode=!1,this.panelUrlPath="cctv",this._detailId=null,this._status="",this._qualityTick=0,this._visibleIds=[],this._sensorLinks={},this._streamGroups=[],this._zones=[],this._selectedZoneId="",this._manageGroupsOpen=!1,this._manageZonesOpen=!1,this._groupDraftMembers=[],this._groupDraftName="",this._groupDraftId="",this._zoneDraftId="",this._zoneDraftName="",this._zoneDraftGroupIds=[],this._forceAspect={},this._savedForceAspect={},this._cameraQuality={},this._savedCameraQuality={},this._customAspectDraft="",this._prefsDirty=!1,this._pickerOpen=!0,this._settingsOpen=!1,this._selectionReady=!1,this._saving=!1,this._sensorFilter="",this._deviceMapReady=!1,this._retentionDays=1,this._recordOnDetection=!0,this._recordDetectionKinds=we.map(e=>e.id),this._notifyOnDetection=!1,this._sessions=[],this._recordingsPage=1,this._recordDir="",this._recordingDebug="",this._recordingDebugSummary="",this._loadedForUser=null,this._isDesktop=!1,this._tvMode=!1,this._aspectById={},this._packStyles={},this._tvStage={width:0,height:0},this._playback=null,this._panelActive=!0,this._liveMountGen=0,this._playbackMountGen=0,this._deviceMap=new Map,this._packObserver=null,this._packObservedEl=null,this._mq=null,this._onMq=null,this._packRaf=0,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map,this._cameraNamesCache={},this._cameraNamesKey="",this._lastHassSig="",this._onDocVisibility=null,this._onLocationChange=null,this._loadToken=0}shouldUpdate(e){if(this.panelMode&&!this._panelActive&&!e.has("_panelActive")&&e.has("hass")&&1===e.size)return!1;if(!e.has("hass"))return!0;if(e.size>1)return!0;const t=e.get("hass"),s=this.hass;return!t||!s||this._hassRelevantChanged(t,s)}_hassRelevantChanged(e,t){const s=this._watchedEntityIds();for(const i of s){const s=e.states?.[i],a=t.states?.[i];if(s!==a){if(!s||!a)return!0;if(s.state!==a.state)return!0;if(s.attributes?.access_token!==a.attributes?.access_token)return!0;if(s.attributes?.friendly_name!==a.attributes?.friendly_name)return!0}}return(e.user?.id||"")!==(t.user?.id||"")}_watchedEntityIds(){const e=new Set(this._visibleIds||[]);if(this._pickerOpen||this._settingsOpen)for(const t of this._cameras())e.add(t.entityId);return e}connectedCallback(){super.connectedCallback(),this._tvMode=function(){try{return"undefined"!=typeof localStorage&&"1"===localStorage.getItem(Zt)}catch{return!1}}(),this._syncTvModeAttr(),"undefined"!=typeof window&&window.matchMedia&&(this._mq=window.matchMedia("(min-width: 801px)"),this._onMq=()=>{this._panelActive&&(this._isDesktop=this._mq.matches,this._refreshTvStage(),this._schedulePack())},this._isDesktop=this._mq.matches,this._mq.addEventListener?this._mq.addEventListener("change",this._onMq):this._mq.addListener(this._onMq)),this._bindTvViewport(),this._bindPanelVisibility(),!this._isCctvLocation()||"undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this._setPanelActive(!0),this._refreshTvStage()}disconnectedCallback(){super.disconnectedCallback(),this._panelActive&&(this._panelActive=!1,this._suspendResources()),this._unbindTvViewport(),this._unbindPanelVisibility(),this._mq&&this._onMq&&(this._mq.removeEventListener?this._mq.removeEventListener("change",this._onMq):this._mq.removeListener(this._onMq)),this._tearDownObservers()}_syncTvModeAttr(){const e=Boolean(this.panelMode&&this._tvMode);this.toggleAttribute("tv-mode",e)}_bindTvViewport(){"undefined"!=typeof window&&(this._unbindTvViewport(),this._onTvResize=()=>{this._panelActive&&(this._refreshTvStage(),this._schedulePack())},window.addEventListener("resize",this._onTvResize))}_unbindTvViewport(){"undefined"!=typeof window&&this._onTvResize&&(window.removeEventListener("resize",this._onTvResize),this._onTvResize=null)}_refreshTvStage(){if(!this._tvMode||!this.panelMode)return void((this._tvStage?.width||this._tvStage?.height)&&(this._tvStage={width:0,height:0}));const e=Kt(),t=this.renderRoot?.querySelector?.(".panel-wrap"),s=this.renderRoot?.querySelector?.(".layout-pack-tv");let i=Jt(t);i<8&&(i=Jt(s)),i<8&&"number"==typeof this.clientWidth&&(i=Math.max(0,this.clientWidth)),i<8&&"undefined"!=typeof window&&(i=Math.max(0,(Number(window.innerWidth)||0)-256-40));const a="undefined"!=typeof window&&Number(window.innerHeight)||0,{stage:r,offsetTop:n}=function(e,t,s){const i=Math.max(0,Number(e)||0),a=Math.max(0,Number(t)||0),r=Number.isFinite(s)?Number(s):Kt(),n=Math.max(0,a-r),o=i>0?i/Qt:0;return{availW:i,availH:n,offsetTop:Math.max(0,(n-o)/2),stage:{width:i,height:o}}}(i,a,e),o={width:Math.round(r.width),height:Math.round(r.height)};o.width<8?this.style.setProperty("--cctv-tv-chrome",`${e}px`):(o.width===this._tvStage?.width&&o.height===this._tvStage?.height||(this._tvStage=o),this.style.setProperty("--cctv-tv-stage-w",`${o.width}px`),this.style.setProperty("--cctv-tv-stage-h",`${o.height}px`),this.style.setProperty("--cctv-tv-chrome",`${e}px`),this.style.setProperty("--cctv-tv-stage-offset",`${Math.round(n)}px`))}_bindPanelVisibility(){this.panelMode&&(this._unbindPanelVisibility(),this._onDocVisibility=()=>{"undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this.isConnected&&this._isCctvLocation()&&this._setPanelActive(!0)},this._onLocationChange=()=>{this.isConnected&&("undefined"!=typeof document&&document.hidden?this._setPanelActive(!1):this._isCctvLocation()?this._panelActive||this._setPanelActive(!0):this._setPanelActive(!1))},"undefined"!=typeof document&&document.addEventListener("visibilitychange",this._onDocVisibility),"undefined"!=typeof window&&(window.addEventListener("location-changed",this._onLocationChange),window.addEventListener("popstate",this._onLocationChange)))}_unbindPanelVisibility(){this._onDocVisibility&&"undefined"!=typeof document&&(document.removeEventListener("visibilitychange",this._onDocVisibility),this._onDocVisibility=null),this._onLocationChange&&"undefined"!=typeof window&&(window.removeEventListener("location-changed",this._onLocationChange),window.removeEventListener("popstate",this._onLocationChange),this._onLocationChange=null)}_isCctvLocation(){if("undefined"==typeof location)return!0;const e=location.pathname||"",t=(String(this.panelUrlPath||"cctv").trim().replace(/^\/+|\/+$/g,"")||"cctv").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");return new RegExp(`(?:^|/)${t}(?:/|$)`).test(e)}_setPanelActive(e){const t=Boolean(e);this._panelActive!==t&&(this._panelActive=t,t?(this._status="Suspended — streams unloaded"===this._status?"":this._status,this._schedulePack()):this._suspendResources())}_suspendResources(){this._loadToken+=1,this._teardownPlaybackMedia({clearSrc:!0}),this._playback=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map,this._tearDownObservers(),this._resetLiveStreamSlots(),this._liveMountGen+=1,this.panelMode&&(this._status="Suspended — streams unloaded")}_tearDownObservers(){this._packObserver&&(this._packObserver.disconnect(),this._packObserver=null,this._packObservedEl=null),this._packRaf&&(cancelAnimationFrame(this._packRaf),this._packRaf=0)}_unloadStreamPlayers(){const e=this.renderRoot||this;e.querySelectorAll?.("cctv-stream-player").forEach(e=>{try{e.active=!1,e._unloadCompletely?.()}catch{}})}updated(e){(this._panelActive||!this.panelMode||e.has("_panelActive")&&this._panelActive)&&(this.panelMode&&this._panelActive&&(e.has("hass")||e.has("panelMode")||e.has("_panelActive"))&&this._ensureSelectionLoaded(),(e.has("_tvMode")||e.has("panelMode"))&&(this._syncTvModeAttr(),this._refreshTvStage()),this.panelMode&&this._panelActive&&(e.has("_visibleIds")||e.has("_isDesktop")||e.has("_detailId")||e.has("_pickerOpen")||e.has("_settingsOpen")||e.has("_aspectById")||e.has("_forceAspect")||e.has("_playback")||e.has("_tvMode")||e.has("_tvStage")||e.has("_panelActive"))&&(this._schedulePack(),this.updateComplete.then(()=>{this._tvMode&&!this._playback?.playing&&this._refreshTvStage(),this._bindPackObserver()})))}firstUpdated(){this._tvMode&&this.panelMode&&this.updateComplete.then(()=>{this._refreshTvStage(),this._schedulePack(),this._bindPackObserver()})}_bindPackObserver(){const e=this.renderRoot?.querySelector?.(".layout-pack");e?this._packObserver&&this._packObservedEl===e?this._recomputePack():(this._packObserver&&this._packObserver.disconnect(),this._packObservedEl=e,"undefined"!=typeof ResizeObserver?(this._packObserver=new ResizeObserver(()=>this._schedulePack()),this._packObserver.observe(e),this._recomputePack()):this._recomputePack()):this._packObserver&&(this._packObserver.disconnect(),this._packObserver=null,this._packObservedEl=null)}_schedulePack(){this._panelActive&&(this._packRaf&&cancelAnimationFrame(this._packRaf),this._packRaf=requestAnimationFrame(()=>{this._packRaf=0,this._recomputePack()}))}_recomputePack(){if(!this._isDesktop||!this.panelMode||this._detailId)return void(Object.keys(this._packStyles).length&&(this._packStyles={}));this._tvMode&&!this._playback?.playing&&this._refreshTvStage();const e=this.renderRoot?.querySelector?.(".layout-pack");if(!e)return;const t=e.getBoundingClientRect();let s=Math.max(0,t.width),i=Math.max(0,t.height);if(this._tvMode&&this._tvStage?.width>=8&&this._tvStage?.height>=8&&(s=this._tvStage.width,i=this._tvStage.height),s<8||i<8)return;const a=this._layoutCameras(this._cameras()).slice(0,4).map(e=>({id:e.entityId,aspect:this._effectiveAspect(e.entityId)}));var r;const n=function(e,t,s,i=10){const a=(e||[]).map(e=>({id:String(e.id),aspect:pt(e.aspect)}));if(!a.length||t<=1||s<=1)return[];let r=null,n=-1;for(const e of function(e){const t=e.length;if(!t)return[];const s=[];return function i(a,r){if(a!==t)for(let s=a+1;s<=t;s+=1)r.push(e.slice(a,s)),i(s,r),r.pop();else s.push(r.map(e=>e.slice()))}(0,[]),s}(a))for(const a of[mt(e,t,s,i),_t(e,t,s,i)])a&&a.totalArea>n&&(n=a.totalArea,r=a.cells);return r||[]}(a,s,i,this._tvMode?(r=a.length,(Number(r)||0)<=2?6:8):10),o=function(e,t,s){if(!t||!s)return{};const i={};for(const a of e)i[a.id]=[`left:${a.left/t*100}%`,`top:${a.top/s*100}%`,`width:${a.width/t*100}%`,`height:${a.height/s*100}%`].join(";");return i}(n,s,i);this._packStylesEqual(this._packStyles,o)||(this._packStyles=o)}_effectiveAspect(e){const t=ot(this._forceAspectLabel(e));return pt(t||(this._aspectById[e]||it))}_groupMembers(e){return Re(this._streamGroups,e)}_forceAspectLabel(e){return ht(this._forceAspect,e,this._groupMembers(e))}_packStylesEqual(e,t){const s=Object.keys(e||{}),i=Object.keys(t||{});if(s.length!==i.length)return!1;for(const i of s)if(e[i]!==t[i])return!1;return!0}_onMediaAspect(e){const t=e?.detail?.entityId,s=pt(e?.detail?.aspect);t&&(ot(this._forceAspect?.[t])||Math.abs((this._aspectById[t]||0)-s)<.01||(this._aspectById={...this._aspectById,[t]:s}))}_onPlaybackMediaSize(e,t,s){const i=Number(t),a=Number(s);!e||!Number.isFinite(i)||!Number.isFinite(a)||i<=0||a<=0||this._onMediaAspect({detail:{entityId:e,aspect:i/a}})}async _ensureSelectionLoaded(){if(!this._panelActive)return;const e=this.hass?.user?.id||"default";if(!this.hass||this._loadedForUser===e)return;this._loadedForUser=e,this._selectionReady=!1;const t=++this._loadToken,[s,i]=await Promise.all([Ft(this.hass),yt(this.hass)]);if(t!==this._loadToken||!this._panelActive)return;const a=this._cameras().map(e=>e.entityId);s?.selectedCameras?.length?(this._visibleIds=s.selectedCameras.filter(e=>a.includes(e)).slice(0,this._maxStreams()),this._pickerOpen=0===this._visibleIds.length):(this._visibleIds=[],this._pickerOpen=!0),s?.selectedZone&&(this._selectedZoneId=String(s.selectedZone));let r=i?.sensorLinks||{};const n=s?.legacySensorLinks;if(n&&"object"==typeof n&&Object.keys(n).length&&!Object.keys(r).length)try{const e=await bt(this.hass,n);if(t!==this._loadToken||!this._panelActive)return;r=e?.sensor_links?Object.fromEntries(Object.entries(e.sensor_links).map(([e,t])=>[e,t])):n,await Gt(this.hass,this._visibleIds),this._status="Detection sensor links moved to shared settings"}catch(e){console.warn("CCTV: legacy sensor-link migration failed",e),r=n}this._streamGroups=Te(i?.streamGroups||[]),this._zones=gt(i?.zones||[],this._streamGroups),(this._selectedZoneId&&!ft(this._zones,this._selectedZoneId)&&this._zones[0]||!this._selectedZoneId&&this._zones[0])&&(this._selectedZoneId=this._zones[0].id),this._sensorLinks=We(r,this._streamGroups),i?(this._retentionDays=Number(i.retention_days)||1,this._recordOnDetection=!1!==i.record_on_detection,this._recordDetectionKinds=this._normalizeRecordKinds(i.record_detection_kinds),this._notifyOnDetection=Boolean(i.notify_on_detection),this._recordDir=i.record_dir||"",this._recordingDebug=String(i.recording_debug||""),this._recordingDebugSummary=String(i.recording_debug_summary||""),this._applySharedCameraPrefs(i)):this.config?.retention_days&&(this._retentionDays=Number(this.config.retention_days)||1,this._recordOnDetection=!1!==this.config.record_on_detection),this._selectionReady=!0,this._loadDeviceMap(),this._sessions?.length||(this._sessions=await kt(this.hass),t===this._loadToken&&this._panelActive)}async _loadDeviceMap(){this.hass&&!this._deviceMapReady&&(this._deviceMap=await async function(e){const t=new Map;if(!e?.callWS)return t;try{const s=await e.callWS({type:"config/entity_registry/list"});if(!Array.isArray(s))return t;for(const e of s)e?.entity_id&&e?.device_id&&t.set(String(e.entity_id),String(e.device_id))}catch(e){console.warn("CCTV: entity registry unavailable for sensor linking",e)}return t}(this.hass),this._deviceMapReady=!0)}async _loadRecordingUi(){if(!this.hass)return;const e=await yt(this.hass);e?(this._retentionDays=Number(e.retention_days)||1,this._recordOnDetection=!1!==e.record_on_detection,this._recordDetectionKinds=this._normalizeRecordKinds(e.record_detection_kinds),this._notifyOnDetection=Boolean(e.notify_on_detection),this._recordDir=e.record_dir||"",this._recordingDebug=String(e.recording_debug||""),this._recordingDebugSummary=String(e.recording_debug_summary||""),e.streamGroups&&(this._streamGroups=Te(e.streamGroups)),e.zones?this._zones=gt(e.zones,this._streamGroups):e.streamGroups&&(this._zones=gt(this._zones,this._streamGroups)),e.sensorLinks&&(this._sensorLinks=We(e.sensorLinks,this._streamGroups)),this._prefsDirty||this._applySharedCameraPrefs(e)):this.config?.retention_days&&(this._retentionDays=Number(this.config.retention_days)||1,this._recordOnDetection=!1!==this.config.record_on_detection),this._sessions=await kt(this.hass)}async _copyRecordingDebug(){const e=this._recordingDebug||"No recording session debug yet. Trigger a detection to populate.";try{if(navigator?.clipboard?.writeText)return await navigator.clipboard.writeText(e),void(this._status="Recording debug copied")}catch(e){console.warn("CCTV: clipboard copy failed",e)}this._status="Could not copy — select the debug text manually"}_normalizeRecordKinds(e){const t=new Set(we.map(e=>e.id));if(!Array.isArray(e))return we.map(e=>e.id);const s=[],i=new Set;for(const a of e){const e=String(a||"").trim().toLowerCase();t.has(e)&&!i.has(e)&&(i.add(e),s.push(e))}return s}_applySharedCameraPrefs(e){const t=dt(e?.forceAspect||e?.force_aspect||{}),s=Ke(e?.cameraQuality||e?.camera_quality||{});if(this._forceAspect={...t},this._savedForceAspect={...t},this._cameraQuality={...s},this._savedCameraQuality={...s},this._prefsDirty=!1,this._detailId){const e=ht(t,this._detailId,this._groupMembers(this._detailId));this._customAspectDraft=e&&"auto"!==e&&!ct(e)?e:""}else this._customAspectDraft="";this._qualityTick+=1}_prefsMapsEqual(e,t){const s=e||{},i=t||{},a=new Set([...Object.keys(s),...Object.keys(i)]);for(const e of a)if((s[e]||"")!==(i[e]||""))return!1;return!0}_syncPrefsDirty(){this._prefsDirty=!this._prefsMapsEqual(this._forceAspect,this._savedForceAspect)||!this._prefsMapsEqual(this._cameraQuality,this._savedCameraQuality)}_qualityFor(e){return et(this.config,e,this.panelMode?this._cameraQuality:null,this._groupMembers(e))}_cameras(){return function(e,t={}){const s=e?.states??{},i=ke(t.cameras),a=new Set(ke(t.exclude).map(e=>e.toLowerCase()));let r=Object.keys(s).filter(e=>e.startsWith("camera."));if(i.length){const e=new Set(i.map(e=>e.toLowerCase()));r=r.filter(t=>e.has(t.toLowerCase()))}return r=r.filter(e=>!a.has(e.toLowerCase())),r.map(e=>me(e,s[e])).sort((e,t)=>e.name.localeCompare(t.name,void 0,{sensitivity:"base"}))}(this.hass,this.config)}_maxStreams(){const e=Number(this.config?.max_streams);return Number.isFinite(e)&&e>0?e:4}_visibleCameras(e){return this._visibleIds.map(t=>e.find(e=>e.entityId===t)).filter(Boolean)}_layoutCameras(e){const t=this._playback?.playing?this._playback.tracks:null;if(!t?.length)return this._visibleCameras(e);const s=new Map(e.map(e=>[e.entityId,e]));return t.map(e=>s.has(e.cameraId)?s.get(e.cameraId):me(e.cameraId,this.hass?.states?.[e.cameraId]))}_resetLiveStreamSlots(){try{Bt.releaseAll()}catch(e){console.warn("CCTV: stream slot reset failed",e)}this._unloadStreamPlayers()}_linksFor(e){return this._sensorLinks?.[e]||[]}_groupFor(e){return Oe(this._streamGroups,e)}_applyStreamGroupsResult(e){e&&"object"==typeof e&&(Array.isArray(e.stream_groups)&&(this._streamGroups=Te(e.stream_groups)),Array.isArray(e.zones)&&(this._zones=gt(e.zones,this._streamGroups)),e.sensor_links&&(this._sensorLinks=We(e.sensor_links,this._streamGroups)))}async _toggleGroupForMosaic(e,t){if(!e?.members?.length)return;if(!t){const t=this._visibleIds.find(t=>e.members.includes(t));return void(t&&await this._toggleVisible(t,!1))}const s=He(e.members)||e.members[0];await this._toggleVisible(s,!0),await this._setPickerQuality(s,"balanced")}async _toggleVisible(e,t){const s=this._maxStreams();let i=[...this._visibleIds];const a=Oe(this._streamGroups,e),r=new Set(a?.members||[]);if(t){if(i.includes(e))return;if(r.size){const t=i.find(e=>r.has(e));if(t)i=i.map(s=>s===t?e:s);else{if(i.length>=s)return void(this._status=`Select at most ${s} cameras`);i.push(e)}}else{if(i.length>=s)return void(this._status=`Select at most ${s} cameras`);i.push(e)}}else i=i.filter(t=>t!==e);this._visibleIds=i,this._detailId&&!i.includes(this._detailId)&&(this._detailId=null),this._playback&&this._returnToLive(),await this._persistSelection(i)}async _setPreferredStream(e,t){const s=String(e||""),i=String(t||"");if(!i.startsWith("camera.")||s===i)return;const a=Oe(this._streamGroups,s);if(a&&!a.members.includes(i))return;let r=[...this._visibleIds];const n=r.indexOf(s);if(n>=0)r[n]=i;else if(!r.includes(i)){if(r.length>=this._maxStreams())return void(this._status=`Select at most ${this._maxStreams()} cameras`);r.push(i)}a&&(r=r.filter(e=>e===i||!a.members.includes(e))),this._visibleIds=r,this._playback&&this._returnToLive(),await this._persistSelection(r)}async _persistSelection(e){this._saving=!0;try{const t=await Gt(this.hass,e,{selectedZone:this._selectedZoneId||""});t?.selectedCameras&&(this._visibleIds=t.selectedCameras),null!=t?.selectedZone&&(this._selectedZoneId=t.selectedZone||this._selectedZoneId);const s=t?.selectedCameras||e;this._status=s.length?`${s.length} camera${1===s.length?"":"s"} on screen`:"No cameras selected"}catch(e){this._status=e?.message||"Could not save camera selection"}finally{this._saving=!1}}async _selectZone(e){const t=ft(this._zones,e);this._selectedZoneId=t?.id||String(e||""),await this._persistSelection(this._visibleIds)}async _persistSensorLinks(e){this._saving=!0;const t=We(e,this._streamGroups);this._sensorLinks=t;try{const e=await bt(this.hass,t);e?.sensor_links&&(this._sensorLinks=We(e.sensor_links,this._streamGroups)),this._status="Detection sensors saved for all users"}catch(e){this._status=e?.message||"Could not save detection sensors"}finally{this._saving=!1}}_setForceAspect(e,t){const s=this._groupMembers(e);if("custom"===t){const t=this._forceAspectLabel(e);this._customAspectDraft=t&&!ct(t)?t:"1920:2560";const i=nt(this._customAspectDraft);return this._forceAspect=ut(this._forceAspect,e,i,s),this._syncPrefsDirty(),void this._schedulePack()}const i=nt(t);this._forceAspect=ut(this._forceAspect,e,i,s),(ct(i)||"auto"===i)&&(this._customAspectDraft=""),this._syncPrefsDirty(),this._schedulePack()}_setCustomForceAspect(e,t){this._customAspectDraft=t;const s=nt(t);this._forceAspect=ut(this._forceAspect,e,s,this._groupMembers(e)),this._syncPrefsDirty(),this._schedulePack()}async _saveCameraPrefs(){this._saving=!0;try{const e=await async function(e,t){if(!e?.callWS)return null;const s={type:"cctv_dashboard/set_camera_prefs"};return void 0!==t.cameraQuality&&(s.camera_quality=Ke(t.cameraQuality)),void 0!==t.forceAspect&&(s.force_aspect=dt(t.forceAspect)),e.callWS(s)}(this.hass,{cameraQuality:this._cameraQuality,forceAspect:this._forceAspect});e?this._applySharedCameraPrefs({force_aspect:e.force_aspect,camera_quality:e.camera_quality}):(this._savedForceAspect={...this._forceAspect},this._savedCameraQuality={...this._cameraQuality},this._prefsDirty=!1),this._status="Quality & aspect saved for all users",this._schedulePack()}catch(e){this._status=e?.message||"Could not save camera preferences"}finally{this._saving=!1}}async _setSensorLinked(e,t,s){const i=Oe(this._streamGroups,e)?.members||[e],a=new Set(this._linksFor(e));s?a.add(t):a.delete(t);const r=[...a],n={...this._sensorLinks};for(const e of i)r.length?n[e]=[...r]:delete n[e];await this._persistSensorLinks(We(n,this._streamGroups))}async _applySuggestions(e){const t=Ie(this.hass,e,{deviceIds:this._deviceMap,limit:8});if(!t.length)return void(this._status="No related detection sensors found");const s=Oe(this._streamGroups,e)?.members||[e],i=[...new Set([...this._linksFor(e),...t.map(e=>e.entityId)])].slice(0,16),a={...this._sensorLinks};for(const e of s)a[e]=[...i];await this._persistSensorLinks(We(a,this._streamGroups)),this._status=`Linked ${t.length} suggested sensor${1===t.length?"":"s"} (all users)`}async _persistStreamGroups(e){if(this._isAdmin()){this._saving=!0;try{const t=Te(e),s=We(this._sensorLinks,t),i=await async function(e,t){if(!e?.callWS)return null;const s=Te(t);return e.callWS({type:"cctv_dashboard/set_stream_groups",stream_groups:s})}(this.hass,t);this._applyStreamGroupsResult(i),i?.stream_groups?null==i?.sensor_links&&Object.keys(s).length&&await this._persistSensorLinks(s):(this._streamGroups=t,await this._persistSensorLinks(s)),Array.isArray(i?.zones)?this._zones=gt(i.zones,this._streamGroups):this._zones=gt(this._zones,this._streamGroups),this._status="Camera groups saved for all users"}catch(e){this._status=e?.message||"Could not save camera groups"}finally{this._saving=!1}}else this._status="Only Home Assistant admins can edit camera groups"}async _persistZones(e){if(!this._isAdmin())return void(this._status="Only Home Assistant admins can edit zones");this._saving=!0;const t=gt(e,this._streamGroups);try{const e=await async function(e,t){if(!e?.callWS)return null;const s=gt(t);return e.callWS({type:"cctv_dashboard/set_zones",zones:s})}(this.hass,t);this._zones=gt(e?.zones||t,this._streamGroups),this._selectedZoneId&&!ft(this._zones,this._selectedZoneId)&&(this._selectedZoneId=this._zones[0]?.id||"",await this._persistSelection(this._visibleIds)),this._status="Zones saved for all users"}catch(e){this._status=e?.message||"Could not save zones"}finally{this._saving=!1}}_syncGroupDraftFromCamera(e){const t=Oe(this._streamGroups,e);if(t)return this._groupDraftId=t.id,this._groupDraftMembers=[...t.members],void(this._groupDraftName=t.name||"");this._groupDraftId="",this._groupDraftMembers=e?[e]:[],this._groupDraftName=""}_beginNewGroupDraft(){this._groupDraftId="",this._groupDraftName="",this._groupDraftMembers=[],this._manageGroupsOpen=!0}_editGroupDraft(e){e&&(this._groupDraftId=e.id,this._groupDraftName=e.name||"",this._groupDraftMembers=[...e.members||[]],this._manageGroupsOpen=!0)}_beginNewZoneDraft(){this._zoneDraftId="",this._zoneDraftName="",this._zoneDraftGroupIds=[],this._manageZonesOpen=!0}_editZoneDraft(e){e&&(this._zoneDraftId=e.id,this._zoneDraftName=e.name||"",this._zoneDraftGroupIds=[...e.group_ids||[]],this._manageZonesOpen=!0)}_toggleGroupDraftMember(e,t,s){const i=String(e),a=String(t);let r=[...this._groupDraftMembers||[]];r.includes(i)||r.unshift(i),s?r.includes(a)||r.push(a):(r=r.filter(e=>e!==a),r.includes(i)||r.unshift(i)),this._groupDraftMembers=[...new Set(r)].slice(0,8)}async _saveGroupDraft(e=""){if(!this._isAdmin())return void(this._status="Only Home Assistant admins can edit camera groups");const t=e||this._groupDraftMembers?.[0]||"",s=[...new Set([...t?[t]:[],...this._groupDraftMembers||[]].map(String).filter(e=>e.startsWith("camera.")))].slice(0,8);if(s.length<2)return void(this._status="Add at least one other stream to form a physical camera");const i=this._groupDraftId||Oe(this._streamGroups,s[0])?.id||"",a=function(e,t){const s=[...new Set((t.members||[]).map(String).filter(e=>e.startsWith("camera.")))].slice(0,8);if(s.length<2){const s=String(t.id||"");return Te((e||[]).filter(e=>e.id!==s))}const i=String(t.id||"").trim()||`grp_${s[0].replace(/^camera\./,"").slice(0,40)}`,a=String(t.name||"").trim().slice(0,64)||s[0].replace(/^camera\./,"").replace(/_/g," "),r=(e||[]).map(e=>({...e,members:(e.members||[]).filter(e=>!s.includes(e))})).filter(e=>e.members.length>=2&&e.id!==i);return Te([...r,{id:i,name:a,members:s}])}(this._streamGroups,{id:i,name:this._groupDraftName,members:s});await this._persistStreamGroups(a);const r=Oe(this._streamGroups,s[0]);r?this._editGroupDraft(r):this._beginNewGroupDraft()}async _saveZoneDraft(){if(!this._isAdmin())return void(this._status="Only Home Assistant admins can edit zones");const e=function(e,t,s=null){const i=new Set((s||[]).map(e=>String(e?.id||"")).filter(Boolean)),a=[...new Set((t.group_ids||[]).map(String).filter(e=>e&&(!i.size||i.has(e))))].slice(0,32),r=String(t.id||"").trim()||`zone_${String(t.name||"zone").replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,40)}`,n=String(t.name||"").trim().slice(0,64)||r.replace(/^zone_/,"").replace(/_/g," ")||"Zone",o=(e||[]).filter(e=>e.id!==r);return gt([...o,{id:r,name:n,group_ids:a}],s)}(this._zones,{id:this._zoneDraftId,name:this._zoneDraftName,group_ids:this._zoneDraftGroupIds},this._streamGroups);await this._persistZones(e);const t=this._zoneDraftId,s=ft(this._zones,t)||this._zones.find(e=>e.name===String(this._zoneDraftName||"").trim())||this._zones.at(-1);s&&this._editZoneDraft(s)}_toggleZoneDraftGroup(e,t){const s=String(e||"");if(!s)return;let i=[...this._zoneDraftGroupIds||[]];t?i.includes(s)||i.push(s):i=i.filter(e=>e!==s),this._zoneDraftGroupIds=i.slice(0,32)}_toggleManageGroupMember(e,t){const s=String(e||"");if(!s.startsWith("camera."))return;let i=[...this._groupDraftMembers||[]];t?i.includes(s)||i.push(s):i=i.filter(e=>e!==s),this._groupDraftMembers=[...new Set(i)].slice(0,8)}async _suggestGroupFromDevice(e){await this._loadDeviceMap();const t=function(e,t={}){const s=String(e||"");if(!s.startsWith("camera."))return[];const i=t.deviceMap;let a=null;if(i instanceof Map?a=i.get(s)||null:i&&"object"==typeof i&&(a=i[s]||null),!a)return[];const r=Oe(t.groups,s),n=new Set;for(const e of t.groups||[])if(!r||e.id!==r.id)for(const t of e.members||[])n.add(t);const o=new Set((t.cameras||[]).map(e=>String(e?.entityId||e||"")).filter(e=>e.startsWith("camera."))),c=[],l=i instanceof Map?i.entries():Object.entries(i||{});for(const[e,t]of l){const i=String(e);i.startsWith("camera.")&&i!==s&&String(t)===String(a)&&(n.has(i)||o.size&&!o.has(i)||c.push(i))}return c.sort()}(e,{cameras:this._cameras(),deviceMap:this._deviceMap,groups:this._streamGroups});t.length?(this._groupDraftMembers=[...new Set([e,...this._groupDraftMembers,...t])].slice(0,8),this._groupDraftName||(this._groupDraftName=e.replace(/^camera\./,"").replace(/_high_resolution_channel$/,"").replace(/_/g," ")),this._status=`Suggested ${t.length} stream${1===t.length?"":"s"} from the same device`):this._status="No same-device camera streams found to group"}async _ungroupCamera(e){const t=Oe(this._streamGroups,e);t?(await this._persistStreamGroups(Ge(this._streamGroups,t.id)),this._syncGroupDraftFromCamera(e)):this._status="This stream is not in a group"}_openDetail(e){this._detailId=e,this._sensorFilter="";const t=this._forceAspectLabel(e);this._customAspectDraft=t&&"auto"!==t&&!ct(t)?t:"",this._syncGroupDraftFromCamera(e)}_back(){this._detailId=null,this._sensorFilter="",this._customAspectDraft="",this._groupDraftMembers=[],this._groupDraftName=""}_setQuality(e,t){if(!this.panelMode){const s=this._groupMembers(e);Ye(e,t);for(const i of s)i!==e&&Ye(i,t);return void(this._qualityTick+=1)}this._cameraQuality=function(e,t,s,i=null){const a=Qe(s),r=[...new Set([...i||[],t].map(String).filter(e=>e.startsWith("camera.")))],n={...e||{}};for(const e of r)"auto"===a?delete n[e]:n[e]=a;return Ke(n)}(this._cameraQuality,e,t,this._groupMembers(e)),this._syncPrefsDirty(),this._qualityTick+=1}async _setPickerQuality(e,t){if(this._setQuality(e,t),this.panelMode)try{await this._saveCameraPrefs()}catch(e){this._status=e?.message||"Could not save quality"}}async _setPickerForceAspect(e,t){if(this._setForceAspect(e,t),this.panelMode)try{await this._saveCameraPrefs()}catch(e){this._status=e?.message||"Could not save aspect"}}async _run(e,t){this._status=`Calling ${e}…`;try{await ye(this.hass,e,t),this._status=`${e} ok`}catch(e){this._status=e?.message||String(e)}}async _saveRetentionDays(e){const t=Math.max(1,Math.min(30,Number(e)||1));this._retentionDays=t,this._saving=!0;try{await vt(this.hass,{retention_days:t}),this._status=`Retention set to ${t} day${1===t?"":"s"}`}catch(e){this._status=e?.message||"Could not save retention"}finally{this._saving=!1}}async _toggleRecordOnDetection(e){this._recordOnDetection=e,this._saving=!0;try{await vt(this.hass,{record_on_detection:e}),this._status=e?"Detection recording enabled":"Detection recording paused"}catch(e){this._status=e?.message||"Could not save recording setting"}finally{this._saving=!1}}async _toggleNotifyOnDetection(e){this._notifyOnDetection=e,this._saving=!0;try{await async function(e,t){return e?.callWS?e.callWS({type:"cctv_dashboard/set_user_notify",notify_on_detection:Boolean(t)}):null}(this.hass,e),this._status=e?"You will be notified when a detection is recorded (this account only)":"Detection notifications disabled for your account"}catch(e){this._status=e?.message||"Could not save notification preference",await this._loadRecordingUi()}finally{this._saving=!1}}_toggleTvMode(e){this._tvMode=Boolean(e),function(e){try{if("undefined"==typeof localStorage)return;localStorage.setItem(Zt,e?"1":"0")}catch{}}(this._tvMode),this._syncTvModeAttr(),this._tvMode&&(this._pickerOpen=!1,this._settingsOpen=!1),this._refreshTvStage(),this._status=this._tvMode?"TV mode on — 16:9 mosaic fills this display width (saved on this device)":"TV mode off",this._schedulePack(),this.updateComplete.then(()=>this._bindPackObserver())}async _toggleRecordKind(e,t){const s=String(e||""),i=new Set(this._recordDetectionKinds||[]);t?i.add(s):i.delete(s);const a=we.map(e=>e.id).filter(e=>i.has(e));this._recordDetectionKinds=a,this._saving=!0;try{await vt(this.hass,{record_detection_kinds:a});const e=we.filter(e=>a.includes(e.id)).map(e=>e.label);this._status=a.length?`Saving video for: ${e.join(", ")}`:"Video save disabled for all detection types (timeline still logs events)"}catch(e){this._status=e?.message||"Could not save detection-type filter",await this._loadRecordingUi()}finally{this._saving=!1}}async _refreshSessions(){this._sessions=await kt(this.hass),this._setRecordingsPage(this._recordingsPage),this._status="Recordings refreshed"}_refreshTimeline(){const e=this.renderRoot?.querySelector?.("cctv-detection-timeline");e?.reload?.()}_isAdmin(){return Boolean(this.hass?.user?.is_admin)}async _deleteSession(e,t,s=null){if(t?.stopPropagation?.(),t?.preventDefault?.(),!this._isAdmin())return void(this._status="Only Home Assistant admins can delete saved detections");const i=Boolean(s?.active),a=i?"Stop and delete this in-progress recording for all users?":"Delete this saved detection’s recordings for all users?";if("undefined"==typeof window||window.confirm(a))try{const t=await async function(e,t){if(!e?.callWS)return!1;const s=await e.callWS({type:"cctv_dashboard/delete_recording",session_id:t});return Boolean(s?.deleted)}(this.hass,e);this._sessions=await kt(this.hass),this._playback?.session?.session_id===e&&this._returnToLive(),this._status=t?i?"In-progress recording stopped and deleted":"Saved detection deleted for all users":"Recording was already removed"}catch(e){this._status=e?.message||"Could not delete recording"}}_setRecordingsPage(e){const t=this._savedDetectionSessions(),{page:s}=Rt(t,e,10);this._recordingsPage=s}_savedDetectionSessions(){return(this._sessions||[]).filter(e=>e.active||Ot(e))}async _clearAllDetections(e){if(e?.stopPropagation?.(),e?.preventDefault?.(),this._isAdmin()){if("undefined"==typeof window||window.confirm("Delete ALL saved detections and reset the detection timeline for every Home Assistant user? This cannot be undone.")){this._saving=!0;try{const e=await async function(e){return e?.callWS?e.callWS({type:"cctv_dashboard/clear_detections"}):null}(this.hass);this._sessions=await kt(this.hass),this._refreshTimeline(),this._playback&&this._returnToLive();const t=Number(e?.sessions_cleared)||0,s=Number(e?.events_cleared)||0;this._status=`Cleared ${t} recording${1===t?"":"s"} and ${s} timeline event${1===s?"":"s"} for all users`}catch(e){this._status=e?.message||"Could not clear detections"}finally{this._saving=!1}}}else this._status="Only Home Assistant admins can clear saved detections"}async _selectPlaybackSession(e,t=null){if(!Ot(e))return this._status="No playable recording for that detection",!1;const s=Pt(this.hass,e.trigger_sensors||[]),i=this._maxStreams(),a=this._visibleIds.slice(0,i),r=function(e,t,s=4){const i=Math.max(1,Number(s)||4),a=qt(e),r=new Set(a),n=(t||[]).map(String).filter(e=>e.startsWith("camera."));if(n.length){const e=n.filter(e=>r.has(e)).slice(0,i);return e.length?{cameraIds:e,usedFallback:!1,reason:""}:{cameraIds:a.slice(0,i),usedFallback:!0,reason:"no-selected-clips"}}return{cameraIds:a.slice(0,i),usedFallback:!0,reason:"empty-selection"}}(e,a,i);if(!r.cameraIds.length)return this._status=a.length?"No playable clips for this detection (files missing or empty)":"No playable clips for this detection — select cameras or wait for recordings",!1;const n=jt(this.hass,e,r.cameraIds),o=n.some(e=>(e.items||[]).some(e=>"video"===e.kind||"snapshot"===e.kind));if(!o)return this._status="No playable clips for this detection (files missing or empty)",!1;const c=function(e,t=null){const s=Number(t?.start),i=Number(t?.end),a=Et(e?.started),r=Et(e?.ended||e?.started),n=Number.isFinite(s)?s:a;let o=Number.isFinite(i)?i:r;return!Number.isFinite(o)&&Number.isFinite(n)&&(o=n+6e4),Number.isFinite(n)&&Number.isFinite(o)&&o<n&&(o=n),{start:n,end:o}}(e,t);this._detailId=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map;for(const e of n){const t=Ht(e,c.start);this._playbackIndex.set(e.cameraId,t.index),this._playbackSeek.set(e.cameraId,t.seekSec),this._playbackDone.set(e.cameraId,!e.items.length)}this._playback={session:e,labels:s,playing:!1,paused:!1,tracks:n,windowStart:c.start,windowEnd:c.end,eventDetail:t,triggerHighlights:It(this.hass,e,this._sensorLinks,t,this._streamGroups)};const l=r.cameraIds.length;return"empty-selection"===r.reason?this._status=`No mosaic selection — playing ${l} camera${1===l?"":"s"} with clips`:"no-selected-clips"===r.reason?this._status=`Selected mosaic cams had no clips — playing ${l} camera${1===l?"":"s"} with recordings`:this._status=`Selected ${s.join(", ")} — Play replaces live mosaic for ${l} cam${1===l?"":"s"}`,this._schedulePack(),!0}async _freshPlaybackSession(e){if(!e?.session_id||!this.hass)return e;try{const t=await kt(this.hass);this._sessions=t;const s=t.find(t=>t.session_id===e.session_id);return s||e}catch(t){return console.warn("CCTV: could not refresh recordings before Play",t),e}}async _playSavedDetection(e,t=null){t?.stopPropagation?.(),t?.preventDefault?.();const s=await this._freshPlaybackSession(e);await this._selectPlaybackSession(s)&&this._playback&&this._playback.session?.session_id===s.session_id&&!this._playback.playing&&await this._startPlayback()}_onPlayDetection(e){const t=e?.detail,s=function(e,t){if(!e?.length||!t)return null;const s=Number(t.start),i=Number(t.end);if(!Number.isFinite(s)||!Number.isFinite(i))return null;const a=new Set((t.sensors||[]).map(e=>e.entityId).filter(Boolean));let r=null,n=-1;for(const t of e){if(t.active)continue;if(!(t.clips||[]).length)continue;const e=Date.parse(t.started),o=Date.parse(t.ended||t.started);if(!Number.isFinite(e)||!Number.isFinite(o))continue;const c=Math.min(i,o)-Math.max(s,e);if(c<=0)continue;let l=c;const d=t.trigger_sensors||[];a.size&&d.some(e=>a.has(e))&&(l+=6e4),l>n&&(n=l,r=t)}return r}(this._sessions||[],t);s?this._selectPlaybackSession(s,t):this._status="No saved recording overlaps that timeline event"}async _startPlayback(){if(!this._playback?.tracks?.length)return;this._status="Signing recording URLs…";try{await async function(e,t){const s=[];for(const i of t||[]){const t=[];for(const a of i.items||[])0!==Number(a.size)||"video"!==a.kind?(t.push(a),s.push((async()=>{null==a.filePath&&a.path&&!String(a.path).includes("/api/")&&(a.filePath=a.path),a.path=St(a),a.url=await xt(e,a.path)})())):console.warn("CCTV: skipping empty video clip",a.path||a.url);i.items=t}return await Promise.all(s),t}(this.hass,this._playback.tracks)}catch(e){return console.warn("CCTV: could not sign playback URLs",e),void(this._status=e?.message||"Could not sign recording URLs (auth/sign_path failed)")}const e=this._playback.tracks.some(e=>(e.items||[]).some(e=>"video"===e.kind||"snapshot"===e.kind));e?(this._resetLiveStreamSlots(),this._playback={...this._playback,playing:!0,paused:!1},this._status=`Playing ${this._playback.labels.join(", ")} (synced)`,this.requestUpdate(),await this.updateComplete,await this._waitForPlaybackMedia(),await this._kickPlaybackVideos()):this._status="No playable clips (files missing or empty)"}async _togglePlaybackPause(){this._playback&&(this._playback.playing?this._playback.paused?await this._resumePlayback():this._pausePlaybackClips():await this._startPlayback())}_pausePlaybackClips(){if(!this._playback?.playing)return;const e=this.renderRoot;e?.querySelectorAll?.("video.playback-media").forEach(e=>{try{e.pause?.()}catch{}}),this._playback={...this._playback,paused:!0},this._status=`Paused ${this._playback.labels.join(", ")}`}async _resumePlayback(){if(!this._playback?.playing)return void await this._startPlayback();this._playback={...this._playback,paused:!1},this._status=`Playing ${this._playback.labels.join(", ")} (synced)`;const{videos:e}=this._playbackMediaEls();e.length?await Promise.all(e.map(async e=>{try{e.muted=!0,e.playsInline=!0,await e.play()}catch(e){console.warn("CCTV resume play() failed",e)}})):await this._kickPlaybackVideos()}async _restartPlayback(){if(!this._playback?.tracks?.length)return;const e=Number(this._playback.windowStart);this._playbackDone=new Map,this._playbackIndex=new Map,this._playbackSeek=new Map;for(const t of this._playback.tracks){const s=Ht(t,e);this._playbackIndex.set(t.cameraId,s.index),this._playbackSeek.set(t.cameraId,s.seekSec),this._playbackDone.set(t.cameraId,!t.items.length)}this._teardownPlaybackMedia({clearSrc:!0}),this._playbackMountGen+=1,this._playback={...this._playback,playing:!0,paused:!1},this._status=`Restarting ${this._playback.labels.join(", ")}…`,this.requestUpdate(),await this.updateComplete,await this._waitForPlaybackMedia(),await this._kickPlaybackVideos(),this._playback?.playing&&!this._playback?.paused&&(this._status=`Playing ${this._playback.labels.join(", ")} (restarted)`)}_returnToLive(){this._teardownPlaybackMedia({clearSrc:!0}),this._playback=null,this._playbackIndex=new Map,this._playbackSeek=new Map,this._playbackDone=new Map;try{Bt.releaseAll()}catch(e){console.warn("CCTV: stream slot reset failed",e)}this._unloadStreamPlayers(),this._liveMountGen+=1,this._status="Live mosaic",this._schedulePack(),this.updateComplete.then(()=>{this._wakeLiveStreamPlayers(),this._tvMode&&this._refreshTvStage()})}_stopPlayback(){this._returnToLive()}_wakeLiveStreamPlayers(){const e=this.renderRoot;e?.querySelectorAll&&e.querySelectorAll("cctv-stream-player").forEach(e=>{try{e.active=!0,e._idleReason="",e._reconcilePlayback?.()}catch{}})}_teardownPlaybackMedia(e={}){const t=!1!==e.clearSrc,s=this.renderRoot;s&&s.querySelectorAll("video.playback-media").forEach(e=>{try{e.pause?.(),t&&(e.removeAttribute("src"),e.load?.())}catch{}})}_playbackMediaEls(){const e=this.renderRoot;return e?.querySelectorAll?{videos:[...e.querySelectorAll("video.playback-media")],snapshots:[...e.querySelectorAll("img.playback-media")],empty:[...e.querySelectorAll(".playback-empty")]}:{videos:[],snapshots:[],empty:[]}}_playbackHasVideoClips(){return(this._playback?.tracks||[]).some(e=>(e.items||[]).some(e=>"video"===e.kind))}async _waitForPlaybackMedia(e={}){const t=Number(e.timeoutMs)>0?Number(e.timeoutMs):2500,s=Date.now()+t;let i=0;for(;this._playback?.playing&&Date.now()<s;){const e=this._playbackMediaEls();if(e.videos.length||e.snapshots.length||e.empty.length)return e;i+=1,i%3==0&&(this.requestUpdate(),await this.updateComplete),await new Promise(e=>requestAnimationFrame(()=>e()))}return this._playbackMediaEls()}async _kickPlaybackVideos(){if(!this._playback?.playing||this._playback?.paused)return;let{videos:e}=this._playbackMediaEls();if(e.length||({videos:e}=await this._waitForPlaybackMedia({timeoutMs:1500})),!e.length){const e=this._playbackMediaEls();return e.snapshots.length&&!this._playbackHasVideoClips()?void(this._status=`Playing ${this._playback.labels.join(", ")} (snapshots)`):!e.empty.length||e.snapshots.length||this._playbackHasVideoClips()?void(this._status="Playback ready but no video elements found"):void(this._status="No recording tiles for the selected cameras")}const t=await Promise.all(e.map(e=>this._startOnePlaybackVideo(e))),s=t.filter(e=>!e.ok);s.length&&s.length===t.length?this._status=`Playback failed to start (${s[0].reason||"media error"})`:s.length&&(this._status=`Playing ${t.length-s.length}/${t.length} cameras`)}_startOnePlaybackVideo(e){const t=e.getAttribute("data-camera")||"",s=Number(this._playbackSeek.get(t))||0,i=this._trackForCamera(t),a=i?this._currentPlaybackItem(i):null;if(e.muted=!0,e.defaultMuted=!0,e.playsInline=!0,e.setAttribute("muted",""),e.setAttribute("playsinline",""),e.setAttribute("webkit-playsinline",""),e.preload="auto","video"===a?.kind&&a.url){const t=e.getAttribute("src")||e.currentSrc||"";if(!t||t!==a.url){e.setAttribute("src",a.url),e.src=a.url;try{e.load?.()}catch{}}}const r=async()=>{try{try{Number.isFinite(s)&&Math.abs((e.currentTime||0)-s)>.05?e.currentTime=s:0===s&&(e.currentTime||0)>.05&&(e.currentTime=0)}catch{}return await e.play(),{ok:!0,cameraId:t}}catch(s){const i=s?.name||s?.message||"play() rejected";console.warn("CCTV playback play() failed",t,s);try{return e.muted=!0,await e.play(),{ok:!0,cameraId:t}}catch(e){return console.warn("CCTV playback retry failed",t,e),{ok:!1,cameraId:t,reason:i}}}};return new Promise(s=>{if(e.readyState>=2)r().then(s);else{e.addEventListener("loadeddata",()=>{r().then(s)},{once:!0}),e.addEventListener("error",()=>{const i=e.error?.code,a=4===i?"unsupported/unauthorized media (check signed URL)":2===i?"network error loading clip":`media error ${i||""}`.trim();console.warn("CCTV playback media error",t,e.error,e.currentSrc),s({ok:!1,cameraId:t,reason:a})},{once:!0});try{e.load()}catch{r().then(s)}}})}_playbackVideoEl(e){const t=String(e).replace(/\\/g,"\\\\").replace(/"/g,'\\"');return this.renderRoot?.querySelector?.(`video.playback-media[data-camera="${t}"]`)}_onPlaybackEnded(e){if(!this._playback?.playing||this._playback?.paused)return;const t=this._playback.tracks.find(t=>t.cameraId===e);if(!t)return;const s=(this._playbackIndex.get(e)||0)+1,i=Number(this._playback.windowEnd);if(s<t.items.length){const a=t.items[s];return Number.isFinite(i)&&Number.isFinite(a.startedMs)&&a.startedMs>=i?void this._markPlaybackCameraDone(e):(this._playbackIndex.set(e,s),this._playbackSeek.set(e,0),"snapshot"===a.kind?void this.requestUpdate():void this._advancePlaybackVideo(e,a))}this._markPlaybackCameraDone(e)}async _advancePlaybackVideo(e,t){const s=this._playbackVideoEl(e);if(s)try{t.path=St(t),t.url=await xt(this.hass,t.path),s.muted=!0,s.playsInline=!0,s.src=t.url,s.load?.(),await this._startOnePlaybackVideo(s)}catch(t){console.warn("CCTV chunk advance failed",e,t),this._markPlaybackCameraDone(e)}else this._markPlaybackCameraDone(e)}_markPlaybackCameraDone(e){this._playbackDone.set(e,!0);const t=(this._playback?.tracks||[]).every(e=>!e.items.length||(!!e.items.every(e=>"snapshot"===e.kind)||this._playbackDone.get(e.cameraId)));t&&this._playback?.playing&&(this._pausePlaybackClips(),this._status=`Finished ${this._playback.labels.join(", ")} — Restart or Back to live`)}_trackForCamera(e){return this._playback?.tracks?.find(t=>t.cameraId===e)||null}_currentPlaybackItem(e){if(!e?.items?.length)return null;const t=Math.min(this._playbackIndex.get(e.cameraId)||0,Math.max(0,e.items.length-1));return e.items[t]||null}_stableCameraNames(e){const t=e.map(e=>`${e.entityId}:${e.name}`).join("|");return t===this._cameraNamesKey||(this._cameraNamesKey=t,this._cameraNamesCache=Object.fromEntries(e.map(e=>[e.entityId,e.name]))),this._cameraNamesCache}render(){if(!this.hass)return W`<div class="wrap placeholder">Waiting for Home Assistant…</div>`;this._qualityTick,this._deviceMapReady;const e=this._cameras(),t=this._maxStreams();Bt.setMax(t);const s=this.config?.title||"CCTV";if(this.panelMode&&!this._selectionReady)return W`
         <div class="panel-wrap wrap">
           <p class="placeholder">Loading camera selection…</p>
         </div>
-      `;if(this.panelMode&&!this._panelActive)return F`
+      `;if(this.panelMode&&!this._panelActive)return W`
         <div class="panel-wrap wrap">
           <p class="placeholder">CCTV paused — streams unloaded while you are away.</p>
         </div>
-      `;const i=t.find(t=>t.entityId===this._detailId)||null,a=this.panelMode?this._layoutCameras(t):t,r=this._stableCameraNames(t),n=Boolean(this._playback?.playing),o=Boolean(n&&this._playback?.paused),c=this._panelActive,l=[this.panelMode?"panel-wrap wrap":"wrap",this.panelMode&&this._tvMode?"tv-mode":""].filter(Boolean).join(" ");return F`
+      `;const i=e.find(e=>e.entityId===this._detailId)||null,a=this.panelMode?this._layoutCameras(e):e,r=this._stableCameraNames(e),n=Boolean(this._playback?.playing),o=Boolean(n&&this._playback?.paused),c=this._panelActive,l=[this.panelMode?"panel-wrap wrap":"wrap",this.panelMode&&this._tvMode?"tv-mode":""].filter(Boolean).join(" ");return W`
       <div class=${l}>
         <div class="top ${this._tvMode?"top-tv":""}">
           <div>
-            ${this.panelMode&&!this._tvMode?F`<p class="eyebrow">Home Assistant</p>`:U}
-            <h1>${s}${this._tvMode?F`<span class="tv-badge">TV</span>`:U}</h1>
+            ${this.panelMode&&!this._tvMode?W`<p class="eyebrow">Home Assistant</p>`:G}
+            <h1>${s}${this._tvMode?W`<span class="tv-badge">TV</span>`:G}</h1>
           </div>
           <div class="top-actions">
-            ${this.panelMode?F`
+            ${this.panelMode?W`
                   <button
                     class="btn"
                     type="button"
                     @click=${()=>this._pickerOpen=!this._pickerOpen}
                   >
-                    ${this._pickerOpen?"Hide cameras":"Choose cameras"}
+                    ${this._pickerOpen?"Hide cameras":"Cameras & zones"}
                   </button>
                   <button
                     class="btn"
@@ -1579,39 +1599,39 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                   >
                     ${this._settingsOpen?"Hide settings":"Settings"}
                   </button>
-                `:U}
+                `:G}
             <span class="status">
-              ${this._status||(this.panelMode?`${a.length}/${e} selected · ${n?o?"paused":"playback":`${Fe.activeCount()} live`}`:`${t.length} camera${1===t.length?"":"s"} · ${Fe.activeCount()} live`)}
+              ${this._status||(this.panelMode?`${a.length}/${t} selected · ${n?o?"paused":"playback":`${Bt.activeCount()} live`}`:`${e.length} camera${1===e.length?"":"s"} · ${Bt.activeCount()} live`)}
               ${this._saving?" · saving…":""}
             </span>
           </div>
         </div>
 
-        ${this.panelMode&&this._pickerOpen?this._renderPicker(t,e):U}
+        ${this.panelMode&&this._pickerOpen?this._renderPicker(e,t):G}
 
-        ${this.panelMode&&this._settingsOpen?this._renderSettings():U}
+        ${this.panelMode&&this._settingsOpen?this._renderSettings():G}
 
-        ${this.panelMode&&this._playback?this._renderPlaybackBar():U}
+        ${this.panelMode&&this._playback?this._renderPlaybackBar():G}
 
-        ${i?this._renderDetail(i,c):this.panelMode?this._renderLayout(a,c):this._renderCardGrid(t)}
+        ${i?this._renderDetail(i,c):this.panelMode?this._renderLayout(a,c):this._renderCardGrid(e)}
 
-        ${this.panelMode&&!i?F`
+        ${this.panelMode&&!i?W`
               <cctv-detection-timeline
                 .hass=${this.hass}
-                .cameras=${a.map(t=>t.entityId)}
+                .cameras=${a.map(e=>e.entityId)}
                 .sensorLinks=${this._sensorLinks}
                 .cameraNames=${r}
                 .active=${c}
                 @cctv-play-detection=${this._onPlayDetection}
               ></cctv-detection-timeline>
               ${this._renderRecordings()}
-            `:U}
+            `:G}
       </div>
-    `}_renderPlaybackBar(){const t=this._playback;if(!t)return U;const e=t.session?.started?new Date(t.session.started).toLocaleString():"—",s=t.playing&&!t.paused?"Pause":"Play";return F`
+    `}_renderPlaybackBar(){const e=this._playback;if(!e)return G;const t=e.session?.started?new Date(e.session.started).toLocaleString():"—",s=e.playing&&!e.paused?"Pause":"Play";return W`
       <div class="playback-bar" role="region" aria-label="Detection playback">
         <div class="playback-bar-meta">
-          <strong>${t.labels.join(", ")}</strong>
-          <span class="hint">${e} · ${xe(Ce(t.session))}${t.playing&&t.paused?" · paused":""}</span>
+          <strong>${e.labels.join(", ")}</strong>
+          <span class="hint">${t} · ${Dt(Nt(e.session))}${e.playing&&e.paused?" · paused":""}</span>
         </div>
         <div class="playback-bar-actions">
           <button
@@ -1621,17 +1641,17 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           >
             ${s}
           </button>
-          ${t.playing?F`
+          ${e.playing?W`
                 <button class="btn" type="button" @click=${this._restartPlayback}>
                   Restart
                 </button>
-              `:U}
+              `:G}
           <button class="btn" type="button" @click=${this._returnToLive}>
             Back to live
           </button>
         </div>
       </div>
-    `}_renderSettings(){const t=this._recordDetectionKinds||[];return F`
+    `}_renderSettings(){const e=this._recordDetectionKinds||[];return W`
       <section class="settings-panel" aria-label="CCTV settings">
         <div class="picker-head">
           <strong>Detection recordings</strong>
@@ -1652,14 +1672,14 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               min="1"
               max="30"
               .value=${String(this._retentionDays)}
-              @change=${t=>this._saveRetentionDays(t.target.value)}
+              @change=${e=>this._saveRetentionDays(e.target.value)}
             />
           </label>
           <label class="picker-item settings-toggle">
             <input
               type="checkbox"
               .checked=${this._recordOnDetection}
-              @change=${t=>this._toggleRecordOnDetection(t.target.checked)}
+              @change=${e=>this._toggleRecordOnDetection(e.target.checked)}
             />
             <span class="picker-name">Record on detection</span>
             <span class="picker-id">Default retention is 1 day (24 hours).</span>
@@ -1669,7 +1689,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               type="checkbox"
               .checked=${this._notifyOnDetection}
               ?disabled=${this._saving}
-              @change=${t=>this._toggleNotifyOnDetection(t.target.checked)}
+              @change=${e=>this._toggleNotifyOnDetection(e.target.checked)}
             />
             <span class="picker-name">Notify me when recorded</span>
             <span class="picker-id">
@@ -1682,7 +1702,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               type="checkbox"
               .checked=${this._tvMode}
               ?disabled=${this._saving}
-              @change=${t=>this._toggleTvMode(t.target.checked)}
+              @change=${e=>this._toggleTvMode(e.target.checked)}
             />
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
@@ -1699,15 +1719,15 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             Shared for all Home Assistant users.
           </span>
           <div class="kind-filter-list">
-            ${wt.map(e=>F`
+            ${we.map(t=>W`
                 <label class="picker-item kind-filter-item">
                   <input
                     type="checkbox"
-                    .checked=${t.includes(e.id)}
+                    .checked=${e.includes(t.id)}
                     ?disabled=${!this._recordOnDetection||this._saving}
-                    @change=${t=>this._toggleRecordKind(e.id,t.target.checked)}
+                    @change=${e=>this._toggleRecordKind(t.id,e.target.checked)}
                   />
-                  <span class="picker-name">${e.label}</span>
+                  <span class="picker-name">${t.label}</span>
                 </label>
               `)}
           </div>
@@ -1731,7 +1751,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             <code>sensor.cctv_dashboard_recording_debug</code> (attribute
             <code>debug_text</code>) — not shown on the main mosaic.
           </span>
-          ${this._recordingDebugSummary?F`<p class="hint"><code>${this._recordingDebugSummary}</code></p>`:U}
+          ${this._recordingDebugSummary?W`<p class="hint"><code>${this._recordingDebugSummary}</code></p>`:G}
           <textarea
             class="settings-debug-text"
             readonly
@@ -1740,7 +1760,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           ></textarea>
         </div>
       </section>
-    `}_renderRecordings(){const t=this._savedDetectionSessions(),e=t.reduce((t,e)=>t+Ce(e),0),s=Ee(t,this._recordingsPage,10),i=this._isAdmin();return F`
+    `}_renderRecordings(){const e=this._savedDetectionSessions(),t=e.reduce((e,t)=>e+Nt(t),0),s=Rt(e,this._recordingsPage,10),i=this._isAdmin();return W`
       <section class="recordings" aria-label="Saved detections">
         <div class="timeline-head">
           <div>
@@ -1757,30 +1777,30 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
           </div>
           <div class="recording-toolbar">
             <span class="recording-total" title="Total size of saved detections">
-              Total ${xe(e)}
-              ${t.length?F` · ${t.length} detection${1===t.length?"":"s"}`:U}
+              Total ${Dt(t)}
+              ${e.length?W` · ${e.length} detection${1===e.length?"":"s"}`:G}
             </span>
             <button class="btn" type="button" @click=${()=>this._refreshSessions()}>
               Refresh
             </button>
-            ${i?F`
+            ${i?W`
                   <button
                     class="btn recording-delete"
                     type="button"
                     ?disabled=${this._saving}
                     title="Delete all saved detections and reset the timeline"
-                    @click=${t=>this._clearAllDetections(t)}
+                    @click=${e=>this._clearAllDetections(e)}
                   >
                     Clear all
                   </button>
-                `:U}
+                `:G}
           </div>
         </div>
-        ${t.length?F`
+        ${e.length?W`
               <div class="recording-list">
-                ${s.items.map(t=>this._renderSession(t,i))}
+                ${s.items.map(e=>this._renderSession(e,i))}
               </div>
-              ${s.pageCount>1?F`
+              ${s.pageCount>1?W`
                     <div class="recording-pager" role="navigation" aria-label="Saved detections pages">
                       <button
                         class="btn"
@@ -1802,21 +1822,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         Next
                       </button>
                     </div>
-                  `:U}
-            `:F`<p class="empty">No detection recordings yet.</p>`}
+                  `:G}
+            `:W`<p class="empty">No detection recordings yet.</p>`}
       </section>
-    `}_renderSession(t,e=!1){const s=t.started?new Date(t.started).toLocaleString():"—",i=Ae(this.hass,t.trigger_sensors||[]),a=xe(Ce(t)),r=this._playback?.session?.session_id===t.session_id,n=De(t);return F`
+    `}_renderSession(e,t=!1){const s=e.started?new Date(e.started).toLocaleString():"—",i=Pt(this.hass,e.trigger_sensors||[]),a=Dt(Nt(e)),r=this._playback?.session?.session_id===e.session_id,n=Ot(e);return W`
       <div
-        class="recording-item ${t.active?"active":""} ${r?"selected":""}"
+        class="recording-item ${e.active?"active":""} ${r?"selected":""}"
       >
         <button
           type="button"
           class="recording-select"
           ?disabled=${!n}
-          @click=${()=>this._selectPlaybackSession(t)}
+          @click=${()=>this._selectPlaybackSession(e)}
         >
           <div class="recording-meta">
-            <span class="recording-when">${s}${t.active?" · recording…":""}</span>
+            <span class="recording-when">${s}${e.active?" · recording…":""}</span>
             <span class="recording-detected">${i.join(", ")}</span>
           </div>
           <span class="recording-size">${a}</span>
@@ -1827,179 +1847,367 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             class="btn primary recording-play"
             title="Play this detection on the mosaic"
             ?disabled=${!n}
-            @click=${e=>this._playSavedDetection(t,e)}
+            @click=${t=>this._playSavedDetection(e,t)}
           >
             Play
           </button>
-          ${e?F`
+          ${t?W`
                 <button
                   type="button"
                   class="btn recording-delete"
-                  title=${t.active?"Stop and delete this in-progress recording":"Delete recordings for all users"}
-                  @click=${e=>this._deleteSession(t.session_id,e,t)}
+                  title=${e.active?"Stop and delete this in-progress recording":"Delete recordings for all users"}
+                  @click=${t=>this._deleteSession(e.session_id,t,e)}
                 >
                   Delete
                 </button>
-              `:U}
+              `:G}
         </div>
       </div>
-    `}_pickerRows(t){const e=new Map(t.map(t=>[t.entityId,t])),s=new Set,i=[];for(const a of t){if(s.has(a.entityId))continue;const t=this._groupFor(a.entityId);if(t){for(const e of t.members)s.add(e);const a=t.members.map(t=>e.get(t)||mt(t,this.hass?.states?.[t])).filter(Boolean),r=this._visibleIds.find(e=>t.members.includes(e))||null;i.push({type:"group",group:t,members:a,selectedId:r})}else s.add(a.entityId),i.push({type:"camera",cam:a})}return i}_renderPicker(t,e){if(!t.length)return F`<p class="empty">No camera entities found.</p>`;const s=this._pickerRows(t);return F`
+    `}_pickerRows(e){const t=new Map(e.map(e=>[e.entityId,e])),s=this._zones||[],i=ft(s,this._selectedZoneId),a=i?new Set(i.group_ids||[]):null,r=new Set,n=[];for(const e of this._streamGroups||[]){if(a&&!a.has(e.id))continue;for(const t of e.members||[])r.add(t);const s=(e.members||[]).map(e=>t.get(e)||me(e,this.hass?.states?.[e])).filter(Boolean);if(!s.length)continue;const i=this._visibleIds.find(t=>e.members.includes(t))||null;n.push({type:"group",group:e,members:s,selectedId:i})}if(!s.length)for(const t of e)r.has(t.entityId)||(r.add(t.entityId),n.push({type:"camera",cam:t}));return n}_renderPicker(e,t){if(!e.length)return W`<p class="empty">No camera entities found.</p>`;const s=this._isAdmin(),i=this._zones||[],a=this._pickerRows(e);return W`
       <section class="picker" aria-label="Camera selection">
         <div class="picker-head">
-          <strong>Visible streams</strong>
+          <strong>Choose cameras</strong>
           <span class="hint">
-            Select 1–${e}. For grouped physical cameras, pick which stream and quality.
-            Live failover uses another group stream if the preferred one fails.
-            Selection is per user; sensors/groups stay shared.
+            Select 1–${t} groups for this mosaic. Selecting a group defaults to
+            <strong>high-resolution</strong> stream and <strong>balanced</strong> quality.
+            Zones and groups are shared; ${s?"admins configure them below.":"only admins can create or edit groups/zones."}
           </span>
         </div>
-        <div class="picker-list">
-          ${s.map(t=>{if("group"===t.type){const s=t.selectedId,i=Boolean(s),a=!i&&this._visibleIds.length>=e,r=s||t.members[0]?.entityId||"",n=r?this._qualityFor(r):"auto",o=r?ne(this._forceAspectLabel(r)):"auto",c=r?this._linksFor(r).length:0;return F`
-                <div class="picker-item picker-group ${a?"disabled":""}">
-                  <label class="picker-group-main">
-                    <input
-                      type="checkbox"
-                      .checked=${i}
-                      ?disabled=${a&&!i}
-                      @change=${e=>this._toggleVisible(r||t.members[0]?.entityId,e.target.checked)}
-                    />
-                    <span class="picker-name">
-                      ${t.group.name}
-                      <span class="group-badge">${t.members.length} streams</span>
-                    </span>
-                  </label>
-                  <span class="picker-id">
-                    ${c?`${c} sensor${1===c?"":"s"} shared`:"No sensors linked yet"}
-                    · quality ${n} · aspect ${o}
-                  </span>
-                  <div class="picker-stream-controls">
-                    <label>
-                      Stream
-                      <select
-                        ?disabled=${!i||this._saving}
-                        @change=${t=>this._setPreferredStream(s||r,t.target.value)}
-                      >
-                        ${t.members.map(t=>F`<option
-                              value=${t.entityId}
-                              ?selected=${t.entityId===r}
-                            >
-                              ${t.name||t.entityId}
-                            </option>`)}
-                      </select>
-                    </label>
-                    <label>
-                      Quality
-                      <select
-                        ?disabled=${!i||this._saving}
-                        @change=${t=>this._setPickerQuality(r,t.target.value)}
-                      >
-                        ${Ft.map(t=>F`<option
-                              value=${t.value}
-                              ?selected=${t.value===n}
-                            >
-                              ${t.label}
-                            </option>`)}
-                      </select>
-                    </label>
-                    <label>
-                      Aspect
-                      <select
-                        ?disabled=${!i||this._saving}
-                        @change=${t=>this._setPickerForceAspect(r,t.target.value)}
-                      >
-                        ${ee.map(t=>F`<option
-                              value=${t.value}
-                              ?selected=${t.value===o}
-                            >
-                              ${t.label}
-                            </option>`)}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              `}const s=t.cam,i=this._visibleIds.includes(s.entityId),a=!i&&this._visibleIds.length>=e,r=this._linksFor(s.entityId).length,n=this._qualityFor(s.entityId),o=ne(this._forceAspectLabel(s.entityId));return F`
-              <div class="picker-item ${a?"disabled":""}">
-                <label class="picker-group-main">
-                  <input
-                    type="checkbox"
-                    .checked=${i}
-                    ?disabled=${a}
-                    @change=${t=>this._toggleVisible(s.entityId,t.target.checked)}
-                  />
-                  <span class="picker-name">${s.name}</span>
-                </label>
-                <span class="picker-id">
-                  ${s.entityId}${r?` · ${r} sensor${1===r?"":"s"}`:""}
-                  · quality ${n} · aspect ${o}
-                </span>
-                <div class="picker-stream-controls">
-                  <label>
-                    Quality
-                    <select
-                      ?disabled=${!i||this._saving}
-                      @change=${t=>this._setPickerQuality(s.entityId,t.target.value)}
+
+        ${i.length?W`
+              <div class="zone-pages" role="tablist" aria-label="Zones">
+                ${i.map(e=>W`
+                    <button
+                      type="button"
+                      class="btn zone-page ${e.id===this._selectedZoneId?"primary":""}"
+                      role="tab"
+                      aria-selected=${e.id===this._selectedZoneId}
+                      @click=${()=>this._selectZone(e.id)}
                     >
-                      ${Ft.map(t=>F`<option
-                            value=${t.value}
-                            ?selected=${t.value===n}
-                          >
-                            ${t.label}
-                          </option>`)}
-                    </select>
-                  </label>
-                  <label>
-                    Aspect
-                    <select
-                      ?disabled=${!i||this._saving}
-                      @change=${t=>this._setPickerForceAspect(s.entityId,t.target.value)}
-                    >
-                      ${ee.map(t=>F`<option
-                            value=${t.value}
-                            ?selected=${t.value===o}
-                          >
-                            ${t.label}
-                          </option>`)}
-                    </select>
-                  </label>
-                </div>
+                      ${e.name}
+                    </button>
+                  `)}
               </div>
-            `})}
+            `:W`<p class="hint">No zones yet${s?" — create zones below to organize groups.":"."}</p>`}
+
+        <div class="picker-list">
+          ${a.length?a.map(e=>{if("group"===e.type){const s=e.selectedId,i=Boolean(s),a=!i&&this._visibleIds.length>=t,r=s||He(e.group.members)||e.members[0]?.entityId||"",n=r?this._qualityFor(r):"balanced",o=r?lt(this._forceAspectLabel(r)):"auto",c=r?this._linksFor(r).length:0;return W`
+                    <div class="picker-item picker-group ${a?"disabled":""}">
+                      <label class="picker-group-main">
+                        <input
+                          type="checkbox"
+                          .checked=${i}
+                          ?disabled=${a&&!i}
+                          @change=${t=>this._toggleGroupForMosaic(e.group,t.target.checked)}
+                        />
+                        <span class="picker-name">
+                          ${e.group.name}
+                          <span class="group-badge">${e.members.length} streams</span>
+                        </span>
+                      </label>
+                      <span class="picker-id">
+                        ${c?`${c} sensor${1===c?"":"s"} shared`:"No sensors linked yet"}
+                        · quality ${n} · aspect ${o}
+                      </span>
+                      <div class="picker-stream-controls">
+                        <label>
+                          Stream
+                          <select
+                            ?disabled=${!i||this._saving}
+                            @change=${e=>this._setPreferredStream(s||r,e.target.value)}
+                          >
+                            ${e.members.map(e=>W`<option
+                                  value=${e.entityId}
+                                  ?selected=${e.entityId===r}
+                                >
+                                  ${e.name||e.entityId}
+                                </option>`)}
+                          </select>
+                        </label>
+                        <label>
+                          Quality
+                          <select
+                            ?disabled=${!i||this._saving}
+                            @change=${e=>this._setPickerQuality(r,e.target.value)}
+                          >
+                            ${Ue.map(e=>W`<option
+                                  value=${e.value}
+                                  ?selected=${e.value===n}
+                                >
+                                  ${e.label}
+                                </option>`)}
+                          </select>
+                        </label>
+                        <label>
+                          Aspect
+                          <select
+                            ?disabled=${!i||this._saving}
+                            @change=${e=>this._setPickerForceAspect(r,e.target.value)}
+                          >
+                            ${at.map(e=>W`<option
+                                  value=${e.value}
+                                  ?selected=${e.value===o}
+                                >
+                                  ${e.label}
+                                </option>`)}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  `}const s=e.cam,i=this._visibleIds.includes(s.entityId),a=!i&&this._visibleIds.length>=t,r=this._linksFor(s.entityId).length,n=this._qualityFor(s.entityId),o=lt(this._forceAspectLabel(s.entityId));return W`
+                  <div class="picker-item ${a?"disabled":""}">
+                    <label class="picker-group-main">
+                      <input
+                        type="checkbox"
+                        .checked=${i}
+                        ?disabled=${a}
+                        @change=${e=>this._toggleVisible(s.entityId,e.target.checked)}
+                      />
+                      <span class="picker-name">${s.name}</span>
+                    </label>
+                    <span class="picker-id">
+                      ${s.entityId}${r?` · ${r} sensor${1===r?"":"s"}`:""}
+                      · quality ${n} · aspect ${o}
+                    </span>
+                    <div class="picker-stream-controls">
+                      <label>
+                        Quality
+                        <select
+                          ?disabled=${!i||this._saving}
+                          @change=${e=>this._setPickerQuality(s.entityId,e.target.value)}
+                        >
+                          ${Ue.map(e=>W`<option
+                                value=${e.value}
+                                ?selected=${e.value===n}
+                              >
+                                ${e.label}
+                              </option>`)}
+                        </select>
+                      </label>
+                      <label>
+                        Aspect
+                        <select
+                          ?disabled=${!i||this._saving}
+                          @change=${e=>this._setPickerForceAspect(s.entityId,e.target.value)}
+                        >
+                          ${at.map(e=>W`<option
+                                value=${e.value}
+                                ?selected=${e.value===o}
+                              >
+                                ${e.label}
+                              </option>`)}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                `}):W`<p class="empty">No camera groups in this zone.</p>`}
         </div>
+
+        ${s?this._renderAdminGroupsZones(e):G}
       </section>
-    `}_renderLayout(t,e=!0){if(!t.length)return F`
+    `}_renderAdminGroupsZones(e){const t=new Set;for(const e of this._streamGroups||[])for(const s of e.members||[])t.add(s);const s=new Set(this._groupDraftMembers||[]);for(const e of s)t.delete(e);return W`
+      <div class="admin-structure">
+        <div class="recording-toolbar">
+          <button
+            class="btn"
+            type="button"
+            @click=${()=>{this._manageGroupsOpen=!this._manageGroupsOpen,this._manageGroupsOpen&&!this._groupDraftMembers.length&&this._beginNewGroupDraft()}}
+          >
+            ${this._manageGroupsOpen?"Hide groups":"Manage groups"}
+          </button>
+          <button
+            class="btn"
+            type="button"
+            @click=${()=>{this._manageZonesOpen=!this._manageZonesOpen,this._manageZonesOpen&&!this._zoneDraftName&&this._beginNewZoneDraft()}}
+          >
+            ${this._manageZonesOpen?"Hide zones":"Manage zones"}
+          </button>
+        </div>
+
+        ${this._manageGroupsOpen?W`
+              <section class="sensor-settings" aria-label="Manage camera groups">
+                <div class="picker-head">
+                  <strong>Camera groups</strong>
+                  <span class="hint">Admin only · shared for all users. Combine streams into one physical camera.</span>
+                </div>
+                <div class="picker-list">
+                  ${(this._streamGroups||[]).map(e=>W`
+                      <div class="picker-item">
+                        <span class="picker-name">${e.name}</span>
+                        <span class="picker-id">${e.members.join(", ")}</span>
+                        <div class="recording-actions">
+                          <button class="btn" type="button" @click=${()=>this._editGroupDraft(e)}>
+                            Edit
+                          </button>
+                          <button
+                            class="btn recording-delete"
+                            type="button"
+                            ?disabled=${this._saving}
+                            @click=${()=>this._persistStreamGroups(Ge(this._streamGroups,e.id))}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    `)}
+                </div>
+                <div class="quality-row">
+                  <label>
+                    Group name
+                    <input
+                      type="text"
+                      class="aspect-input"
+                      placeholder="Driveway"
+                      .value=${this._groupDraftName||""}
+                      @input=${e=>this._groupDraftName=e.target.value}
+                    />
+                  </label>
+                  <button class="btn" type="button" @click=${()=>this._beginNewGroupDraft()}>
+                    New group
+                  </button>
+                </div>
+                <div class="sensor-candidates">
+                  <p class="hint">Streams in this group</p>
+                  ${e.map(e=>{const i=s.has(e.entityId),a=t.has(e.entityId)&&!i;return W`
+                      <label class="sensor-item ${a?"disabled":""}">
+                        <input
+                          type="checkbox"
+                          .checked=${i}
+                          ?disabled=${a||this._saving}
+                          @change=${t=>this._toggleManageGroupMember(e.entityId,t.target.checked)}
+                        />
+                        <span class="sensor-name">${e.name}</span>
+                        <span class="picker-id">${e.entityId}</span>
+                      </label>
+                    `})}
+                </div>
+                <div class="sensor-tools">
+                  <button
+                    class="btn primary"
+                    type="button"
+                    ?disabled=${this._saving}
+                    @click=${()=>this._saveGroupDraft()}
+                  >
+                    ${this._saving?"Saving…":"Save group"}
+                  </button>
+                  ${this._groupDraftMembers?.[0]?W`
+                        <button
+                          class="btn"
+                          type="button"
+                          ?disabled=${this._saving}
+                          @click=${()=>this._suggestGroupFromDevice(this._groupDraftMembers[0])}
+                        >
+                          Suggest from device
+                        </button>
+                      `:G}
+                </div>
+              </section>
+            `:G}
+
+        ${this._manageZonesOpen?W`
+              <section class="sensor-settings" aria-label="Manage zones">
+                <div class="picker-head">
+                  <strong>Zones</strong>
+                  <span class="hint">Admin only · shared. Assign camera groups to a zone; users switch zones above.</span>
+                </div>
+                <div class="picker-list">
+                  ${(this._zones||[]).map(e=>W`
+                      <div class="picker-item">
+                        <span class="picker-name">${e.name}</span>
+                        <span class="picker-id">${(e.group_ids||[]).length} group(s)</span>
+                        <div class="recording-actions">
+                          <button class="btn" type="button" @click=${()=>this._editZoneDraft(e)}>
+                            Edit
+                          </button>
+                          <button
+                            class="btn recording-delete"
+                            type="button"
+                            ?disabled=${this._saving}
+                            @click=${()=>this._persistZones(function(e,t,s=null){const i=String(t||"");return gt((e||[]).filter(e=>e.id!==i),s)}(this._zones,e.id,this._streamGroups))}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    `)}
+                </div>
+                <div class="quality-row">
+                  <label>
+                    Zone name
+                    <input
+                      type="text"
+                      class="aspect-input"
+                      placeholder="Front"
+                      .value=${this._zoneDraftName||""}
+                      @input=${e=>this._zoneDraftName=e.target.value}
+                    />
+                  </label>
+                  <button class="btn" type="button" @click=${()=>this._beginNewZoneDraft()}>
+                    New zone
+                  </button>
+                </div>
+                <div class="sensor-candidates">
+                  <p class="hint">Groups in this zone</p>
+                  ${(this._streamGroups||[]).map(e=>{const t=(this._zoneDraftGroupIds||[]).includes(e.id);return W`
+                      <label class="sensor-item">
+                        <input
+                          type="checkbox"
+                          .checked=${t}
+                          ?disabled=${this._saving}
+                          @change=${t=>this._toggleZoneDraftGroup(e.id,t.target.checked)}
+                        />
+                        <span class="sensor-name">${e.name}</span>
+                        <span class="picker-id">${e.id}</span>
+                      </label>
+                    `})}
+                </div>
+                <div class="sensor-tools">
+                  <button
+                    class="btn primary"
+                    type="button"
+                    ?disabled=${this._saving}
+                    @click=${()=>this._saveZoneDraft()}
+                  >
+                    ${this._saving?"Saving…":"Save zone"}
+                  </button>
+                </div>
+              </section>
+            `:G}
+      </div>
+    `}_renderLayout(e,t=!0){if(!e.length)return W`
         <p class="empty">
           Select cameras above to start streaming.
           One camera fills the view; two to four split the screen equally (max ${this._maxStreams()}).
         </p>
-      `;const s=t.slice(0,4);if(!this._isDesktop){const t=s.length;return F`
-        <div class="layout layout-${t}" role="list">
-          ${s.map(t=>this._renderLayoutTile(t,!1,e))}
+      `;const s=e.slice(0,4);if(!this._isDesktop){const e=s.length;return W`
+        <div class="layout layout-${e}" role="list">
+          ${s.map(e=>this._renderLayoutTile(e,!1,t))}
         </div>
-      `}const i=this._tvMode&&this._tvStage?.width>=8&&this._tvStage?.height>=8?`width:${this._tvStage.width}px;height:${this._tvStage.height}px;max-width:100%;aspect-ratio:16/9;`:this._tvMode?"width:100%;max-width:100%;aspect-ratio:16/9;":U,a=this._tvMode&&s.length<=2?"layout-pack-maximize":"";return F`
+      `}const i=this._tvMode&&this._tvStage?.width>=8&&this._tvStage?.height>=8?`width:${this._tvStage.width}px;height:${this._tvStage.height}px;max-width:100%;aspect-ratio:16/9;`:this._tvMode?"width:100%;max-width:100%;aspect-ratio:16/9;":G,a=this._tvMode&&s.length<=2?"layout-pack-maximize":"";return W`
       <div
         class="layout layout-pack ${this._tvMode?"layout-pack-tv":""} ${a}"
         role="list"
         style=${i}
         @cctv-media-aspect=${this._onMediaAspect}
       >
-        ${s.map(t=>this._renderLayoutTile(t,!0,e))}
+        ${s.map(e=>this._renderLayoutTile(e,!0,t))}
       </div>
-    `}_renderLayoutTile(t,e,s=!0){const i=this._qualityFor(t.entityId),a=Ot(this._streamGroups,t.entityId),r=jt(t.entityId,a),n=this._linksFor(t.entityId).length,o=e?this._packStyles?.[t.entityId]:"",c=Boolean(e&&o),l=Boolean(this._playback?.playing),d=Boolean(l&&this._playback?.paused),h=l?this._trackForCamera(t.entityId):null,u=h?this._currentPlaybackItem(h):null,p=ae(this._forceAspectLabel(t.entityId)),m=l&&this._playback?.triggerHighlights?this._playback.triggerHighlights[t.entityId]:null;return F`
+    `}_renderLayoutTile(e,t,s=!0){const i=this._qualityFor(e.entityId),a=Re(this._streamGroups,e.entityId),r=qe(e.entityId,a),n=this._linksFor(e.entityId).length,o=t?this._packStyles?.[e.entityId]:"",c=Boolean(t&&o),l=Boolean(this._playback?.playing),d=Boolean(l&&this._playback?.paused),h=l?this._trackForCamera(e.entityId):null,u=h?this._currentPlaybackItem(h):null,p=ot(this._forceAspectLabel(e.entityId)),m=l&&this._playback?.triggerHighlights?this._playback.triggerHighlights[e.entityId]:null;return W`
       <article
         class="tile layout-tile ${c?"pack-tile":""}"
         role="listitem"
-        style=${c?o:U}
+        style=${c?o:G}
       >
-        <div class="tile-media" style=${!c&&p?`aspect-ratio:${p}; width:100%;`:U}>
-          ${l?u?"snapshot"===u.kind?dt(`${this._playbackMountGen}:${t.entityId}:snap:${u.url}`,F`<img
+        <div class="tile-media" style=${!c&&p?`aspect-ratio:${p}; width:100%;`:G}>
+          ${l?u?"snapshot"===u.kind?de(`${this._playbackMountGen}:${e.entityId}:snap:${u.url}`,W`<img
                       class="playback-media"
                       alt=""
                       src=${u.url}
-                      @load=${e=>this._onPlaybackMediaSize(t.entityId,e.target.naturalWidth,e.target.naturalHeight)}
-                    />`):dt(`${this._playbackMountGen}:${t.entityId}:vid:${u.url}`,F`
+                      @load=${t=>this._onPlaybackMediaSize(e.entityId,t.target.naturalWidth,t.target.naturalHeight)}
+                    />`):de(`${this._playbackMountGen}:${e.entityId}:vid:${u.url}`,W`
                       <video
                         class="playback-media"
-                        data-camera=${t.entityId}
+                        data-camera=${e.entityId}
                         src=${u.url}
                         ?autoplay=${!d}
                         muted
@@ -2009,61 +2217,61 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         .muted=${!0}
                         .playsInline=${!0}
                         controls
-                        @loadedmetadata=${e=>this._onPlaybackMediaSize(t.entityId,e.target.videoWidth,e.target.videoHeight)}
-                        @ended=${()=>this._onPlaybackEnded(t.entityId)}
+                        @loadedmetadata=${t=>this._onPlaybackMediaSize(e.entityId,t.target.videoWidth,t.target.videoHeight)}
+                        @ended=${()=>this._onPlaybackEnded(e.entityId)}
                       ></video>
-                    `):F`<div class="playback-empty">No recording for this camera</div>`:dt(`${this._liveMountGen}:${t.entityId}`,F`
+                    `):W`<div class="playback-empty">No recording for this camera</div>`:de(`${this._liveMountGen}:${e.entityId}`,W`
                   <cctv-stream-player
                     large
                     mosaic
                     eager
                     .active=${s}
                     .hass=${this.hass}
-                    .camera=${t}
+                    .camera=${e}
                     .config=${this.config}
                     .quality=${i}
                     .groupMembers=${a}
                     .failoverEntityIds=${r}
                     context="mosaic"
                     muted
-                    @cctv-stream-failover=${t=>{const e=t?.detail?.to;e&&(this._status=`Live failover → ${e.replace(/^camera\./,"")}`)}}
+                    @cctv-stream-failover=${e=>{const t=e?.detail?.to;t&&(this._status=`Live failover → ${t.replace(/^camera\./,"")}`)}}
                   ></cctv-stream-player>
                 `)}
-          ${m?F`<div
+          ${m?W`<div
                 class="trigger-cam-overlay kind-${m.kindId}"
                 style=${`--cctv-trigger-color:${m.color}`}
                 aria-hidden="true"
-              ></div>`:U}
+              ></div>`:G}
         </div>
-        ${l?F`
-              <div class="tile-body ${e?"pack-caption":""}">
-                <p class="tile-title">${t.name}</p>
+        ${l?W`
+              <div class="tile-body ${t?"pack-caption":""}">
+                <p class="tile-title">${e.name}</p>
                 <p class="tile-meta">${d?"Paused":"Playback"}</p>
               </div>
-            `:F`
+            `:W`
               <button
                 type="button"
-                class="tile-body tile-open ${e?"pack-caption":""}"
-                @click=${()=>this._openDetail(t.entityId)}
+                class="tile-body tile-open ${t?"pack-caption":""}"
+                @click=${()=>this._openDetail(e.entityId)}
               >
-                <p class="tile-title">${t.name}</p>
+                <p class="tile-title">${e.name}</p>
                 <p class="tile-meta">
-                  <span class="dot ${t.state}"></span>${t.state} · ${i}
-                  ${n?F` · ${n} detection`:U}
+                  <span class="dot ${e.state}"></span>${e.state} · ${i}
+                  ${n?W` · ${n} detection`:G}
                 </p>
               </button>
             `}
       </article>
-    `}_renderCardGrid(t){return t.length?F`
+    `}_renderCardGrid(e){return e.length?W`
       <div class="grid" role="list">
-        ${t.map(t=>{const e=this._qualityFor(t.entityId);return F`
+        ${e.map(e=>{const t=this._qualityFor(e.entityId);return W`
             <article class="tile" role="listitem">
               <div class="tile-media">
                 <cctv-stream-player
                   .hass=${this.hass}
-                  .camera=${t}
+                  .camera=${e}
                   .config=${this.config}
-                  .quality=${e}
+                  .quality=${t}
                   context="mosaic"
                   muted
                 ></cctv-stream-player>
@@ -2071,89 +2279,89 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               <button
                 type="button"
                 class="tile-body tile-open"
-                @click=${()=>this._openDetail(t.entityId)}
+                @click=${()=>this._openDetail(e.entityId)}
               >
-                <p class="tile-title">${t.name}</p>
+                <p class="tile-title">${e.name}</p>
                 <p class="tile-meta">
-                  <span class="dot ${t.state}"></span>${t.state} · ${e}
+                  <span class="dot ${e.state}"></span>${e.state} · ${t}
                 </p>
               </button>
             </article>
           `})}
       </div>
-    `:F`<p class="empty">No camera entities found.</p>`}_renderDetail(t,e=!0){const s=bt(this.hass,t),i=this._qualityFor(t.entityId),a=Xt(this.hass,t,this.config,i,"detail"),r=ne(this._forceAspectLabel(t.entityId)),n=this.panelMode&&("custom"===r||Boolean(this._customAspectDraft)),o=this._customAspectDraft||("custom"===r?this._forceAspectLabel(t.entityId):""),c=this._groupFor(t.entityId),l=this._groupMembers(t.entityId);return F`
+    `:W`<p class="empty">No camera entities found.</p>`}_renderDetail(e,t=!0){const s=be(this.hass,e),i=this._qualityFor(e.entityId),a=tt(this.hass,e,this.config,i,"detail"),r=lt(this._forceAspectLabel(e.entityId)),n=this.panelMode&&("custom"===r||Boolean(this._customAspectDraft)),o=this._customAspectDraft||("custom"===r?this._forceAspectLabel(e.entityId):""),c=this._groupFor(e.entityId),l=this._groupMembers(e.entityId);return W`
       <button class="btn linkish" type="button" @click=${this._back}>
         ← ${this.panelMode?"Back to layout":"All cameras"}
       </button>
-      <h2>${t.name}</h2>
+      <h2>${e.name}</h2>
       <div class="detail-stage">
         <cctv-stream-player
           large
           eager
-          .active=${e}
+          .active=${t}
           .hass=${this.hass}
-          .camera=${t}
+          .camera=${e}
           .config=${this.config}
           .quality=${i}
           .groupMembers=${l}
-          .failoverEntityIds=${jt(t.entityId,l)}
+          .failoverEntityIds=${qe(e.entityId,l)}
           context="detail"
           .muted=${!1}
           controls
         ></cctv-stream-player>
       </div>
-      ${c?F`
+      ${c?W`
             <div class="quality-row">
               <label>
                 Live stream
                 <select
-                  @change=${e=>{const s=e.target.value;this._setPreferredStream(t.entityId,s),this._detailId=s,this._syncGroupDraftFromCamera(s)}}
+                  @change=${t=>{const s=t.target.value;this._setPreferredStream(e.entityId,s),this._detailId=s,this._syncGroupDraftFromCamera(s)}}
                 >
-                  ${c.members.map(e=>{const s=this._cameras().find(t=>t.entityId===e)||mt(e,this.hass?.states?.[e]);return F`<option
-                      value=${e}
-                      ?selected=${e===t.entityId}
+                  ${c.members.map(t=>{const s=this._cameras().find(e=>e.entityId===t)||me(t,this.hass?.states?.[t]);return W`<option
+                      value=${t}
+                      ?selected=${t===e.entityId}
                     >
-                      ${s?.name||e}
+                      ${s?.name||t}
                     </option>`})}
                 </select>
               </label>
               <span class="hint">Physical group: ${c.name}</span>
             </div>
-          `:U}
+          `:G}
       <div class="quality-row">
         <label>
           Stream quality
           <select
-            @change=${e=>this._setQuality(t.entityId,e.target.value)}
+            @change=${t=>this._setQuality(e.entityId,t.target.value)}
           >
-            ${Ft.map(t=>F`<option
-                  value=${t.value}
-                  ?selected=${t.value===i}
+            ${Ue.map(e=>W`<option
+                  value=${e.value}
+                  ?selected=${e.value===i}
                 >
-                  ${t.label}
+                  ${e.label}
                 </option>`)}
           </select>
         </label>
-        <span class="hint">${Yt(i)}</span>
+        <span class="hint">${st(i)}</span>
       </div>
-      ${this.panelMode?F`
+      ${this.panelMode?W`
             <div class="quality-row">
               <label>
                 Force aspect ratio
                 <select
-                  @change=${e=>this._setForceAspect(t.entityId,e.target.value)}
+                  @change=${t=>this._setForceAspect(e.entityId,t.target.value)}
                 >
-                  ${ee.map(t=>F`<option
-                        value=${t.value}
-                        ?selected=${t.value===r}
+                  ${at.map(e=>W`<option
+                        value=${e.value}
+                        ?selected=${e.value===r}
                       >
-                        ${t.label}
+                        ${e.label}
                       </option>`)}
                 </select>
               </label>
               <span class="hint">Shared for all users.</span>
             </div>
-            ${n?F`
+            ${n?W`
                   <div class="quality-row">
                     <label>
                       Custom W:H
@@ -2162,12 +2370,12 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         class="aspect-input"
                         placeholder="1920:2560"
                         .value=${o}
-                        @input=${e=>this._setCustomForceAspect(t.entityId,e.target.value)}
+                        @input=${t=>this._setCustomForceAspect(e.entityId,t.target.value)}
                       />
                     </label>
                     <span class="hint">Examples: 1920:2560, 3:4, 1080x1920</span>
                   </div>
-                `:U}
+                `:G}
             <div class="quality-row prefs-save-row">
               <button
                 class="btn primary"
@@ -2181,143 +2389,75 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._prefsDirty?"Unsaved changes — writes shared settings for all users.":"No unsaved changes."}
               </span>
             </div>
-          `:U}
+          `:G}
       <dl class="meta">
         <dt>Entity</dt>
-        <dd>${t.entityId}</dd>
+        <dd>${e.entityId}</dd>
         <dt>Streaming</dt>
         <dd>${a.entityId}</dd>
         <dt>State</dt>
-        <dd>${t.state}</dd>
+        <dd>${e.state}</dd>
         <dt>Brand</dt>
-        <dd>${t.brand||"—"}</dd>
+        <dd>${e.brand||"—"}</dd>
         <dt>Model</dt>
-        <dd>${t.model||"—"}</dd>
+        <dd>${e.model||"—"}</dd>
       </dl>
       <div class="actions">
-        ${s.length?s.map(e=>F`
+        ${s.length?s.map(t=>W`
                 <button
                   class="btn primary"
                   type="button"
-                  @click=${()=>this._run(e.service,t.entityId)}
+                  @click=${()=>this._run(t.service,e.entityId)}
                 >
-                  ${e.label}
+                  ${t.label}
                 </button>
-              `):F`<span class="placeholder">No camera services available</span>`}
+              `):W`<span class="placeholder">No camera services available</span>`}
         <button
           class="btn"
           type="button"
-          @click=${()=>vt(this,t.entityId)}
+          @click=${()=>ve(this,e.entityId)}
         >
           More info
         </button>
       </div>
-      ${this.panelMode?this._renderStreamGroupSettings(t):U}
-      ${this.panelMode?this._renderSensorSettings(t):U}
-    `}_renderStreamGroupSettings(t){const e=this._groupFor(t.entityId),s=new Set(this._groupDraftMembers||[t.entityId]);s.has(t.entityId)||s.add(t.entityId);const i=this._cameras(),a=new Set;for(const t of this._streamGroups||[])if(!e||t.id!==e.id)for(const e of t.members||[])a.add(e);const r=i.filter(e=>e.entityId===t.entityId||!a.has(e.entityId));return F`
-      <section class="sensor-settings" aria-label="Physical camera stream group">
-        <div class="picker-head">
-          <strong>Physical camera (stream group)</strong>
-          <span class="hint">
-            Combine high-res + fluent (or other) <code>camera.*</code> streams into one physical camera.
-            Detection sensors are assigned once and apply to <strong>all streams in the group</strong>
-            (shared for all users). Mosaic still selects which stream(s) to show live.
-          </span>
-        </div>
-        <div class="quality-row">
-          <label>
-            Group name
-            <input
-              type="text"
-              class="aspect-input"
-              placeholder="Driveway"
-              .value=${this._groupDraftName||""}
-              @input=${t=>this._groupDraftName=t.target.value}
-            />
-          </label>
-          <span class="hint">${e?`Saved as ${e.id}`:"Not grouped yet"}</span>
-        </div>
-        <div class="sensor-candidates">
-          <p class="hint">Streams in this physical camera</p>
-          ${r.map(e=>{const i=s.has(e.entityId),a=e.entityId===t.entityId;return F`
-              <label class="sensor-item ${a?"disabled":""}">
-                <input
-                  type="checkbox"
-                  .checked=${i}
-                  ?disabled=${a||this._saving}
-                  @change=${s=>this._toggleGroupDraftMember(t.entityId,e.entityId,s.target.checked)}
-                />
-                <span class="sensor-name">${e.name}</span>
-                <span class="picker-id">${e.entityId}</span>
-              </label>
-            `})}
-        </div>
-        <div class="sensor-tools">
-          <button
-            class="btn primary"
-            type="button"
-            ?disabled=${this._saving}
-            @click=${()=>this._saveGroupDraft(t.entityId)}
-          >
-            ${this._saving?"Saving…":"Save stream group"}
-          </button>
-          <button
-            class="btn"
-            type="button"
-            ?disabled=${this._saving}
-            @click=${()=>this._suggestGroupFromDevice(t.entityId)}
-          >
-            Suggest from device
-          </button>
-          ${e?F`
-                <button
-                  class="btn"
-                  type="button"
-                  ?disabled=${this._saving}
-                  @click=${()=>this._ungroupCamera(t.entityId)}
-                >
-                  Ungroup
-                </button>
-              `:U}
-        </div>
-      </section>
-    `}_renderSensorSettings(t){const e=this._linksFor(t.entityId),s=function(t,e){const s=t?.states||{};return(e||[]).map(String).filter(t=>$t.has(t.split(".")[0])).map(t=>{const e=s[t];return{entityId:t,name:e?.attributes?.friendly_name||t,kind:At(t,e),state:String(e?.state??"unknown"),active:Ct(e),missing:!e}})}(this.hass,e),i=this._groupFor(t.entityId),a=It(this.hass,t.entityId,{deviceIds:this._deviceMap,limit:12}).filter(t=>!e.includes(t.entityId)),r=this._sensorFilter.trim().toLowerCase(),n=r?function(t){const e=t?.states||{};return Object.entries(e).filter(([t,e])=>{const s=t.split(".")[0];return!!$t.has(s)&&("other"!==At(t,e).id||/detection|object|zone|occupancy|motion/i.test(t))}).map(([t,e])=>({entityId:t,name:e?.attributes?.friendly_name||t,kind:At(t,e),state:String(e?.state??"unknown"),active:Ct(e)})).sort((t,e)=>t.name.localeCompare(e.name,void 0,{sensitivity:"base"}))}(this.hass).filter(t=>!e.includes(t.entityId)).filter(t=>t.entityId.toLowerCase().includes(r)||t.name.toLowerCase().includes(r)||t.kind.label.toLowerCase().includes(r)).slice(0,40):a;return F`
+      ${this.panelMode?this._renderSensorSettings(e):G}
+    `}_renderSensorSettings(e){const t=this._linksFor(e.entityId),s=function(e,t){const s=e?.states||{};return(t||[]).map(String).filter(e=>$e.has(e.split(".")[0])).map(e=>{const t=s[e];return{entityId:e,name:t?.attributes?.friendly_name||e,kind:Ae(e,t),state:String(t?.state??"unknown"),active:Me(t),missing:!t}})}(this.hass,t),i=this._groupFor(e.entityId),a=Ie(this.hass,e.entityId,{deviceIds:this._deviceMap,limit:12}).filter(e=>!t.includes(e.entityId)),r=this._sensorFilter.trim().toLowerCase(),n=r?function(e){const t=e?.states||{};return Object.entries(t).filter(([e,t])=>{const s=e.split(".")[0];return!!$e.has(s)&&("other"!==Ae(e,t).id||/detection|object|zone|occupancy|motion/i.test(e))}).map(([e,t])=>({entityId:e,name:t?.attributes?.friendly_name||e,kind:Ae(e,t),state:String(t?.state??"unknown"),active:Me(t)})).sort((e,t)=>e.name.localeCompare(t.name,void 0,{sensitivity:"base"}))}(this.hass).filter(e=>!t.includes(e.entityId)).filter(e=>e.entityId.toLowerCase().includes(r)||e.name.toLowerCase().includes(r)||e.kind.label.toLowerCase().includes(r)).slice(0,40):a;return W`
       <section class="sensor-settings" aria-label="Detection sensors">
         <div class="picker-head">
           <strong>Detection sensors</strong>
           <span class="hint">
             Link person / car / animal / package sensors for the timeline and recordings.
             Associations are <strong>shared for all Home Assistant users</strong> (site-wide).
-            ${i?F` Assigned once for physical camera <strong>${i.name}</strong> (${i.members.length} streams). `:U}
+            ${i?W` Assigned once for physical camera <strong>${i.name}</strong> (${i.members.length} streams). Manage groups under <strong>Cameras &amp; zones</strong>. `:W` Group streams under <strong>Cameras &amp; zones</strong> (admins) to share sensors. `}
             Suggestions use name + device heuristics; confirm or pick manually.
           </span>
         </div>
 
-        ${s.length?F`
+        ${s.length?W`
               <div class="sensor-linked">
-                ${s.map(e=>F`
+                ${s.map(t=>W`
                     <label class="sensor-item">
                       <input
                         type="checkbox"
                         .checked=${!0}
-                        @change=${s=>this._setSensorLinked(t.entityId,e.entityId,s.target.checked)}
+                        @change=${s=>this._setSensorLinked(e.entityId,t.entityId,s.target.checked)}
                       />
-                      <span class="sensor-kind kind-${e.kind.id}">${e.kind.label}</span>
-                      <span class="sensor-name">${e.name}</span>
-                      <span class="sensor-state ${e.active?"on":""}">
-                        ${e.missing?"missing":e.state}
+                      <span class="sensor-kind kind-${t.kind.id}">${t.kind.label}</span>
+                      <span class="sensor-name">${t.name}</span>
+                      <span class="sensor-state ${t.active?"on":""}">
+                        ${t.missing?"missing":t.state}
                       </span>
-                      <span class="picker-id">${e.entityId}</span>
+                      <span class="picker-id">${t.entityId}</span>
                     </label>
                   `)}
               </div>
-            `:F`<p class="empty">No sensors linked to this camera yet.</p>`}
+            `:W`<p class="empty">No sensors linked to this camera yet.</p>`}
 
         <div class="sensor-tools">
           <button
             class="btn primary"
             type="button"
-            @click=${()=>this._applySuggestions(t.entityId)}
+            @click=${()=>this._applySuggestions(e.entityId)}
           >
             Link suggested sensors
           </button>
@@ -2327,65 +2467,65 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               type="search"
               .value=${this._sensorFilter}
               placeholder="person, package, driveway…"
-              @input=${t=>this._sensorFilter=t.target.value}
+              @input=${e=>this._sensorFilter=e.target.value}
             />
           </label>
         </div>
 
-        ${n.length?F`
+        ${n.length?W`
               <div class="sensor-candidates">
                 <p class="hint">
                   ${r?"Matching sensors":"Suggested associations"}
                 </p>
-                ${n.map(e=>F`
+                ${n.map(t=>W`
                     <label class="sensor-item">
                       <input
                         type="checkbox"
                         .checked=${!1}
-                        @change=${s=>this._setSensorLinked(t.entityId,e.entityId,s.target.checked)}
+                        @change=${s=>this._setSensorLinked(e.entityId,t.entityId,s.target.checked)}
                       />
-                      <span class="sensor-kind kind-${e.kind.id}">${e.kind.label}</span>
-                      <span class="sensor-name">${e.name}</span>
-                      <span class="sensor-state ${e.active?"on":""}">${e.state}</span>
-                      <span class="picker-id">${e.entityId}</span>
+                      <span class="sensor-kind kind-${t.kind.id}">${t.kind.label}</span>
+                      <span class="sensor-name">${t.name}</span>
+                      <span class="sensor-state ${t.active?"on":""}">${t.state}</span>
+                      <span class="picker-id">${t.entityId}</span>
                     </label>
                   `)}
               </div>
-            `:r?F`<p class="empty">No sensors match “${r}”.</p>`:F`
+            `:r?W`<p class="empty">No sensors match “${r}”.</p>`:W`
                 <p class="hint">
                   No strong suggestions. Search above to link any binary_sensor/sensor
-                  (${wt.map(t=>t.label).join(", ")}).
+                  (${we.map(e=>e.label).join(", ")}).
                 </p>
               `}
       </section>
-    `}}customElements.get("cctv-view")||customElements.define("cctv-view",Je);class Ze extends nt{static properties={hass:{attribute:!1},narrow:{type:Boolean},route:{attribute:!1},panel:{attribute:!1}};constructor(){super(),this._stableConfig=null,this._stablePanelConfigRef=null}createRenderRoot(){return this}get _config(){const t=this.panel?.config||{};if(t===this._stablePanelConfigRef&&this._stableConfig)return this._stableConfig;this._stablePanelConfigRef=t;const{_panel_custom:e,...s}=t;return this._stableConfig={title:"CCTV",max_streams:4,quality:"auto",...s},this._stableConfig}connectedCallback(){super.connectedCallback(),this.style.display="block",this.style.height="100%"}disconnectedCallback(){super.disconnectedCallback();const t=this.querySelector?.("cctv-view");if(t)try{t._setPanelActive?.(!1)}catch{}}render(){return F`
+    `}}customElements.get("cctv-view")||customElements.define("cctv-view",ts);class ss extends ne{static properties={hass:{attribute:!1},narrow:{type:Boolean},route:{attribute:!1},panel:{attribute:!1}};constructor(){super(),this._stableConfig=null,this._stablePanelConfigRef=null}createRenderRoot(){return this}get _config(){const e=this.panel?.config||{};if(e===this._stablePanelConfigRef&&this._stableConfig)return this._stableConfig;this._stablePanelConfigRef=e;const{_panel_custom:t,...s}=e;return this._stableConfig={title:"CCTV",max_streams:4,quality:"auto",...s},this._stableConfig}connectedCallback(){super.connectedCallback(),this.style.display="block",this.style.height="100%"}disconnectedCallback(){super.disconnectedCallback();const e=this.querySelector?.("cctv-view");if(e)try{e._setPanelActive?.(!1)}catch{}}render(){return W`
       <cctv-view
         .hass=${this.hass}
         .config=${this._config}
         .panelUrlPath=${this.panel?.url_path||"cctv"}
         panel-mode
       ></cctv-view>
-    `}}customElements.get("cctv-dashboard-panel")||customElements.define("cctv-dashboard-panel",Ze);class Xe extends nt{static properties={hass:{attribute:!1},_config:{attribute:!1}};static styles=ht;static getConfigElement(){return null}static getStubConfig(t){const e=Object.keys(t?.states??{}).filter(t=>t.startsWith("camera.")).slice(0,4);return{title:"CCTV",max_streams:4,quality:"auto",...e.length?{cameras:e}:{}}}setConfig(t){if(!t||"object"!=typeof t||Array.isArray(t))throw new Error("Card configuration must be an object");this._config={title:"CCTV",max_streams:4,quality:"auto",...t}}getCardSize(){const t=this._config?.cameras?.length;return t?Math.max(3,2*Math.ceil(t/2)):6}render(){return this._config?F`
+    `}}customElements.get("cctv-dashboard-panel")||customElements.define("cctv-dashboard-panel",ss);class is extends ne{static properties={hass:{attribute:!1},_config:{attribute:!1}};static styles=he;static getConfigElement(){return null}static getStubConfig(e){const t=Object.keys(e?.states??{}).filter(e=>e.startsWith("camera.")).slice(0,4);return{title:"CCTV",max_streams:4,quality:"auto",...t.length?{cameras:t}:{}}}setConfig(e){if(!e||"object"!=typeof e||Array.isArray(e))throw new Error("Card configuration must be an object");this._config={title:"CCTV",max_streams:4,quality:"auto",...e}}getCardSize(){const e=this._config?.cameras?.length;return e?Math.max(3,2*Math.ceil(e/2)):6}render(){return this._config?W`
       <ha-card>
         <div class="card-inner">
           <cctv-view .hass=${this.hass} .config=${this._config}></cctv-view>
         </div>
       </ha-card>
-    `:F``}}customElements.get("cctv-cameras-card")||customElements.define("cctv-cameras-card",Xe),window.customCards=window.customCards||[],window.customCards.some(t=>"cctv-cameras-card"===t.type)||window.customCards.push({type:"cctv-cameras-card",name:"CCTV Cameras",preview:!0,description:"Live stream grid of Home Assistant camera entities with detail view and basic controls.",documentationURL:"https://github.com/davies1995/HA-CCTV"});class Ye extends nt{static properties={hass:{attribute:!1},_config:{attribute:!1},_status:{state:!0},_qualityTick:{state:!0}};static styles=ht;static getStubConfig(t){return{entity:Object.keys(t?.states??{}).find(t=>t.startsWith("camera."))||"camera.demo",title:"",muted:!0,quality:"auto"}}constructor(){super(),this._status="",this._qualityTick=0}setConfig(t){if(!t||"object"!=typeof t||Array.isArray(t))throw new Error("Card configuration must be an object");if(!t.entity||!String(t.entity).startsWith("camera."))throw new Error("cctv-camera-card requires a camera.* entity");this._config={muted:!0,quality:"auto",max_streams:4,...t,entity:String(t.entity)}}getCardSize(){return 4}_setQuality(t){Jt(this._config.entity,t),this._qualityTick+=1}async _run(t){this._status=`Calling ${t}…`;try{await yt(this.hass,t,this._config.entity),this._status=`${t} ok`}catch(t){this._status=t?.message||String(t)}}render(){if(!this._config||!this.hass)return F``;this._qualityTick;const t=this.hass.states?.[this._config.entity],e=mt(this._config.entity,t),s=this._config.title||e.name,i=bt(this.hass,e),a=Zt(this._config,this._config.entity),r=Xt(this.hass,e,this._config,a,"detail");return F`
+    `:W``}}customElements.get("cctv-cameras-card")||customElements.define("cctv-cameras-card",is),window.customCards=window.customCards||[],window.customCards.some(e=>"cctv-cameras-card"===e.type)||window.customCards.push({type:"cctv-cameras-card",name:"CCTV Cameras",preview:!0,description:"Live stream grid of Home Assistant camera entities with detail view and basic controls.",documentationURL:"https://github.com/davies1995/HA-CCTV"});class as extends ne{static properties={hass:{attribute:!1},_config:{attribute:!1},_status:{state:!0},_qualityTick:{state:!0}};static styles=he;static getStubConfig(e){return{entity:Object.keys(e?.states??{}).find(e=>e.startsWith("camera."))||"camera.demo",title:"",muted:!0,quality:"auto"}}constructor(){super(),this._status="",this._qualityTick=0}setConfig(e){if(!e||"object"!=typeof e||Array.isArray(e))throw new Error("Card configuration must be an object");if(!e.entity||!String(e.entity).startsWith("camera."))throw new Error("cctv-camera-card requires a camera.* entity");this._config={muted:!0,quality:"auto",max_streams:4,...e,entity:String(e.entity)}}getCardSize(){return 4}_setQuality(e){Ye(this._config.entity,e),this._qualityTick+=1}async _run(e){this._status=`Calling ${e}…`;try{await ye(this.hass,e,this._config.entity),this._status=`${e} ok`}catch(e){this._status=e?.message||String(e)}}render(){if(!this._config||!this.hass)return W``;this._qualityTick;const e=this.hass.states?.[this._config.entity],t=me(this._config.entity,e),s=this._config.title||t.name,i=be(this.hass,t),a=et(this._config,this._config.entity),r=tt(this.hass,t,this._config,a,"detail");return W`
       <ha-card>
         <div class="card-inner">
           <div class="top">
             <div>
               <h2>${s}</h2>
             </div>
-            <span class="status">${this._status||e.state}</span>
+            <span class="status">${this._status||t.state}</span>
           </div>
           <div class="detail-stage">
             <cctv-stream-player
               large
               eager
               .hass=${this.hass}
-              .camera=${e}
+              .camera=${t}
               .config=${this._config}
               .quality=${a}
               context="detail"
@@ -2398,31 +2538,31 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
               Stream quality
               <select
                 .value=${a}
-                @change=${t=>this._setQuality(t.target.value)}
+                @change=${e=>this._setQuality(e.target.value)}
               >
-                ${Ft.map(t=>F`<option value=${t.value}>${t.label}</option>`)}
+                ${Ue.map(e=>W`<option value=${e.value}>${e.label}</option>`)}
               </select>
             </label>
-            <span class="hint">${Yt(a)} · using ${r.entityId}</span>
+            <span class="hint">${st(a)} · using ${r.entityId}</span>
           </div>
           <div class="actions" style="margin-top: 0.75rem">
-            ${i.map(t=>F`
+            ${i.map(e=>W`
                 <button
                   class="btn primary"
                   type="button"
-                  @click=${()=>this._run(t.service)}
+                  @click=${()=>this._run(e.service)}
                 >
-                  ${t.label}
+                  ${e.label}
                 </button>
               `)}
             <button
               class="btn"
               type="button"
-              @click=${()=>vt(this,this._config.entity)}
+              @click=${()=>ve(this,this._config.entity)}
             >
               More info
             </button>
           </div>
         </div>
       </ha-card>
-    `}}customElements.get("cctv-camera-card")||customElements.define("cctv-camera-card",Ye),window.customCards=window.customCards||[],window.customCards.some(t=>"cctv-camera-card"===t.type)||window.customCards.push({type:"cctv-camera-card",name:"CCTV Camera",preview:!0,description:"Live stream for a single Home Assistant camera entity.",documentationURL:"https://github.com/davies1995/HA-CCTV"});const ts="0.20.3";console.info(`%c CCTV-DASHBOARD %c ${ts} `,"color: #fff; background: #1b6ea8; font-weight: 700;","color: #1b6ea8; background: #fff; font-weight: 700;");export{ts as VERSION};
+    `}}customElements.get("cctv-camera-card")||customElements.define("cctv-camera-card",as),window.customCards=window.customCards||[],window.customCards.some(e=>"cctv-camera-card"===e.type)||window.customCards.push({type:"cctv-camera-card",name:"CCTV Camera",preview:!0,description:"Live stream for a single Home Assistant camera entity.",documentationURL:"https://github.com/davies1995/HA-CCTV"});const rs="0.21.0";console.info(`%c CCTV-DASHBOARD %c ${rs} `,"color: #fff; background: #1b6ea8; font-weight: 700;","color: #1b6ea8; background: #fff; font-weight: 700;");export{rs as VERSION};

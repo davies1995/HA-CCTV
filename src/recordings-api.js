@@ -7,6 +7,7 @@ import {
   normalizeStreamGroups,
   syncSensorLinksAcrossGroups,
 } from "./stream-groups.js";
+import { normalizeZones } from "./zones.js";
 
 /**
  * Load site-wide settings (sensor links, force aspect, quality, retention).
@@ -18,6 +19,7 @@ export async function loadSharedConfig(hass) {
     const result = await hass.callWS({ type: "cctv_dashboard/get_settings" });
     if (!result || typeof result !== "object") return null;
     const streamGroups = normalizeStreamGroups(result.stream_groups || []);
+    const zones = normalizeZones(result.zones || [], streamGroups);
     const sensorLinks = syncSensorLinksAcrossGroups(
       normalizeSensorLinks(result.sensor_links || {}),
       streamGroups
@@ -26,6 +28,7 @@ export async function loadSharedConfig(hass) {
       ...result,
       sensorLinks,
       streamGroups,
+      zones,
       forceAspect: normalizeForceAspectMap(result.force_aspect || {}),
       cameraQuality: normalizeCameraQualityMap(result.camera_quality || {}),
     };
@@ -60,6 +63,20 @@ export async function saveStreamGroups(hass, groups) {
   return hass.callWS({
     type: "cctv_dashboard/set_stream_groups",
     stream_groups: cleaned,
+  });
+}
+
+/**
+ * Persist zones (admin-only WS). Shared for all HA users.
+ * @param {any} hass
+ * @param {import("./zones.js").CameraZone[]} zones
+ */
+export async function saveZones(hass, zones) {
+  if (!hass?.callWS) return null;
+  const cleaned = normalizeZones(zones);
+  return hass.callWS({
+    type: "cctv_dashboard/set_zones",
+    zones: cleaned,
   });
 }
 

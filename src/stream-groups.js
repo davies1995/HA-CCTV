@@ -106,6 +106,34 @@ export function failoverStreamOrder(preferredId, members) {
   return [...soft, ...other];
 }
 
+const HIGH_PREFERRED_TOKENS = [
+  "high_resolution",
+  "high_res",
+  "_clear",
+  "_main",
+];
+
+/**
+ * Prefer the high-resolution member when selecting a physical group for mosaic.
+ * @param {string[] | null | undefined} members
+ * @returns {string}
+ */
+export function pickHighStreamFromGroup(members) {
+  const list = [...new Set((members || []).map(String))].filter((id) =>
+    id.startsWith("camera.")
+  );
+  if (!list.length) return "";
+  for (const token of HIGH_PREFERRED_TOKENS) {
+    const hit = list.find((id) => id.replace(/^camera\./, "").includes(token));
+    if (hit) return hit;
+  }
+  const nonSoft = list.find((id) => {
+    const name = id.replace(/^camera\./, "");
+    return !FAILOVER_PREFERRED_SUFFIXES.some((suffix) => name.endsWith(suffix));
+  });
+  return nonSoft || list[0];
+}
+
 /**
  * Pick a low/substream entity from group members for quality=low/auto mosaic.
  * @param {string[] | null | undefined} members

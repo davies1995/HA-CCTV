@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.21.0 — 2026-11-16
+
+### Changed
+
+- Camera **groups** move to **Cameras & zones** (removed from per-camera Settings)
+- Selecting a group for the mosaic defaults to **high-resolution** stream + **balanced** quality
+- **Zones** assign groups; users switch zones via page-like tabs
+- Creating/editing groups and zones is **admin-only**; config stays shared for all users
+
 ## 0.20.3 — 2026-11-13
 
 ### Added

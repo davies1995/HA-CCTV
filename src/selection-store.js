@@ -3,14 +3,14 @@
 export const PANEL_SELECTION_KEY = "cctv_dashboard";
 
 /**
- * @typedef {{ selectedCameras: string[] }} UserPanelData
+ * @typedef {{ selectedCameras: string[], selectedZone: string }} UserPanelData
  */
 
 /**
  * Load this user's visible-camera selection.
  * Also returns legacy `sensorLinks` if present (for one-time migration to shared store).
  * @param {any} hass
- * @returns {Promise<{ selectedCameras: string[], legacySensorLinks: Record<string, string[]> | null } | null>}
+ * @returns {Promise<{ selectedCameras: string[], selectedZone: string, legacySensorLinks: Record<string, string[]> | null } | null>}
  */
 export async function loadPanelData(hass) {
   if (!hass?.callWS) return null;
@@ -25,13 +25,14 @@ export async function loadPanelData(hass) {
     const selected = Array.isArray(value.selectedCameras)
       ? value.selectedCameras.map(String).filter((id) => id.startsWith("camera."))
       : [];
+    const selectedZone = String(value.selectedZone || "").trim();
 
     const legacySensorLinks =
       value.sensorLinks && typeof value.sensorLinks === "object"
         ? value.sensorLinks
         : null;
 
-    return { selectedCameras: selected, legacySensorLinks };
+    return { selectedCameras: selected, selectedZone, legacySensorLinks };
   } catch (err) {
     console.warn("CCTV: failed to load panel user data", err);
     return null;
@@ -48,10 +49,10 @@ export async function loadPanelSelection(hass) {
 }
 
 /**
- * Save this user's camera selection only (site-wide sensor links live in the integration store).
+ * Save this user's camera selection (+ optional zone). Site-wide groups/zones live in the store.
  * @param {any} hass
  * @param {string[]} selectedCameras
- * @param {{ clearLegacySensorLinks?: boolean }} [opts]
+ * @param {{ clearLegacySensorLinks?: boolean, selectedZone?: string }} [opts]
  */
 export async function savePanelSelection(hass, selectedCameras, opts = {}) {
   if (!hass?.callWS) return;
@@ -59,8 +60,11 @@ export async function savePanelSelection(hass, selectedCameras, opts = {}) {
   const cleaned = [
     ...new Set(selectedCameras.map(String).filter((id) => id.startsWith("camera."))),
   ].slice(0, 4);
+  const selectedZone = String(opts.selectedZone || "").trim();
 
+  /** @type {{ selectedCameras: string[], selectedZone?: string }} */
   const value = { selectedCameras: cleaned };
+  if (selectedZone) value.selectedZone = selectedZone;
   // Drop legacy per-user sensorLinks once migrated to shared storage.
   if (!opts.clearLegacySensorLinks) {
     // Keep payload minimal — never re-write sensorLinks into user data.
@@ -77,7 +81,7 @@ export async function savePanelSelection(hass, selectedCameras, opts = {}) {
     throw err;
   }
 
-  return { selectedCameras: cleaned };
+  return { selectedCameras: cleaned, selectedZone };
 }
 
 /**
