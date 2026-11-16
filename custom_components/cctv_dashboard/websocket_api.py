@@ -80,6 +80,9 @@ async def ws_get_settings(
         ),
         vol.Optional("record_on_detection"): bool,
         vol.Optional("record_detection_kinds"): [str],
+        vol.Optional("max_cameras_per_zone"): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=4)
+        ),
     }
 )
 @websocket_api.async_response
@@ -110,6 +113,17 @@ async def ws_set_settings(
             )
             return
         patch["record_detection_kinds"] = kinds
+    if "max_cameras_per_zone" in msg:
+        # Shared zone cap — admin only (same role as groups/zones).
+        user = connection.user
+        if not user or not getattr(user, "is_admin", False):
+            connection.send_error(
+                msg["id"],
+                "unauthorized",
+                "Only Home Assistant admins can set max cameras per zone",
+            )
+            return
+        patch["max_cameras_per_zone"] = msg["max_cameras_per_zone"]
     data = await store.async_save(patch)
     if manager:
         manager.apply_store_update()

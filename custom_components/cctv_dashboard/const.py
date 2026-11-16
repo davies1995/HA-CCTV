@@ -1,7 +1,7 @@
 """Constants for the CCTV Dashboard integration."""
 
 DOMAIN = "cctv_dashboard"
-VERSION = "0.21.0"
+VERSION = "0.21.1"
 PANEL_URL_PATH = "cctv"
 URL_BASE = "/cctv_dashboard"
 JS_FILENAME = "cctv-dashboard.js"
@@ -25,6 +25,9 @@ DEFAULT_MAX_STREAMS = 4
 DEFAULT_QUALITY = "auto"
 DEFAULT_RETENTION_DAYS = 1  # 24 hours
 DEFAULT_RECORD_ON_DETECTION = True
+DEFAULT_MAX_CAMERAS_PER_ZONE = 4
+# Shared store cap (also limited by live max_streams / slot budget).
+MAX_CAMERAS_PER_ZONE_LIMIT = 4
 
 # Which detection kinds start/extend video recording (timeline still logs all).
 # Keep ids in sync with recordings._KIND_TOKENS / frontend DETECTION_KINDS.

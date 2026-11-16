@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.21.1 — 2026-11-16
+
+### Added
+
+- Zone tabs above the live mosaic (switch without opening Cameras & zones)
+- Shared admin setting **max cameras per zone** (default 4, range 1–4; also capped by `max_streams`)
+- TV mode: tap/click a mosaic feed to promote it to the large hero tile
+
+### Fixed
+
+- Settings checkbox rows align ticks with their option labels again (group picker column layout no longer overrides them)
+
 ## 0.21.0 — 2026-11-16
 
 ### Changed

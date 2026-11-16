@@ -9,9 +9,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    DEFAULT_MAX_CAMERAS_PER_ZONE,
     DEFAULT_RECORD_DETECTION_KINDS,
     DEFAULT_RECORD_ON_DETECTION,
     DEFAULT_RETENTION_DAYS,
+    MAX_CAMERAS_PER_ZONE_LIMIT,
     RECORD_DETECTION_KIND_IDS,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -76,13 +78,28 @@ def _normalize_stream_groups(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _normalize_zones(raw: Any, groups: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _normalize_max_cameras_per_zone(raw: Any) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = DEFAULT_MAX_CAMERAS_PER_ZONE
+    return max(1, min(value, MAX_CAMERAS_PER_ZONE_LIMIT))
+
+
+def _normalize_zones(
+    raw: Any,
+    groups: list[dict[str, Any]] | None = None,
+    max_cameras: int | None = None,
+) -> list[dict[str, Any]]:
     """Named zones that list stream-group ids (admin-managed, site-wide)."""
     valid_groups = {
         str(g.get("id") or "")
         for g in (groups or [])
         if str(g.get("id") or "")
     }
+    limit = _normalize_max_cameras_per_zone(
+        max_cameras if max_cameras is not None else DEFAULT_MAX_CAMERAS_PER_ZONE
+    )
     if not isinstance(raw, list):
         return []
     out: list[dict[str, Any]] = []
@@ -98,7 +115,7 @@ def _normalize_zones(raw: Any, groups: list[dict[str, Any]] | None = None) -> li
             if valid_groups and sid not in valid_groups:
                 continue
             group_ids.append(sid)
-            if len(group_ids) >= 32:
+            if len(group_ids) >= limit:
                 break
         raw_id = str(item.get("id") or "").strip()
         if raw_id and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", raw_id):
@@ -298,6 +315,7 @@ def default_data() -> dict[str, Any]:
         "sensor_links": {},
         "stream_groups": [],
         "zones": [],
+        "max_cameras_per_zone": DEFAULT_MAX_CAMERAS_PER_ZONE,
         "force_aspect": {},
         "camera_quality": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
@@ -321,8 +339,13 @@ class PanelStore:
             data["stream_groups"] = _normalize_stream_groups(
                 loaded.get("stream_groups")
             )
+            data["max_cameras_per_zone"] = _normalize_max_cameras_per_zone(
+                loaded.get("max_cameras_per_zone", DEFAULT_MAX_CAMERAS_PER_ZONE)
+            )
             data["zones"] = _normalize_zones(
-                loaded.get("zones"), data["stream_groups"]
+                loaded.get("zones"),
+                data["stream_groups"],
+                data["max_cameras_per_zone"],
             )
             data["sensor_links"] = sync_sensor_links_across_groups(
                 _normalize_links(loaded.get("sensor_links")),
@@ -358,14 +381,22 @@ class PanelStore:
                 data["stream_groups"] = _normalize_stream_groups(
                     patch["stream_groups"]
                 )
+            if "max_cameras_per_zone" in patch:
+                data["max_cameras_per_zone"] = _normalize_max_cameras_per_zone(
+                    patch["max_cameras_per_zone"]
+                )
             if "zones" in patch:
                 data["zones"] = _normalize_zones(
-                    patch["zones"], data.get("stream_groups") or []
+                    patch["zones"],
+                    data.get("stream_groups") or [],
+                    data.get("max_cameras_per_zone"),
                 )
-            # Drop zone group refs removed when stream_groups change.
-            if "stream_groups" in patch:
+            # Drop zone group refs removed when stream_groups / max change.
+            if "stream_groups" in patch or "max_cameras_per_zone" in patch:
                 data["zones"] = _normalize_zones(
-                    data.get("zones") or [], data.get("stream_groups") or []
+                    data.get("zones") or [],
+                    data.get("stream_groups") or [],
+                    data.get("max_cameras_per_zone"),
                 )
             if "sensor_links" in patch:
                 data["sensor_links"] = _normalize_links(patch["sensor_links"])

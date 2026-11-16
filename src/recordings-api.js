@@ -7,7 +7,10 @@ import {
   normalizeStreamGroups,
   syncSensorLinksAcrossGroups,
 } from "./stream-groups.js";
-import { normalizeZones } from "./zones.js";
+import {
+  normalizeMaxCamerasPerZone,
+  normalizeZones,
+} from "./zones.js";
 
 /**
  * Load site-wide settings (sensor links, force aspect, quality, retention).
@@ -19,7 +22,14 @@ export async function loadSharedConfig(hass) {
     const result = await hass.callWS({ type: "cctv_dashboard/get_settings" });
     if (!result || typeof result !== "object") return null;
     const streamGroups = normalizeStreamGroups(result.stream_groups || []);
-    const zones = normalizeZones(result.zones || [], streamGroups);
+    const maxCamerasPerZone = normalizeMaxCamerasPerZone(
+      result.max_cameras_per_zone
+    );
+    const zones = normalizeZones(
+      result.zones || [],
+      streamGroups,
+      maxCamerasPerZone
+    );
     const sensorLinks = syncSensorLinksAcrossGroups(
       normalizeSensorLinks(result.sensor_links || {}),
       streamGroups
@@ -29,6 +39,7 @@ export async function loadSharedConfig(hass) {
       sensorLinks,
       streamGroups,
       zones,
+      maxCamerasPerZone,
       forceAspect: normalizeForceAspectMap(result.force_aspect || {}),
       cameraQuality: normalizeCameraQualityMap(result.camera_quality || {}),
     };
@@ -70,10 +81,11 @@ export async function saveStreamGroups(hass, groups) {
  * Persist zones (admin-only WS). Shared for all HA users.
  * @param {any} hass
  * @param {import("./zones.js").CameraZone[]} zones
+ * @param {number | null | undefined} [maxCameras]
  */
-export async function saveZones(hass, zones) {
+export async function saveZones(hass, zones, maxCameras = null) {
   if (!hass?.callWS) return null;
-  const cleaned = normalizeZones(zones);
+  const cleaned = normalizeZones(zones, null, maxCameras);
   return hass.callWS({
     type: "cctv_dashboard/set_zones",
     zones: cleaned,
@@ -146,6 +158,7 @@ export async function loadRecordingSettings(hass) {
  *   retention_days?: number,
  *   record_on_detection?: boolean,
  *   record_detection_kinds?: string[],
+ *   max_cameras_per_zone?: number,
  * }} patch
  */
 export async function saveRecordingSettings(hass, patch) {

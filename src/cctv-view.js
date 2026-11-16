@@ -80,6 +80,8 @@ import {
   upsertStreamGroup,
 } from "./stream-groups.js";
 import {
+  DEFAULT_MAX_CAMERAS_PER_ZONE,
+  normalizeMaxCamerasPerZone,
   normalizeZones,
   removeZone,
   upsertZone,
@@ -90,6 +92,7 @@ import {
   contentBoxWidth,
   estimateTvChromePx,
   loadTvMode,
+  packTvHeroMosaic,
   saveTvMode,
   tvPackGap,
   tvStageFullContentWidth,
@@ -134,6 +137,10 @@ export class CctvView extends LitElement {
     _zoneDraftName: { state: true },
     /** @type {string[]} */
     _zoneDraftGroupIds: { state: true },
+    /** Shared admin cap: max groups/cameras per zone (1–4). */
+    _maxCamerasPerZone: { state: true },
+    /** TV mode: entity id promoted to the large hero tile. */
+    _tvFocusId: { state: true },
     /** @type {Record<string, string>} draft forced aspect labels */
     _forceAspect: { state: true },
     /** @type {Record<string, string>} last saved forced aspect */
@@ -210,6 +217,8 @@ export class CctvView extends LitElement {
     this._zoneDraftId = "";
     this._zoneDraftName = "";
     this._zoneDraftGroupIds = [];
+    this._maxCamerasPerZone = DEFAULT_MAX_CAMERAS_PER_ZONE;
+    this._tvFocusId = "";
     this._forceAspect = {};
     this._savedForceAspect = {};
     this._cameraQuality = {};
@@ -670,13 +679,17 @@ export class CctvView extends LitElement {
     if (boxW < 8 || boxH < 8) return;
 
     // Always pack the same visible mosaic cameras (live or playback).
-    const cameras = this._layoutCameras(this._cameras()).slice(0, 4);
+    const cameras = this._layoutCameras(this._cameras()).slice(0, this._mosaicLimit());
     const items = cameras.map((cam) => ({
       id: cam.entityId,
       aspect: this._effectiveAspect(cam.entityId),
     }));
     const gap = this._tvMode ? tvPackGap(items.length) : 10;
-    const cells = packAspectMosaic(items, boxW, boxH, gap);
+    // TV mode: focused feed is the large hero; others stack smaller beside it.
+    const cells =
+      this._tvMode && items.length >= 3
+        ? packTvHeroMosaic(items, boxW, boxH, gap, this._tvFocusId)
+        : packAspectMosaic(items, boxW, boxH, gap);
     const nextStyles = cellsToPercentStyles(cells, boxW, boxH);
     if (!this._packStylesEqual(this._packStyles, nextStyles)) {
       this._packStyles = nextStyles;
@@ -766,11 +779,21 @@ export class CctvView extends LitElement {
     ]);
     if (token !== this._loadToken || !this._panelActive) return;
 
+    this._streamGroups = normalizeStreamGroups(shared?.streamGroups || []);
+    this._maxCamerasPerZone = normalizeMaxCamerasPerZone(
+      shared?.maxCamerasPerZone ?? shared?.max_cameras_per_zone
+    );
+    this._zones = normalizeZones(
+      shared?.zones || [],
+      this._streamGroups,
+      this._maxCamerasPerZone
+    );
+
     const all = this._cameras().map((c) => c.entityId);
     if (userData?.selectedCameras?.length) {
       this._visibleIds = userData.selectedCameras
         .filter((id) => all.includes(id))
-        .slice(0, this._maxStreams());
+        .slice(0, this._mosaicLimit());
       this._pickerOpen = this._visibleIds.length === 0;
     } else {
       this._visibleIds = [];
@@ -804,9 +827,6 @@ export class CctvView extends LitElement {
         links = legacy;
       }
     }
-
-    this._streamGroups = normalizeStreamGroups(shared?.streamGroups || []);
-    this._zones = normalizeZones(shared?.zones || [], this._streamGroups);
     if (
       this._selectedZoneId &&
       !zoneById(this._zones, this._selectedZoneId) &&
@@ -834,6 +854,15 @@ export class CctvView extends LitElement {
     } else if (this.config?.retention_days) {
       this._retentionDays = Number(this.config.retention_days) || 1;
       this._recordOnDetection = this.config.record_on_detection !== false;
+    }
+
+    // Enforce mosaic / zone camera cap on restored selection.
+    const mosaicMax = this._mosaicLimit();
+    if (this._visibleIds.length > mosaicMax) {
+      this._visibleIds = this._visibleIds.slice(0, mosaicMax);
+    }
+    if (!this._tvFocusId && this._visibleIds[0]) {
+      this._tvFocusId = this._visibleIds[0];
     }
 
     this._selectionReady = true;
@@ -864,13 +893,26 @@ export class CctvView extends LitElement {
       this._recordDir = settings.record_dir || "";
       this._recordingDebug = String(settings.recording_debug || "");
       this._recordingDebugSummary = String(settings.recording_debug_summary || "");
+      if (settings.maxCamerasPerZone != null || settings.max_cameras_per_zone != null) {
+        this._maxCamerasPerZone = normalizeMaxCamerasPerZone(
+          settings.maxCamerasPerZone ?? settings.max_cameras_per_zone
+        );
+      }
       if (settings.streamGroups) {
         this._streamGroups = normalizeStreamGroups(settings.streamGroups);
       }
       if (settings.zones) {
-        this._zones = normalizeZones(settings.zones, this._streamGroups);
+        this._zones = normalizeZones(
+          settings.zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
       } else if (settings.streamGroups) {
-        this._zones = normalizeZones(this._zones, this._streamGroups);
+        this._zones = normalizeZones(
+          this._zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
       }
       if (settings.sensorLinks) {
         this._sensorLinks = syncSensorLinksAcrossGroups(
@@ -998,6 +1040,13 @@ export class CctvView extends LitElement {
     return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_STREAMS;
   }
 
+  /** Effective mosaic selection cap: min(max_streams, max_cameras_per_zone). */
+  _mosaicLimit() {
+    const streams = this._maxStreams();
+    const perZone = normalizeMaxCamerasPerZone(this._maxCamerasPerZone);
+    return Math.max(1, Math.min(streams, perZone));
+  }
+
   _visibleCameras(cameras) {
     const order = this._visibleIds;
     return order
@@ -1045,7 +1094,11 @@ export class CctvView extends LitElement {
       this._streamGroups = normalizeStreamGroups(saved.stream_groups);
     }
     if (Array.isArray(saved.zones)) {
-      this._zones = normalizeZones(saved.zones, this._streamGroups);
+      this._zones = normalizeZones(
+        saved.zones,
+        this._streamGroups,
+        this._maxCamerasPerZone
+      );
     }
     if (saved.sensor_links) {
       this._sensorLinks = syncSensorLinksAcrossGroups(
@@ -1076,7 +1129,7 @@ export class CctvView extends LitElement {
   }
 
   async _toggleVisible(entityId, checked) {
-    const max = this._maxStreams();
+    const max = this._mosaicLimit();
     let next = [...this._visibleIds];
     const group = groupForCamera(this._streamGroups, entityId);
     const groupMembers = new Set(group?.members || []);
@@ -1101,8 +1154,12 @@ export class CctvView extends LitElement {
         }
         next.push(entityId);
       }
+      if (!this._tvFocusId) this._tvFocusId = entityId;
     } else {
       next = next.filter((id) => id !== entityId);
+      if (this._tvFocusId === entityId) {
+        this._tvFocusId = next[0] || "";
+      }
     }
     this._visibleIds = next;
     if (this._detailId && !next.includes(this._detailId)) {
@@ -1128,12 +1185,13 @@ export class CctvView extends LitElement {
     const idx = next.indexOf(prev);
     if (idx >= 0) next[idx] = nextStream;
     else if (!next.includes(nextStream)) {
-      if (next.length >= this._maxStreams()) {
-        this._status = `Select at most ${this._maxStreams()} cameras`;
+      if (next.length >= this._mosaicLimit()) {
+        this._status = `Select at most ${this._mosaicLimit()} cameras`;
         return;
       }
       next.push(nextStream);
     }
+    if (this._tvFocusId === prev) this._tvFocusId = nextStream;
     // Drop any other group siblings from selection.
     if (group) {
       next = next.filter(
@@ -1169,7 +1227,43 @@ export class CctvView extends LitElement {
   async _selectZone(zoneId) {
     const zone = zoneById(this._zones, zoneId);
     this._selectedZoneId = zone?.id || String(zoneId || "");
-    await this._persistSelection(this._visibleIds);
+    // Keep mosaic picks that belong to this zone's groups; drop others.
+    let next = [...this._visibleIds];
+    if (zone?.group_ids?.length) {
+      const allowed = new Set();
+      for (const g of this._streamGroups || []) {
+        if (!(zone.group_ids || []).includes(g.id)) continue;
+        for (const mid of g.members || []) allowed.add(mid);
+      }
+      next = next.filter((id) => allowed.has(id));
+    }
+    next = next.slice(0, this._mosaicLimit());
+    if (this._tvFocusId && !next.includes(this._tvFocusId)) {
+      this._tvFocusId = next[0] || "";
+    }
+    this._visibleIds = next;
+    await this._persistSelection(next);
+  }
+
+  /**
+   * TV mode: promote a mosaic feed to the large hero tile.
+   * Second tap on the current hero opens the camera detail.
+   * @param {string} entityId
+   */
+  _onTvTileActivate(entityId) {
+    const id = String(entityId || "");
+    if (!id) return;
+    if (!this._tvMode) {
+      this._openDetail(id);
+      return;
+    }
+    if (this._tvFocusId === id) {
+      this._openDetail(id);
+      return;
+    }
+    this._tvFocusId = id;
+    this._schedulePack();
+    this._status = `Focused ${id.replace(/^camera\./, "")}`;
   }
 
   async _persistSensorLinks(next) {
@@ -1341,9 +1435,17 @@ export class CctvView extends LitElement {
         await this._persistSensorLinks(syncedLinks);
       }
       if (Array.isArray(saved?.zones)) {
-        this._zones = normalizeZones(saved.zones, this._streamGroups);
+        this._zones = normalizeZones(
+          saved.zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
       } else {
-        this._zones = normalizeZones(this._zones, this._streamGroups);
+        this._zones = normalizeZones(
+          this._zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
       }
       this._status = "Camera groups saved for all users";
     } catch (err) {
@@ -1359,12 +1461,21 @@ export class CctvView extends LitElement {
       return;
     }
     this._saving = true;
-    const normalized = normalizeZones(zones, this._streamGroups);
+    const normalized = normalizeZones(
+      zones,
+      this._streamGroups,
+      this._maxCamerasPerZone
+    );
     try {
-      const saved = await saveZones(this.hass, normalized);
+      const saved = await saveZones(
+        this.hass,
+        normalized,
+        this._maxCamerasPerZone
+      );
       this._zones = normalizeZones(
         saved?.zones || normalized,
-        this._streamGroups
+        this._streamGroups,
+        this._maxCamerasPerZone
       );
       if (
         this._selectedZoneId &&
@@ -1482,7 +1593,8 @@ export class CctvView extends LitElement {
         name: this._zoneDraftName,
         group_ids: this._zoneDraftGroupIds,
       },
-      this._streamGroups
+      this._streamGroups,
+      this._maxCamerasPerZone
     );
     await this._persistZones(next);
     const id = this._zoneDraftId;
@@ -1497,12 +1609,18 @@ export class CctvView extends LitElement {
     const gid = String(groupId || "");
     if (!gid) return;
     let next = [...(this._zoneDraftGroupIds || [])];
+    const max = this._mosaicLimit();
     if (checked) {
-      if (!next.includes(gid)) next.push(gid);
+      if (next.includes(gid)) return;
+      if (next.length >= max) {
+        this._status = `At most ${max} cameras per zone`;
+        return;
+      }
+      next.push(gid);
     } else {
       next = next.filter((id) => id !== gid);
     }
-    this._zoneDraftGroupIds = next.slice(0, 32);
+    this._zoneDraftGroupIds = next.slice(0, max);
   }
 
   _toggleManageGroupMember(memberId, checked) {
@@ -1639,6 +1757,53 @@ export class CctvView extends LitElement {
       this._status = `Retention set to ${value} day${value === 1 ? "" : "s"}`;
     } catch (err) {
       this._status = err?.message || "Could not save retention";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _saveMaxCamerasPerZone(raw) {
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can set max cameras per zone";
+      return;
+    }
+    const value = normalizeMaxCamerasPerZone(raw);
+    this._maxCamerasPerZone = value;
+    this._saving = true;
+    try {
+      const saved = await saveRecordingSettings(this.hass, {
+        max_cameras_per_zone: value,
+      });
+      if (saved?.max_cameras_per_zone != null) {
+        this._maxCamerasPerZone = normalizeMaxCamerasPerZone(
+          saved.max_cameras_per_zone
+        );
+      }
+      if (Array.isArray(saved?.zones)) {
+        this._zones = normalizeZones(
+          saved.zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
+      } else {
+        this._zones = normalizeZones(
+          this._zones,
+          this._streamGroups,
+          this._maxCamerasPerZone
+        );
+      }
+      const limit = this._mosaicLimit();
+      if (this._visibleIds.length > limit) {
+        this._visibleIds = this._visibleIds.slice(0, limit);
+        await this._persistSelection(this._visibleIds);
+      }
+      if ((this._zoneDraftGroupIds || []).length > limit) {
+        this._zoneDraftGroupIds = this._zoneDraftGroupIds.slice(0, limit);
+      }
+      this._status = `Max cameras per zone set to ${this._maxCamerasPerZone}`;
+    } catch (err) {
+      this._status = err?.message || "Could not save max cameras per zone";
+      await this._loadRecordingUi();
     } finally {
       this._saving = false;
     }
@@ -2405,8 +2570,10 @@ export class CctvView extends LitElement {
 
     const cameras = this._cameras();
     const maxStreams = this._maxStreams();
+    const mosaicLimit = this._mosaicLimit();
     streamSlots.setMax(maxStreams);
     const title = this.config?.title || "CCTV";
+    const zoneTabs = this._renderZoneTabs();
 
     if (this.panelMode && !this._selectionReady) {
       return html`
@@ -2477,7 +2644,7 @@ export class CctvView extends LitElement {
             <span class="status">
               ${this._status ||
               (this.panelMode
-                ? `${visible.length}/${maxStreams} selected · ${playing ? (playbackPaused ? "paused" : "playback") : `${streamSlots.activeCount()} live`}`
+                ? `${visible.length}/${mosaicLimit} selected · ${playing ? (playbackPaused ? "paused" : "playback") : `${streamSlots.activeCount()} live`}`
                 : `${cameras.length} camera${cameras.length === 1 ? "" : "s"} · ${streamSlots.activeCount()} live`)}
               ${this._saving ? " · saving…" : ""}
             </span>
@@ -2485,7 +2652,7 @@ export class CctvView extends LitElement {
         </div>
 
         ${this.panelMode && this._pickerOpen
-          ? this._renderPicker(cameras, maxStreams)
+          ? this._renderPicker(cameras, mosaicLimit)
           : nothing}
 
         ${this.panelMode && this._settingsOpen
@@ -2495,6 +2662,8 @@ export class CctvView extends LitElement {
         ${this.panelMode && this._playback
           ? this._renderPlaybackBar()
           : nothing}
+
+        ${this.panelMode && !detail ? zoneTabs : nothing}
 
         ${detail
           ? this._renderDetail(detail, streamsActive)
@@ -2558,6 +2727,8 @@ export class CctvView extends LitElement {
 
   _renderSettings() {
     const kinds = this._recordDetectionKinds || [];
+    const admin = this._isAdmin();
+    const mosaicLimit = this._mosaicLimit();
     return html`
       <section class="settings-panel" aria-label="CCTV settings">
         <div class="picker-head">
@@ -2582,6 +2753,25 @@ export class CctvView extends LitElement {
               @change=${(e) => this._saveRetentionDays(e.target.value)}
             />
           </label>
+          ${admin
+            ? html`
+                <label class="settings-field">
+                  Max cameras per zone
+                  <input
+                    type="number"
+                    min="1"
+                    max="4"
+                    .value=${String(this._maxCamerasPerZone)}
+                    ?disabled=${this._saving}
+                    @change=${(e) => this._saveMaxCamerasPerZone(e.target.value)}
+                  />
+                  <span class="hint">
+                    Shared · admin. Effective mosaic limit ${mosaicLimit}
+                    (also capped by max streams ${this._maxStreams()}).
+                  </span>
+                </label>
+              `
+            : nothing}
           <label class="picker-item settings-toggle">
             <input
               type="checkbox"
@@ -2614,8 +2804,9 @@ export class CctvView extends LitElement {
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
               Per-device (this browser / kiosk). Fits a 16:9 mosaic above the fold
-              (accounts for HA / kiosk chrome); up to 4 cams fill the stage; 1–2 cams
-              maximize. Timeline and Saved detections scroll below.
+              (accounts for HA / kiosk chrome); up to ${mosaicLimit} cams fill the stage;
+              1–2 cams maximize; tap a feed to promote it to the large hero tile.
+              Timeline and Saved detections scroll below.
             </span>
           </label>
         </div>
@@ -2862,6 +3053,29 @@ export class CctvView extends LitElement {
     return rows;
   }
 
+  /** Zone switcher tabs — shown above the mosaic and in Cameras & zones. */
+  _renderZoneTabs() {
+    const zones = this._zones || [];
+    if (!zones.length) return nothing;
+    return html`
+      <div class="zone-pages zone-pages-mosaic" role="tablist" aria-label="Zones">
+        ${zones.map(
+          (zone) => html`
+            <button
+              type="button"
+              class="btn zone-page ${zone.id === this._selectedZoneId ? "primary" : ""}"
+              role="tab"
+              aria-selected=${zone.id === this._selectedZoneId}
+              @click=${() => this._selectZone(zone.id)}
+            >
+              ${zone.name}
+            </button>
+          `
+        )}
+      </div>
+    `;
+  }
+
   _renderPicker(cameras, maxStreams) {
     if (!cameras.length) {
       return html`<p class="empty">No camera entities found.</p>`;
@@ -2881,23 +3095,7 @@ export class CctvView extends LitElement {
         </div>
 
         ${zones.length
-          ? html`
-              <div class="zone-pages" role="tablist" aria-label="Zones">
-                ${zones.map(
-                  (zone) => html`
-                    <button
-                      type="button"
-                      class="btn zone-page ${zone.id === this._selectedZoneId ? "primary" : ""}"
-                      role="tab"
-                      aria-selected=${zone.id === this._selectedZoneId}
-                      @click=${() => this._selectZone(zone.id)}
-                    >
-                      ${zone.name}
-                    </button>
-                  `
-                )}
-              </div>
-            `
+          ? this._renderZoneTabs()
           : html`<p class="hint">No zones yet${admin ? " — create zones below to organize groups." : "."}</p>`}
 
         <div class="picker-list">
@@ -3236,7 +3434,12 @@ export class CctvView extends LitElement {
                             ?disabled=${this._saving}
                             @click=${() =>
                               this._persistZones(
-                                removeZone(this._zones, z.id, this._streamGroups)
+                                removeZone(
+                                  this._zones,
+                                  z.id,
+                                  this._streamGroups,
+                                  this._maxCamerasPerZone
+                                )
                               )}
                           >
                             Delete
@@ -3262,15 +3465,20 @@ export class CctvView extends LitElement {
                   </button>
                 </div>
                 <div class="sensor-candidates">
-                  <p class="hint">Groups in this zone</p>
+                  <p class="hint">
+                    Groups in this zone (max ${this._mosaicLimit()})
+                  </p>
                   ${(this._streamGroups || []).map((g) => {
                     const checked = (this._zoneDraftGroupIds || []).includes(g.id);
+                    const atCap =
+                      !checked &&
+                      (this._zoneDraftGroupIds || []).length >= this._mosaicLimit();
                     return html`
-                      <label class="sensor-item">
+                      <label class="sensor-item ${atCap ? "disabled" : ""}">
                         <input
                           type="checkbox"
                           .checked=${checked}
-                          ?disabled=${this._saving}
+                          ?disabled=${this._saving || atCap}
                           @change=${(e) =>
                             this._toggleZoneDraftGroup(g.id, e.target.checked)}
                         />
@@ -3298,16 +3506,18 @@ export class CctvView extends LitElement {
   }
 
   _renderLayout(cameras, streamsActive = true) {
+    const mosaicLimit = this._mosaicLimit();
     if (!cameras.length) {
       return html`
         <p class="empty">
           Select cameras above to start streaming.
-          One camera fills the view; two to four split the screen equally (max ${this._maxStreams()}).
+          One camera fills the view; two to ${mosaicLimit} split the screen
+          (max ${mosaicLimit}).
         </p>
       `;
     }
 
-    const list = cameras.slice(0, 4);
+    const list = cameras.slice(0, mosaicLimit);
     // Mobile: previous stacked layout-N. Desktop: aspect-aware absolute pack.
     if (!this._isDesktop) {
       const count = list.length;
@@ -3353,6 +3563,8 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
+    const tvHero =
+      this._tvMode && this._tvFocusId === cam.entityId && this._visibleIds.length >= 3;
     // Trigger highlight is a pointer-events:none overlay — never rewrite the
     // tile class/style or video src/kick (that broke pre-#46 playback).
     const triggerMeta =
@@ -3364,13 +3576,21 @@ export class CctvView extends LitElement {
       !positioned && forcedRatio
         ? `aspect-ratio:${forcedRatio}; width:100%;`
         : nothing;
+    const onTileActivate = () =>
+      this._tvMode
+        ? this._onTvTileActivate(cam.entityId)
+        : this._openDetail(cam.entityId);
     return html`
       <article
-        class="tile layout-tile ${positioned ? "pack-tile" : ""}"
+        class="tile layout-tile ${positioned ? "pack-tile" : ""} ${tvHero ? "tv-hero" : ""} ${this._tvMode && !playing ? "tv-focusable" : ""}"
         role="listitem"
         style=${positioned ? packStyle : nothing}
       >
-        <div class="tile-media" style=${mediaStyle}>
+        <div
+          class="tile-media"
+          style=${mediaStyle}
+          @click=${this._tvMode && !playing ? onTileActivate : nothing}
+        >
           ${playing
             ? !item
               ? html`<div class="playback-empty">No recording for this camera</div>`
@@ -3458,12 +3678,13 @@ export class CctvView extends LitElement {
               <button
                 type="button"
                 class="tile-body tile-open ${packed ? "pack-caption" : ""}"
-                @click=${() => this._openDetail(cam.entityId)}
+                @click=${onTileActivate}
               >
                 <p class="tile-title">${cam.name}</p>
                 <p class="tile-meta">
                   <span class="dot ${cam.state}"></span>${cam.state} · ${quality}
                   ${linked ? html` · ${linked} detection` : nothing}
+                  ${tvHero ? html` · focus` : nothing}
                 </p>
               </button>
             `}

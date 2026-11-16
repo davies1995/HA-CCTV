@@ -1049,8 +1049,20 @@ export const sharedStyles = css`
     margin: 0.55rem 0 0.75rem;
   }
 
+  .zone-pages-mosaic {
+    margin: 0 0 0.65rem;
+  }
+
   .zone-page {
     min-width: 4.5rem;
+  }
+
+  .tile.tv-focusable .tile-media {
+    cursor: pointer;
+  }
+
+  .tile.tv-hero {
+    outline: 1px solid color-mix(in srgb, var(--cctv-accent) 55%, transparent);
   }
 
   .admin-structure {
@@ -1223,8 +1235,8 @@ export const sharedStyles = css`
     vertical-align: middle;
   }
 
-  .picker-group,
-  .picker-item {
+  /* Group mosaic rows only — do not restyle Settings/kind-filter checkbox rows. */
+  .picker-group {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -1235,6 +1247,21 @@ export const sharedStyles = css`
     display: flex;
     gap: 0.55rem;
     align-items: flex-start;
+  }
+
+  .settings-panel .picker-item.settings-toggle,
+  .kind-filter-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 0.55rem;
+    align-items: start;
+  }
+
+  .settings-panel .picker-item.settings-toggle input,
+  .kind-filter-item input {
+    grid-row: 1 / span 2;
+    margin-top: 0.15rem;
   }
 
   .picker-stream-controls {
