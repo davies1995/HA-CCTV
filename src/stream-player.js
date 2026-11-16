@@ -230,8 +230,18 @@ export class CctvStreamPlayer extends LitElement {
     this._unbindDocumentVisibility();
     if (typeof document === "undefined") return;
     this._onDocVisibility = () => {
-      // document.hidden gated live; when the tab/WebView returns, re-request slots.
       if (!this.active) return;
+      if (document.hidden) {
+        // Match panel suspend: drop media while backgrounded.
+        this._unloadCompletely();
+        return;
+      }
+      // Force a fresh live session. Soft reconcile early-returns when _playKey
+      // still matches, which leaves black tiles after Companion/WebView resume.
+      this._playKey = "";
+      this._releaseSlot();
+      this._stopLive();
+      this._mode = "empty";
       this._reconcilePlayback();
     };
     document.addEventListener("visibilitychange", this._onDocVisibility);
