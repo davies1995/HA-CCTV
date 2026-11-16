@@ -6,14 +6,32 @@
  * @typedef {{ id: string, name: string, group_ids: string[] }} CameraZone
  */
 
+/** Soft default; callers pass store/settings value when enforcing. */
+export const DEFAULT_MAX_CAMERAS_PER_ZONE = 4;
+export const MAX_CAMERAS_PER_ZONE_LIMIT = 4;
+
+/**
+ * @param {any} raw
+ * @returns {number}
+ */
+export function normalizeMaxCamerasPerZone(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return DEFAULT_MAX_CAMERAS_PER_ZONE;
+  return Math.max(1, Math.min(Math.floor(n), MAX_CAMERAS_PER_ZONE_LIMIT));
+}
+
 /**
  * @param {any} raw
  * @param {Array<{ id?: string }> | null | undefined} [groups]
+ * @param {number | null | undefined} [maxCameras]
  * @returns {CameraZone[]}
  */
-export function normalizeZones(raw, groups = null) {
+export function normalizeZones(raw, groups = null, maxCameras = null) {
   const valid = new Set(
     (groups || []).map((g) => String(g?.id || "")).filter(Boolean)
+  );
+  const limit = normalizeMaxCamerasPerZone(
+    maxCameras == null ? DEFAULT_MAX_CAMERAS_PER_ZONE : maxCameras
   );
   if (!Array.isArray(raw)) return [];
   /** @type {CameraZone[]} */
@@ -27,7 +45,7 @@ export function normalizeZones(raw, groups = null) {
       if (!id || groupIds.includes(id)) continue;
       if (valid.size && !valid.has(id)) continue;
       groupIds.push(id);
-      if (groupIds.length >= 32) break;
+      if (groupIds.length >= limit) break;
     }
     const idRaw = String(item.id || "").trim();
     const id =
@@ -75,11 +93,15 @@ export function zonesForGroup(zones, groupId) {
  * @param {CameraZone[]} zones
  * @param {{ id?: string, name?: string, group_ids?: string[] }} patch
  * @param {Array<{ id?: string }> | null} [groups]
+ * @param {number | null | undefined} [maxCameras]
  * @returns {CameraZone[]}
  */
-export function upsertZone(zones, patch, groups = null) {
+export function upsertZone(zones, patch, groups = null, maxCameras = null) {
   const valid = new Set(
     (groups || []).map((g) => String(g?.id || "")).filter(Boolean)
+  );
+  const limit = normalizeMaxCamerasPerZone(
+    maxCameras == null ? DEFAULT_MAX_CAMERAS_PER_ZONE : maxCameras
   );
   const groupIds = [
     ...new Set(
@@ -87,7 +109,7 @@ export function upsertZone(zones, patch, groups = null) {
         .map(String)
         .filter((id) => id && (!valid.size || valid.has(id)))
     ),
-  ].slice(0, 32);
+  ].slice(0, limit);
   const id =
     String(patch.id || "").trim() ||
     `zone_${String(patch.name || "zone")
@@ -98,19 +120,25 @@ export function upsertZone(zones, patch, groups = null) {
     id.replace(/^zone_/, "").replace(/_/g, " ") ||
     "Zone";
   const without = (zones || []).filter((z) => z.id !== id);
-  return normalizeZones([...without, { id, name, group_ids: groupIds }], groups);
+  return normalizeZones(
+    [...without, { id, name, group_ids: groupIds }],
+    groups,
+    limit
+  );
 }
 
 /**
  * @param {CameraZone[]} zones
  * @param {string} zoneId
  * @param {Array<{ id?: string }> | null} [groups]
+ * @param {number | null | undefined} [maxCameras]
  * @returns {CameraZone[]}
  */
-export function removeZone(zones, zoneId, groups = null) {
+export function removeZone(zones, zoneId, groups = null, maxCameras = null) {
   const id = String(zoneId || "");
   return normalizeZones(
     (zones || []).filter((z) => z.id !== id),
-    groups
+    groups,
+    maxCameras
   );
 }
