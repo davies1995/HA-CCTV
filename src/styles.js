@@ -552,6 +552,8 @@ export const sharedStyles = css`
       width: 100%;
       flex: 1 1 auto;
       min-height: 0;
+      /* Unused stage margins (not inside tiles) stay dark. */
+      background: #0a0e13;
     }
 
     .panel-wrap .layout-pack .pack-tile {
@@ -566,8 +568,8 @@ export const sharedStyles = css`
       flex: 1 1 auto;
       min-height: 0;
       height: 100%;
-      /* Keep letterboxing visible when cam aspect ≠ packed cell. */
-      background: #0a0e13;
+      /* Aspect-matched cells — avoid inventing black bars inside the tile. */
+      background: transparent;
     }
 
     .panel-wrap .layout-pack .pack-caption {

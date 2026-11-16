@@ -308,28 +308,73 @@ function packAsColumns(cols, boxW, boxH, gap) {
 }
 
 /**
+ * Score a packed layout. When focusId is set, prefer layouts where that
+ * camera's cell is larger (priority share) while still maximizing fill.
+ * @param {{ cells: Array<{ id: string, width: number, height: number }>, totalArea: number }} candidate
+ * @param {string} focusId
+ * @param {number} focusWeight
+ */
+function scorePackCandidate(candidate, focusId, focusWeight) {
+  if (!candidate) return -1;
+  const base = candidate.totalArea;
+  if (!focusId) return base;
+  const focus = candidate.cells.find((c) => c.id === focusId);
+  if (!focus) return base;
+  const focusArea = focus.width * focus.height;
+  // Weight focused area so priority layouts beat equal densest packs.
+  return base + focusArea * Math.max(0, focusWeight - 1);
+}
+
+/**
  * Choose the densest packing of cameras into the container.
+ * Each cell keeps the camera's aspect (no invented letterbox boxes).
+ *
  * @param {Array<{ id: string, aspect?: number }>} cameras
  * @param {number} boxW
  * @param {number} boxH
  * @param {number} [gap]
+ * @param {{ focusId?: string, focusWeight?: number }} [opts]
  * @returns {Array<{ id: string, left: number, top: number, width: number, height: number, aspect: number }>}
  */
-export function packAspectMosaic(cameras, boxW, boxH, gap = 10) {
+export function packAspectMosaic(cameras, boxW, boxH, gap = 10, opts = {}) {
   const items = (cameras || []).map((c) => ({
     id: String(c.id),
     aspect: normalizeAspect(c.aspect),
   }));
   if (!items.length || boxW <= 1 || boxH <= 1) return [];
 
-  let best = null;
-  let bestArea = -1;
+  const focusId = String(opts?.focusId || "");
+  const focusWeight =
+    Number.isFinite(Number(opts?.focusWeight)) && Number(opts.focusWeight) > 0
+      ? Number(opts.focusWeight)
+      : 2.75;
 
-  for (const parts of contiguousPartitions(items)) {
-    for (const candidate of [packAsRows(parts, boxW, boxH, gap), packAsColumns(parts, boxW, boxH, gap)]) {
-      if (candidate && candidate.totalArea > bestArea) {
-        bestArea = candidate.totalArea;
-        best = candidate.cells;
+  // Try focus-first order so partitions can isolate the priority cam.
+  const orders = [items];
+  if (focusId) {
+    const idx = items.findIndex((c) => c.id === focusId);
+    if (idx > 0) {
+      const reordered = items.slice();
+      const [focus] = reordered.splice(idx, 1);
+      reordered.unshift(focus);
+      orders.push(reordered);
+    }
+  }
+
+  let best = null;
+  let bestScore = -1;
+
+  for (const ordered of orders) {
+    for (const parts of contiguousPartitions(ordered)) {
+      for (const candidate of [
+        packAsRows(parts, boxW, boxH, gap),
+        packAsColumns(parts, boxW, boxH, gap),
+      ]) {
+        const score = scorePackCandidate(candidate, focusId, focusWeight);
+        if (score > bestScore) {
+          bestScore = score;
+          best = candidate.cells;
+        }
       }
     }
   }
