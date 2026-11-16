@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.21.3 — 2026-11-16
+
+### Fixed
+
+- Remount/restart live mosaic streams when returning to the CCTV panel after Companion app background or tab hide (black tiles with “N live” until navigate away/back)
+
 ## 0.21.2 — 2026-11-16
 
 ### Fixed

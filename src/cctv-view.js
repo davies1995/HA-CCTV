@@ -450,6 +450,9 @@ export class CctvView extends LitElement {
    *   (closes the brief gap before non-cached custom panels are removeChild'd)
    * - `document.hidden` for browser tab hide (suspendWhenHidden path)
    * - `disconnectedCallback` when HA actually unmounts the panel
+   *
+   * Resume (Companion / WebView / tab return): remount live players — otherwise
+   * HLS/WebRTC/ha-camera-stream often stay black while status still says "N live".
    */
   _bindPanelVisibility() {
     if (!this.panelMode) return;
@@ -457,12 +460,34 @@ export class CctvView extends LitElement {
 
     this._onDocVisibility = () => {
       if (typeof document !== "undefined" && document.hidden) {
+        this._resumeAfterBackground = true;
         this._setPanelActive(false);
         return;
       }
       if (this.isConnected && this._isCctvLocation()) {
         this._setPanelActive(true);
+        // Remount even when panel stayed "active" (Companion often skips a clean
+        // hidden→visible cycle but still kills media tracks).
+        this._resumeAfterBackground = true;
+        this._scheduleLiveRemountOnResume("visibility");
       }
+    };
+
+    this._onPageShow = () => {
+      if (!this.isConnected || !this._isCctvLocation()) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      this._setPanelActive(true);
+      this._resumeAfterBackground = true;
+      this._scheduleLiveRemountOnResume("pageshow");
+    };
+
+    this._onWindowFocus = () => {
+      if (!this.isConnected || !this._isCctvLocation()) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      // Only after a real background — avoid remounting on every desktop window focus.
+      if (!this._resumeAfterBackground) return;
+      if (!this._panelActive) this._setPanelActive(true);
+      this._scheduleLiveRemountOnResume("focus");
     };
 
     this._onLocationChange = () => {
@@ -471,9 +496,12 @@ export class CctvView extends LitElement {
         this._setPanelActive(false);
         return;
       }
-      // Path still this panel → stay live (never remount while watching).
+      // Path still this panel → stay live (do not remount on in-panel URL noise).
       if (this._isCctvLocation()) {
-        if (!this._panelActive) this._setPanelActive(true);
+        if (!this._panelActive) {
+          this._setPanelActive(true);
+          this._scheduleLiveRemountOnResume("location");
+        }
         return;
       }
       // Sidebar / in-app navigate away — unload immediately.
@@ -484,21 +512,78 @@ export class CctvView extends LitElement {
       document.addEventListener("visibilitychange", this._onDocVisibility);
     }
     if (typeof window !== "undefined") {
+      window.addEventListener("pageshow", this._onPageShow);
+      window.addEventListener("focus", this._onWindowFocus);
       window.addEventListener("location-changed", this._onLocationChange);
       window.addEventListener("popstate", this._onLocationChange);
     }
   }
 
   _unbindPanelVisibility() {
+    if (this._resumeRemountTimer) {
+      clearTimeout(this._resumeRemountTimer);
+      this._resumeRemountTimer = 0;
+    }
     if (this._onDocVisibility && typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this._onDocVisibility);
       this._onDocVisibility = null;
     }
-    if (this._onLocationChange && typeof window !== "undefined") {
-      window.removeEventListener("location-changed", this._onLocationChange);
-      window.removeEventListener("popstate", this._onLocationChange);
-      this._onLocationChange = null;
+    if (typeof window !== "undefined") {
+      if (this._onPageShow) {
+        window.removeEventListener("pageshow", this._onPageShow);
+        this._onPageShow = null;
+      }
+      if (this._onWindowFocus) {
+        window.removeEventListener("focus", this._onWindowFocus);
+        this._onWindowFocus = null;
+      }
+      if (this._onLocationChange) {
+        window.removeEventListener("location-changed", this._onLocationChange);
+        window.removeEventListener("popstate", this._onLocationChange);
+        this._onLocationChange = null;
+      }
     }
+  }
+
+  /**
+   * Debounced remount after app/tab resume. Coalesces visibility + pageshow + focus.
+   * @param {string} [_reason]
+   */
+  _scheduleLiveRemountOnResume(_reason = "") {
+    if (!this.panelMode || !this._panelActive) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (!this._isCctvLocation()) return;
+    // Don't tear down detection playback on resume — only live mosaic.
+    if (this._playback?.playing) return;
+    if (this._resumeRemountTimer) clearTimeout(this._resumeRemountTimer);
+    this._resumeRemountTimer = setTimeout(() => {
+      this._resumeRemountTimer = 0;
+      this._forceRemountLiveStreams();
+    }, 80);
+  }
+
+  /**
+   * Destroy and remount mosaic stream players so HLS/WebRTC/ha-camera-stream
+   * restart after Companion/WebView backgrounding (black tiles otherwise).
+   */
+  _forceRemountLiveStreams() {
+    if (!this.panelMode || !this._panelActive) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (this._playback?.playing) return;
+    this._resumeAfterBackground = false;
+    try {
+      streamSlots.releaseAll();
+    } catch (err) {
+      console.warn("CCTV: stream slot reset failed", err);
+    }
+    this._unloadStreamPlayers();
+    this._liveMountGen += 1;
+    this._status =
+      this._status === "Suspended — streams unloaded" ? "" : this._status;
+    this.updateComplete.then(() => {
+      this._wakeLiveStreamPlayers();
+      this._schedulePack();
+    });
   }
 
   /**
@@ -522,11 +607,14 @@ export class CctvView extends LitElement {
    */
   _setPanelActive(active) {
     const next = Boolean(active);
-    if (this._panelActive === next) return;
+    const was = this._panelActive;
+    if (was === next) return;
     this._panelActive = next;
     if (next) {
       this._status = this._status === "Suspended — streams unloaded" ? "" : this._status;
       this._schedulePack();
+      // After a real suspend, remount players (placeholder → mosaic).
+      if (was === false) this._scheduleLiveRemountOnResume("activate");
     } else {
       this._suspendResources();
     }
@@ -534,6 +622,7 @@ export class CctvView extends LitElement {
 
   /** Unload streams/playback/timers/observers while panel is away. */
   _suspendResources() {
+    this._resumeAfterBackground = true;
     this._loadToken += 1;
     this._teardownPlaybackMedia({ clearSrc: true });
     this._playback = null;

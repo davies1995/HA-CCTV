@@ -8,6 +8,7 @@ import "./cctv-view.js";
  * Leave-page unload (in cctv-view): HA `location-changed` / `popstate` when the
  * path leaves this panel, plus `document.hidden` (tab hide) and
  * `disconnectedCallback` (HA removes non-cached custom panels on sidebar leave).
+ * Resume remounts live players on visibility/pageshow after Companion background.
  * No IntersectionObserver — that remounted streams while watching.
  */
 class CctvDashboardPanel extends LitElement {
