@@ -92,7 +92,6 @@ import {
   contentBoxWidth,
   estimateTvChromePx,
   loadTvMode,
-  packTvHeroMosaic,
   saveTvMode,
   tvPackGap,
   tvStageFullContentWidth,
@@ -139,7 +138,7 @@ export class CctvView extends LitElement {
     _zoneDraftGroupIds: { state: true },
     /** Shared admin cap: max groups/cameras per zone (1–4). */
     _maxCamerasPerZone: { state: true },
-    /** TV mode: entity id promoted to the large hero tile. */
+    /** TV mode: entity id with priority size; empty = equal aspect pack. */
     _tvFocusId: { state: true },
     /** @type {Record<string, string>} draft forced aspect labels */
     _forceAspect: { state: true },
@@ -685,11 +684,11 @@ export class CctvView extends LitElement {
       aspect: this._effectiveAspect(cam.entityId),
     }));
     const gap = this._tvMode ? tvPackGap(items.length) : 10;
-    // TV mode: focused feed is the large hero; others stack smaller beside it.
-    const cells =
-      this._tvMode && items.length >= 3
-        ? packTvHeroMosaic(items, boxW, boxH, gap, this._tvFocusId)
-        : packAspectMosaic(items, boxW, boxH, gap);
+    // TV: aspect-correct cells from settings/probe. Focus (if any) gets
+    // priority area; empty focus → equal densest pack (no invented hero box).
+    const cells = packAspectMosaic(items, boxW, boxH, gap, {
+      focusId: this._tvMode ? this._tvFocusId : "",
+    });
     const nextStyles = cellsToPercentStyles(cells, boxW, boxH);
     if (!this._packStylesEqual(this._packStyles, nextStyles)) {
       this._packStyles = nextStyles;
@@ -861,8 +860,9 @@ export class CctvView extends LitElement {
     if (this._visibleIds.length > mosaicMax) {
       this._visibleIds = this._visibleIds.slice(0, mosaicMax);
     }
-    if (!this._tvFocusId && this._visibleIds[0]) {
-      this._tvFocusId = this._visibleIds[0];
+    // TV focus starts empty → equal aspect pack until the user taps a feed.
+    if (this._tvFocusId && !this._visibleIds.includes(this._tvFocusId)) {
+      this._tvFocusId = "";
     }
 
     this._selectionReady = true;
@@ -1154,11 +1154,10 @@ export class CctvView extends LitElement {
         }
         next.push(entityId);
       }
-      if (!this._tvFocusId) this._tvFocusId = entityId;
     } else {
       next = next.filter((id) => id !== entityId);
       if (this._tvFocusId === entityId) {
-        this._tvFocusId = next[0] || "";
+        this._tvFocusId = "";
       }
     }
     this._visibleIds = next;
@@ -1239,15 +1238,16 @@ export class CctvView extends LitElement {
     }
     next = next.slice(0, this._mosaicLimit());
     if (this._tvFocusId && !next.includes(this._tvFocusId)) {
-      this._tvFocusId = next[0] || "";
+      this._tvFocusId = "";
     }
     this._visibleIds = next;
     await this._persistSelection(next);
   }
 
   /**
-   * TV mode: promote a mosaic feed to the large hero tile.
-   * Second tap on the current hero opens the camera detail.
+   * TV mode: tap a feed to give it priority size (aspect-correct pack).
+   * Tap the focused feed again to clear focus → equal layout.
+   * Outside TV mode, opens camera detail as before.
    * @param {string} entityId
    */
   _onTvTileActivate(entityId) {
@@ -1258,7 +1258,9 @@ export class CctvView extends LitElement {
       return;
     }
     if (this._tvFocusId === id) {
-      this._openDetail(id);
+      this._tvFocusId = "";
+      this._schedulePack();
+      this._status = "Equal mosaic layout";
       return;
     }
     this._tvFocusId = id;
@@ -2804,8 +2806,9 @@ export class CctvView extends LitElement {
             <span class="picker-name">TV mode</span>
             <span class="picker-id">
               Per-device (this browser / kiosk). Fits a 16:9 mosaic above the fold
-              (accounts for HA / kiosk chrome); up to ${mosaicLimit} cams fill the stage;
-              1–2 cams maximize; tap a feed to promote it to the large hero tile.
+              (accounts for HA / kiosk chrome); up to ${mosaicLimit} cams fill the stage.
+              Packs honor each camera’s aspect settings (no forced letterbox boxes).
+              Tap a feed for priority size; tap again for equal layout.
               Timeline and Saved detections scroll below.
             </span>
           </label>
@@ -3563,8 +3566,7 @@ export class CctvView extends LitElement {
     const item = track ? this._currentPlaybackItem(track) : null;
     const forceLabel = this._forceAspectLabel(cam.entityId);
     const forcedRatio = forceAspectRatio(forceLabel);
-    const tvHero =
-      this._tvMode && this._tvFocusId === cam.entityId && this._visibleIds.length >= 3;
+    const tvHero = this._tvMode && Boolean(this._tvFocusId) && this._tvFocusId === cam.entityId;
     // Trigger highlight is a pointer-events:none overlay — never rewrite the
     // tile class/style or video src/kick (that broke pre-#46 playback).
     const triggerMeta =

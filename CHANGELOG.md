@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.21.2 — 2026-11-16
+
+### Fixed
+
+- TV mosaic packs each feed to its **aspect settings** (no forced hero boxes that create black letterbox/pillarbox bars)
+- Tap-to-focus still enlarges the priority feed; with no focus the layout treats cameras equally
+
 ## 0.21.1 — 2026-11-16
 
 ### Added
