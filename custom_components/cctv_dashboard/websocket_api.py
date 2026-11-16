@@ -22,6 +22,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_user_notify)
     websocket_api.async_register_command(hass, ws_set_sensor_links)
     websocket_api.async_register_command(hass, ws_set_stream_groups)
+    websocket_api.async_register_command(hass, ws_set_zones)
     websocket_api.async_register_command(hass, ws_set_force_aspect)
     websocket_api.async_register_command(hass, ws_set_camera_prefs)
     websocket_api.async_register_command(hass, ws_list_recordings)
@@ -189,13 +190,14 @@ async def ws_set_sensor_links(
         vol.Required("stream_groups"): list,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_set_stream_groups(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Save site-wide physical-camera stream groups (shared sensor assignment)."""
+    """Admin-only: save site-wide physical-camera stream groups."""
     store = _store(hass)
     manager = _manager(hass)
     if not store:
@@ -204,6 +206,28 @@ async def ws_set_stream_groups(
     data = await store.async_save({"stream_groups": msg["stream_groups"]})
     if manager:
         manager.apply_store_update()
+    connection.send_result(msg["id"], data)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "cctv_dashboard/set_zones",
+        vol.Required("zones"): list,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_zones(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Admin-only: save site-wide zones that assign stream groups."""
+    store = _store(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "CCTV store not ready")
+        return
+    data = await store.async_save({"zones": msg["zones"]})
     connection.send_result(msg["id"], data)
 
 

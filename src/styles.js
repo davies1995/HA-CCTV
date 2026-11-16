@@ -1042,6 +1042,26 @@ export const sharedStyles = css`
     justify-content: flex-end;
   }
 
+  .zone-pages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0.75rem;
+  }
+
+  .zone-page {
+    min-width: 4.5rem;
+  }
+
+  .admin-structure {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--cctv-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
   .recording-total {
     margin-right: 0.25rem;
     color: var(--cctv-muted);

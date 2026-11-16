@@ -76,6 +76,48 @@ def _normalize_stream_groups(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _normalize_zones(raw: Any, groups: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Named zones that list stream-group ids (admin-managed, site-wide)."""
+    valid_groups = {
+        str(g.get("id") or "")
+        for g in (groups or [])
+        if str(g.get("id") or "")
+    }
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        group_ids: list[str] = []
+        for gid in item.get("group_ids") or item.get("groups") or []:
+            sid = str(gid or "").strip()
+            if not sid or sid in group_ids:
+                continue
+            if valid_groups and sid not in valid_groups:
+                continue
+            group_ids.append(sid)
+            if len(group_ids) >= 32:
+                break
+        raw_id = str(item.get("id") or "").strip()
+        if raw_id and re.fullmatch(r"[a-zA-Z0-9._-]{1,64}", raw_id):
+            zone_id = raw_id
+        else:
+            name_seed = str(item.get("name") or "zone").strip() or "zone"
+            zone_id = f"zone_{re.sub(r'[^a-zA-Z0-9._-]+', '_', name_seed)[:40]}"
+        if zone_id in used_ids:
+            continue
+        used_ids.add(zone_id)
+        name = str(item.get("name") or "").strip()[:64]
+        if not name:
+            name = zone_id.removeprefix("zone_").replace("_", " ") or "Zone"
+        out.append({"id": zone_id, "name": name, "group_ids": group_ids})
+        if len(out) >= 32:
+            break
+    return out
+
+
 def sync_sensor_links_across_groups(
     links: dict[str, list[str]], groups: list[dict[str, Any]]
 ) -> dict[str, list[str]]:
@@ -255,6 +297,7 @@ def default_data() -> dict[str, Any]:
     return {
         "sensor_links": {},
         "stream_groups": [],
+        "zones": [],
         "force_aspect": {},
         "camera_quality": {},
         "retention_days": DEFAULT_RETENTION_DAYS,
@@ -277,6 +320,9 @@ class PanelStore:
         if isinstance(loaded, dict):
             data["stream_groups"] = _normalize_stream_groups(
                 loaded.get("stream_groups")
+            )
+            data["zones"] = _normalize_zones(
+                loaded.get("zones"), data["stream_groups"]
             )
             data["sensor_links"] = sync_sensor_links_across_groups(
                 _normalize_links(loaded.get("sensor_links")),
@@ -311,6 +357,15 @@ class PanelStore:
             if "stream_groups" in patch:
                 data["stream_groups"] = _normalize_stream_groups(
                     patch["stream_groups"]
+                )
+            if "zones" in patch:
+                data["zones"] = _normalize_zones(
+                    patch["zones"], data.get("stream_groups") or []
+                )
+            # Drop zone group refs removed when stream_groups change.
+            if "stream_groups" in patch:
+                data["zones"] = _normalize_zones(
+                    data.get("zones") or [], data.get("stream_groups") or []
                 )
             if "sensor_links" in patch:
                 data["sensor_links"] = _normalize_links(patch["sensor_links"])

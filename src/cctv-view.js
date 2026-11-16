@@ -62,6 +62,7 @@ import {
   saveSensorLinks,
   saveStreamGroups,
   saveUserNotifyPreference,
+  saveZones,
   signPlaybackTracks,
   mediaApiPathFromClip,
   signRecordingUrl,
@@ -72,11 +73,18 @@ import {
   groupForCamera,
   groupMembersForCamera,
   normalizeStreamGroups,
+  pickHighStreamFromGroup,
   removeStreamGroup,
   suggestGroupMembersFromDevice,
   syncSensorLinksAcrossGroups,
   upsertStreamGroup,
 } from "./stream-groups.js";
+import {
+  normalizeZones,
+  removeZone,
+  upsertZone,
+  zoneById,
+} from "./zones.js";
 import { DEFAULT_MAX_STREAMS, streamSlots } from "./stream-slots.js";
 import {
   contentBoxWidth,
@@ -112,10 +120,20 @@ export class CctvView extends LitElement {
     _sensorLinks: { state: true },
     /** @type {import("./stream-groups.js").StreamGroup[]} physical-camera groups */
     _streamGroups: { state: true },
-    /** Draft member entity ids while editing a stream group on detail. */
+    /** @type {import("./zones.js").CameraZone[]} */
+    _zones: { state: true },
+    /** Per-user active zone id for mosaic picker */
+    _selectedZoneId: { state: true },
+    _manageGroupsOpen: { state: true },
+    _manageZonesOpen: { state: true },
+    /** Draft member entity ids while editing a stream group (admin Choose cameras). */
     _groupDraftMembers: { state: true },
-    /** Draft display name for the stream group on detail. */
     _groupDraftName: { state: true },
+    _groupDraftId: { state: true },
+    _zoneDraftId: { state: true },
+    _zoneDraftName: { state: true },
+    /** @type {string[]} */
+    _zoneDraftGroupIds: { state: true },
     /** @type {Record<string, string>} draft forced aspect labels */
     _forceAspect: { state: true },
     /** @type {Record<string, string>} last saved forced aspect */
@@ -182,8 +200,16 @@ export class CctvView extends LitElement {
     this._visibleIds = [];
     this._sensorLinks = {};
     this._streamGroups = [];
+    this._zones = [];
+    this._selectedZoneId = "";
+    this._manageGroupsOpen = false;
+    this._manageZonesOpen = false;
     this._groupDraftMembers = [];
     this._groupDraftName = "";
+    this._groupDraftId = "";
+    this._zoneDraftId = "";
+    this._zoneDraftName = "";
+    this._zoneDraftGroupIds = [];
     this._forceAspect = {};
     this._savedForceAspect = {};
     this._cameraQuality = {};
@@ -750,6 +776,9 @@ export class CctvView extends LitElement {
       this._visibleIds = [];
       this._pickerOpen = true;
     }
+    if (userData?.selectedZone) {
+      this._selectedZoneId = String(userData.selectedZone);
+    }
 
     let links = shared?.sensorLinks || {};
     // One-time migrate: older builds stored links in per-user frontend data.
@@ -777,6 +806,16 @@ export class CctvView extends LitElement {
     }
 
     this._streamGroups = normalizeStreamGroups(shared?.streamGroups || []);
+    this._zones = normalizeZones(shared?.zones || [], this._streamGroups);
+    if (
+      this._selectedZoneId &&
+      !zoneById(this._zones, this._selectedZoneId) &&
+      this._zones[0]
+    ) {
+      this._selectedZoneId = this._zones[0].id;
+    } else if (!this._selectedZoneId && this._zones[0]) {
+      this._selectedZoneId = this._zones[0].id;
+    }
     this._sensorLinks = syncSensorLinksAcrossGroups(
       links,
       this._streamGroups
@@ -827,6 +866,11 @@ export class CctvView extends LitElement {
       this._recordingDebugSummary = String(settings.recording_debug_summary || "");
       if (settings.streamGroups) {
         this._streamGroups = normalizeStreamGroups(settings.streamGroups);
+      }
+      if (settings.zones) {
+        this._zones = normalizeZones(settings.zones, this._streamGroups);
+      } else if (settings.streamGroups) {
+        this._zones = normalizeZones(this._zones, this._streamGroups);
       }
       if (settings.sensorLinks) {
         this._sensorLinks = syncSensorLinksAcrossGroups(
@@ -1000,12 +1044,35 @@ export class CctvView extends LitElement {
     if (Array.isArray(saved.stream_groups)) {
       this._streamGroups = normalizeStreamGroups(saved.stream_groups);
     }
+    if (Array.isArray(saved.zones)) {
+      this._zones = normalizeZones(saved.zones, this._streamGroups);
+    }
     if (saved.sensor_links) {
       this._sensorLinks = syncSensorLinksAcrossGroups(
         saved.sensor_links,
         this._streamGroups
       );
     }
+  }
+
+  /**
+   * Select a physical group into the mosaic: high-res stream + balanced quality.
+   * @param {import("./stream-groups.js").StreamGroup} group
+   * @param {boolean} checked
+   */
+  async _toggleGroupForMosaic(group, checked) {
+    if (!group?.members?.length) return;
+    if (!checked) {
+      const selected = this._visibleIds.find((id) =>
+        group.members.includes(id)
+      );
+      if (selected) await this._toggleVisible(selected, false);
+      return;
+    }
+    const preferred =
+      pickHighStreamFromGroup(group.members) || group.members[0];
+    await this._toggleVisible(preferred, true);
+    await this._setPickerQuality(preferred, "balanced");
   }
 
   async _toggleVisible(entityId, checked) {
@@ -1081,8 +1148,13 @@ export class CctvView extends LitElement {
   async _persistSelection(ids) {
     this._saving = true;
     try {
-      const saved = await savePanelSelection(this.hass, ids);
+      const saved = await savePanelSelection(this.hass, ids, {
+        selectedZone: this._selectedZoneId || "",
+      });
       if (saved?.selectedCameras) this._visibleIds = saved.selectedCameras;
+      if (saved?.selectedZone != null) {
+        this._selectedZoneId = saved.selectedZone || this._selectedZoneId;
+      }
       const next = saved?.selectedCameras || ids;
       this._status = next.length
         ? `${next.length} camera${next.length === 1 ? "" : "s"} on screen`
@@ -1092,6 +1164,12 @@ export class CctvView extends LitElement {
     } finally {
       this._saving = false;
     }
+  }
+
+  async _selectZone(zoneId) {
+    const zone = zoneById(this._zones, zoneId);
+    this._selectedZoneId = zone?.id || String(zoneId || "");
+    await this._persistSelection(this._visibleIds);
   }
 
   async _persistSensorLinks(next) {
@@ -1242,6 +1320,10 @@ export class CctvView extends LitElement {
   }
 
   async _persistStreamGroups(groups) {
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can edit camera groups";
+      return;
+    }
     this._saving = true;
     try {
       const normalized = normalizeStreamGroups(groups);
@@ -1258,9 +1340,42 @@ export class CctvView extends LitElement {
       } else if (saved?.sensor_links == null && Object.keys(syncedLinks).length) {
         await this._persistSensorLinks(syncedLinks);
       }
-      this._status = "Stream groups saved for all users";
+      if (Array.isArray(saved?.zones)) {
+        this._zones = normalizeZones(saved.zones, this._streamGroups);
+      } else {
+        this._zones = normalizeZones(this._zones, this._streamGroups);
+      }
+      this._status = "Camera groups saved for all users";
     } catch (err) {
-      this._status = err?.message || "Could not save stream groups";
+      this._status = err?.message || "Could not save camera groups";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async _persistZones(zones) {
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can edit zones";
+      return;
+    }
+    this._saving = true;
+    const normalized = normalizeZones(zones, this._streamGroups);
+    try {
+      const saved = await saveZones(this.hass, normalized);
+      this._zones = normalizeZones(
+        saved?.zones || normalized,
+        this._streamGroups
+      );
+      if (
+        this._selectedZoneId &&
+        !zoneById(this._zones, this._selectedZoneId)
+      ) {
+        this._selectedZoneId = this._zones[0]?.id || "";
+        await this._persistSelection(this._visibleIds);
+      }
+      this._status = "Zones saved for all users";
+    } catch (err) {
+      this._status = err?.message || "Could not save zones";
     } finally {
       this._saving = false;
     }
@@ -1269,12 +1384,44 @@ export class CctvView extends LitElement {
   _syncGroupDraftFromCamera(cameraId) {
     const group = groupForCamera(this._streamGroups, cameraId);
     if (group) {
+      this._groupDraftId = group.id;
       this._groupDraftMembers = [...group.members];
       this._groupDraftName = group.name || "";
       return;
     }
-    this._groupDraftMembers = [cameraId];
+    this._groupDraftId = "";
+    this._groupDraftMembers = cameraId ? [cameraId] : [];
     this._groupDraftName = "";
+  }
+
+  _beginNewGroupDraft() {
+    this._groupDraftId = "";
+    this._groupDraftName = "";
+    this._groupDraftMembers = [];
+    this._manageGroupsOpen = true;
+  }
+
+  _editGroupDraft(group) {
+    if (!group) return;
+    this._groupDraftId = group.id;
+    this._groupDraftName = group.name || "";
+    this._groupDraftMembers = [...(group.members || [])];
+    this._manageGroupsOpen = true;
+  }
+
+  _beginNewZoneDraft() {
+    this._zoneDraftId = "";
+    this._zoneDraftName = "";
+    this._zoneDraftGroupIds = [];
+    this._manageZonesOpen = true;
+  }
+
+  _editZoneDraft(zone) {
+    if (!zone) return;
+    this._zoneDraftId = zone.id;
+    this._zoneDraftName = zone.name || "";
+    this._zoneDraftGroupIds = [...(zone.group_ids || [])];
+    this._manageZonesOpen = true;
   }
 
   _toggleGroupDraftMember(cameraId, memberId, checked) {
@@ -1291,22 +1438,83 @@ export class CctvView extends LitElement {
     this._groupDraftMembers = [...new Set(next)].slice(0, 8);
   }
 
-  async _saveGroupDraft(cameraId) {
-    const members = [...new Set([cameraId, ...(this._groupDraftMembers || [])])]
-      .filter((id) => String(id).startsWith("camera."))
-      .slice(0, 8);
+  async _saveGroupDraft(cameraId = "") {
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can edit camera groups";
+      return;
+    }
+    const seed = cameraId || this._groupDraftMembers?.[0] || "";
+    const members = [
+      ...new Set(
+        [...(seed ? [seed] : []), ...(this._groupDraftMembers || [])]
+          .map(String)
+          .filter((id) => id.startsWith("camera."))
+      ),
+    ].slice(0, 8);
     if (members.length < 2) {
       this._status = "Add at least one other stream to form a physical camera";
       return;
     }
-    const existing = groupForCamera(this._streamGroups, cameraId);
+    const existingId =
+      this._groupDraftId ||
+      groupForCamera(this._streamGroups, members[0])?.id ||
+      "";
     const next = upsertStreamGroup(this._streamGroups, {
-      id: existing?.id,
+      id: existingId,
       name: this._groupDraftName,
       members,
     });
     await this._persistStreamGroups(next);
-    this._syncGroupDraftFromCamera(cameraId);
+    const saved = groupForCamera(this._streamGroups, members[0]);
+    if (saved) this._editGroupDraft(saved);
+    else this._beginNewGroupDraft();
+  }
+
+  async _saveZoneDraft() {
+    if (!this._isAdmin()) {
+      this._status = "Only Home Assistant admins can edit zones";
+      return;
+    }
+    const next = upsertZone(
+      this._zones,
+      {
+        id: this._zoneDraftId,
+        name: this._zoneDraftName,
+        group_ids: this._zoneDraftGroupIds,
+      },
+      this._streamGroups
+    );
+    await this._persistZones(next);
+    const id = this._zoneDraftId;
+    const saved =
+      zoneById(this._zones, id) ||
+      this._zones.find((z) => z.name === String(this._zoneDraftName || "").trim()) ||
+      this._zones.at(-1);
+    if (saved) this._editZoneDraft(saved);
+  }
+
+  _toggleZoneDraftGroup(groupId, checked) {
+    const gid = String(groupId || "");
+    if (!gid) return;
+    let next = [...(this._zoneDraftGroupIds || [])];
+    if (checked) {
+      if (!next.includes(gid)) next.push(gid);
+    } else {
+      next = next.filter((id) => id !== gid);
+    }
+    this._zoneDraftGroupIds = next.slice(0, 32);
+  }
+
+  _toggleManageGroupMember(memberId, checked) {
+    const mid = String(memberId || "");
+    if (!mid.startsWith("camera.")) return;
+    let next = [...(this._groupDraftMembers || [])];
+    if (checked) {
+      if (!next.includes(mid)) next.push(mid);
+    } else {
+      next = next.filter((id) => id !== mid);
+    }
+    this._groupDraftMembers = [...new Set(next)].slice(0, 8);
   }
 
   async _suggestGroupFromDevice(cameraId) {
@@ -2252,7 +2460,7 @@ export class CctvView extends LitElement {
                     type="button"
                     @click=${() => (this._pickerOpen = !this._pickerOpen)}
                   >
-                    ${this._pickerOpen ? "Hide cameras" : "Choose cameras"}
+                    ${this._pickerOpen ? "Hide cameras" : "Cameras & zones"}
                   </button>
                   <button
                     class="btn"
@@ -2617,26 +2825,36 @@ export class CctvView extends LitElement {
   }
 
   /**
-   * Picker rows: one per physical group + ungrouped cameras.
+   * Picker rows for the active zone: groups in zone (+ ungrouped cams when no zones).
    * @param {ReturnType<typeof listCameras>} cameras
    */
   _pickerRows(cameras) {
     const byId = new Map(cameras.map((c) => [c.entityId, c]));
+    const zones = this._zones || [];
+    const activeZone = zoneById(zones, this._selectedZoneId);
+    const allowedGroupIds = activeZone
+      ? new Set(activeZone.group_ids || [])
+      : null;
     const seen = new Set();
     /** @type {Array<{ type: "group", group: any, members: any[], selectedId: string | null } | { type: "camera", cam: any }>} */
     const rows = [];
-    for (const cam of cameras) {
-      if (seen.has(cam.entityId)) continue;
-      const group = this._groupFor(cam.entityId);
-      if (group) {
-        for (const mid of group.members) seen.add(mid);
-        const members = group.members
-          .map((id) => byId.get(id) || cameraFromState(id, this.hass?.states?.[id]))
-          .filter(Boolean);
-        const selectedId =
-          this._visibleIds.find((id) => group.members.includes(id)) || null;
-        rows.push({ type: "group", group, members, selectedId });
-      } else {
+
+    for (const group of this._streamGroups || []) {
+      if (allowedGroupIds && !allowedGroupIds.has(group.id)) continue;
+      for (const mid of group.members || []) seen.add(mid);
+      const members = (group.members || [])
+        .map((id) => byId.get(id) || cameraFromState(id, this.hass?.states?.[id]))
+        .filter(Boolean);
+      if (!members.length) continue;
+      const selectedId =
+        this._visibleIds.find((id) => group.members.includes(id)) || null;
+      rows.push({ type: "group", group, members, selectedId });
+    }
+
+    // Ungrouped streams only when no zones configured (or zone has no groups yet).
+    if (!zones.length) {
+      for (const cam of cameras) {
+        if (seen.has(cam.entityId)) continue;
         seen.add(cam.entityId);
         rows.push({ type: "camera", cam });
       }
@@ -2648,182 +2866,434 @@ export class CctvView extends LitElement {
     if (!cameras.length) {
       return html`<p class="empty">No camera entities found.</p>`;
     }
+    const admin = this._isAdmin();
+    const zones = this._zones || [];
     const rows = this._pickerRows(cameras);
     return html`
       <section class="picker" aria-label="Camera selection">
         <div class="picker-head">
-          <strong>Visible streams</strong>
+          <strong>Choose cameras</strong>
           <span class="hint">
-            Select 1–${maxStreams}. For grouped physical cameras, pick which stream and quality.
-            Live failover uses another group stream if the preferred one fails.
-            Selection is per user; sensors/groups stay shared.
+            Select 1–${maxStreams} groups for this mosaic. Selecting a group defaults to
+            <strong>high-resolution</strong> stream and <strong>balanced</strong> quality.
+            Zones and groups are shared; ${admin ? "admins configure them below." : "only admins can create or edit groups/zones."}
           </span>
         </div>
-        <div class="picker-list">
-          ${rows.map((row) => {
-            if (row.type === "group") {
-              const selectedId = row.selectedId;
-              const checked = Boolean(selectedId);
-              const disabled = !checked && this._visibleIds.length >= maxStreams;
-              const preferred = selectedId || row.members[0]?.entityId || "";
-              const quality = preferred ? this._qualityFor(preferred) : "auto";
-              const forceSelect = preferred
-                ? forceAspectSelectValue(this._forceAspectLabel(preferred))
-                : "auto";
-              const linked = preferred ? this._linksFor(preferred).length : 0;
-              return html`
-                <div class="picker-item picker-group ${disabled ? "disabled" : ""}">
-                  <label class="picker-group-main">
-                    <input
-                      type="checkbox"
-                      .checked=${checked}
-                      ?disabled=${disabled && !checked}
-                      @change=${(e) =>
-                        this._toggleVisible(
-                          preferred || row.members[0]?.entityId,
-                          e.target.checked
-                        )}
-                    />
-                    <span class="picker-name">
-                      ${row.group.name}
-                      <span class="group-badge">${row.members.length} streams</span>
-                    </span>
-                  </label>
-                  <span class="picker-id">
-                    ${linked
-                      ? `${linked} sensor${linked === 1 ? "" : "s"} shared`
-                      : "No sensors linked yet"}
-                    · quality ${quality} · aspect ${forceSelect}
-                  </span>
-                  <div class="picker-stream-controls">
-                    <label>
-                      Stream
-                      <select
-                        ?disabled=${!checked || this._saving}
-                        @change=${(e) =>
-                          this._setPreferredStream(
-                            selectedId || preferred,
-                            e.target.value
-                          )}
-                      >
-                        ${row.members.map(
-                          (m) =>
-                            html`<option
-                              value=${m.entityId}
-                              ?selected=${m.entityId === preferred}
-                            >
-                              ${m.name || m.entityId}
-                            </option>`
-                        )}
-                      </select>
-                    </label>
-                    <label>
-                      Quality
-                      <select
-                        ?disabled=${!checked || this._saving}
-                        @change=${(e) =>
-                          this._setPickerQuality(preferred, e.target.value)}
-                      >
-                        ${QUALITY_OPTIONS.map(
-                          (opt) =>
-                            html`<option
-                              value=${opt.value}
-                              ?selected=${opt.value === quality}
-                            >
-                              ${opt.label}
-                            </option>`
-                        )}
-                      </select>
-                    </label>
-                    <label>
-                      Aspect
-                      <select
-                        ?disabled=${!checked || this._saving}
-                        @change=${(e) =>
-                          this._setPickerForceAspect(preferred, e.target.value)}
-                      >
-                        ${FORCE_ASPECT_OPTIONS.map(
-                          (opt) =>
-                            html`<option
-                              value=${opt.value}
-                              ?selected=${opt.value === forceSelect}
-                            >
-                              ${opt.label}
-                            </option>`
-                        )}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              `;
-            }
-            const cam = row.cam;
-            const checked = this._visibleIds.includes(cam.entityId);
-            const disabled = !checked && this._visibleIds.length >= maxStreams;
-            const linked = this._linksFor(cam.entityId).length;
-            const quality = this._qualityFor(cam.entityId);
-            const forceSelect = forceAspectSelectValue(
-              this._forceAspectLabel(cam.entityId)
-            );
-            return html`
-              <div class="picker-item ${disabled ? "disabled" : ""}">
-                <label class="picker-group-main">
-                  <input
-                    type="checkbox"
-                    .checked=${checked}
-                    ?disabled=${disabled}
-                    @change=${(e) =>
-                      this._toggleVisible(cam.entityId, e.target.checked)}
-                  />
-                  <span class="picker-name">${cam.name}</span>
-                </label>
-                <span class="picker-id">
-                  ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}
-                  · quality ${quality} · aspect ${forceSelect}
-                </span>
-                <div class="picker-stream-controls">
-                  <label>
-                    Quality
-                    <select
-                      ?disabled=${!checked || this._saving}
-                      @change=${(e) =>
-                        this._setPickerQuality(cam.entityId, e.target.value)}
+
+        ${zones.length
+          ? html`
+              <div class="zone-pages" role="tablist" aria-label="Zones">
+                ${zones.map(
+                  (zone) => html`
+                    <button
+                      type="button"
+                      class="btn zone-page ${zone.id === this._selectedZoneId ? "primary" : ""}"
+                      role="tab"
+                      aria-selected=${zone.id === this._selectedZoneId}
+                      @click=${() => this._selectZone(zone.id)}
                     >
-                      ${QUALITY_OPTIONS.map(
-                        (opt) =>
-                          html`<option
-                            value=${opt.value}
-                            ?selected=${opt.value === quality}
-                          >
-                            ${opt.label}
-                          </option>`
-                      )}
-                    </select>
-                  </label>
-                  <label>
-                    Aspect
-                    <select
-                      ?disabled=${!checked || this._saving}
-                      @change=${(e) =>
-                        this._setPickerForceAspect(cam.entityId, e.target.value)}
-                    >
-                      ${FORCE_ASPECT_OPTIONS.map(
-                        (opt) =>
-                          html`<option
-                            value=${opt.value}
-                            ?selected=${opt.value === forceSelect}
-                          >
-                            ${opt.label}
-                          </option>`
-                      )}
-                    </select>
-                  </label>
-                </div>
+                      ${zone.name}
+                    </button>
+                  `
+                )}
               </div>
-            `;
-          })}
+            `
+          : html`<p class="hint">No zones yet${admin ? " — create zones below to organize groups." : "."}</p>`}
+
+        <div class="picker-list">
+          ${!rows.length
+            ? html`<p class="empty">No camera groups in this zone.</p>`
+            : rows.map((row) => {
+                if (row.type === "group") {
+                  const selectedId = row.selectedId;
+                  const checked = Boolean(selectedId);
+                  const disabled = !checked && this._visibleIds.length >= maxStreams;
+                  const preferred =
+                    selectedId ||
+                    pickHighStreamFromGroup(row.group.members) ||
+                    row.members[0]?.entityId ||
+                    "";
+                  const quality = preferred
+                    ? this._qualityFor(preferred)
+                    : "balanced";
+                  const forceSelect = preferred
+                    ? forceAspectSelectValue(this._forceAspectLabel(preferred))
+                    : "auto";
+                  const linked = preferred ? this._linksFor(preferred).length : 0;
+                  return html`
+                    <div class="picker-item picker-group ${disabled ? "disabled" : ""}">
+                      <label class="picker-group-main">
+                        <input
+                          type="checkbox"
+                          .checked=${checked}
+                          ?disabled=${disabled && !checked}
+                          @change=${(e) =>
+                            this._toggleGroupForMosaic(row.group, e.target.checked)}
+                        />
+                        <span class="picker-name">
+                          ${row.group.name}
+                          <span class="group-badge">${row.members.length} streams</span>
+                        </span>
+                      </label>
+                      <span class="picker-id">
+                        ${linked
+                          ? `${linked} sensor${linked === 1 ? "" : "s"} shared`
+                          : "No sensors linked yet"}
+                        · quality ${quality} · aspect ${forceSelect}
+                      </span>
+                      <div class="picker-stream-controls">
+                        <label>
+                          Stream
+                          <select
+                            ?disabled=${!checked || this._saving}
+                            @change=${(e) =>
+                              this._setPreferredStream(
+                                selectedId || preferred,
+                                e.target.value
+                              )}
+                          >
+                            ${row.members.map(
+                              (m) =>
+                                html`<option
+                                  value=${m.entityId}
+                                  ?selected=${m.entityId === preferred}
+                                >
+                                  ${m.name || m.entityId}
+                                </option>`
+                            )}
+                          </select>
+                        </label>
+                        <label>
+                          Quality
+                          <select
+                            ?disabled=${!checked || this._saving}
+                            @change=${(e) =>
+                              this._setPickerQuality(preferred, e.target.value)}
+                          >
+                            ${QUALITY_OPTIONS.map(
+                              (opt) =>
+                                html`<option
+                                  value=${opt.value}
+                                  ?selected=${opt.value === quality}
+                                >
+                                  ${opt.label}
+                                </option>`
+                            )}
+                          </select>
+                        </label>
+                        <label>
+                          Aspect
+                          <select
+                            ?disabled=${!checked || this._saving}
+                            @change=${(e) =>
+                              this._setPickerForceAspect(preferred, e.target.value)}
+                          >
+                            ${FORCE_ASPECT_OPTIONS.map(
+                              (opt) =>
+                                html`<option
+                                  value=${opt.value}
+                                  ?selected=${opt.value === forceSelect}
+                                >
+                                  ${opt.label}
+                                </option>`
+                            )}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  `;
+                }
+                const cam = row.cam;
+                const checked = this._visibleIds.includes(cam.entityId);
+                const disabled = !checked && this._visibleIds.length >= maxStreams;
+                const linked = this._linksFor(cam.entityId).length;
+                const quality = this._qualityFor(cam.entityId);
+                const forceSelect = forceAspectSelectValue(
+                  this._forceAspectLabel(cam.entityId)
+                );
+                return html`
+                  <div class="picker-item ${disabled ? "disabled" : ""}">
+                    <label class="picker-group-main">
+                      <input
+                        type="checkbox"
+                        .checked=${checked}
+                        ?disabled=${disabled}
+                        @change=${(e) =>
+                          this._toggleVisible(cam.entityId, e.target.checked)}
+                      />
+                      <span class="picker-name">${cam.name}</span>
+                    </label>
+                    <span class="picker-id">
+                      ${cam.entityId}${linked ? ` · ${linked} sensor${linked === 1 ? "" : "s"}` : ""}
+                      · quality ${quality} · aspect ${forceSelect}
+                    </span>
+                    <div class="picker-stream-controls">
+                      <label>
+                        Quality
+                        <select
+                          ?disabled=${!checked || this._saving}
+                          @change=${(e) =>
+                            this._setPickerQuality(cam.entityId, e.target.value)}
+                        >
+                          ${QUALITY_OPTIONS.map(
+                            (opt) =>
+                              html`<option
+                                value=${opt.value}
+                                ?selected=${opt.value === quality}
+                              >
+                                ${opt.label}
+                              </option>`
+                          )}
+                        </select>
+                      </label>
+                      <label>
+                        Aspect
+                        <select
+                          ?disabled=${!checked || this._saving}
+                          @change=${(e) =>
+                            this._setPickerForceAspect(cam.entityId, e.target.value)}
+                        >
+                          ${FORCE_ASPECT_OPTIONS.map(
+                            (opt) =>
+                              html`<option
+                                value=${opt.value}
+                                ?selected=${opt.value === forceSelect}
+                              >
+                                ${opt.label}
+                              </option>`
+                          )}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                `;
+              })}
         </div>
+
+        ${admin ? this._renderAdminGroupsZones(cameras) : nothing}
       </section>
+    `;
+  }
+
+  /**
+   * Admin-only manage panels for shared groups + zones.
+   * @param {ReturnType<typeof listCameras>} cameras
+   */
+  _renderAdminGroupsZones(cameras) {
+    const used = new Set();
+    for (const g of this._streamGroups || []) {
+      for (const mid of g.members || []) used.add(mid);
+    }
+    const draftMembers = new Set(this._groupDraftMembers || []);
+    for (const mid of draftMembers) used.delete(mid);
+    return html`
+      <div class="admin-structure">
+        <div class="recording-toolbar">
+          <button
+            class="btn"
+            type="button"
+            @click=${() => {
+              this._manageGroupsOpen = !this._manageGroupsOpen;
+              if (this._manageGroupsOpen && !this._groupDraftMembers.length) {
+                this._beginNewGroupDraft();
+              }
+            }}
+          >
+            ${this._manageGroupsOpen ? "Hide groups" : "Manage groups"}
+          </button>
+          <button
+            class="btn"
+            type="button"
+            @click=${() => {
+              this._manageZonesOpen = !this._manageZonesOpen;
+              if (this._manageZonesOpen && !this._zoneDraftName) {
+                this._beginNewZoneDraft();
+              }
+            }}
+          >
+            ${this._manageZonesOpen ? "Hide zones" : "Manage zones"}
+          </button>
+        </div>
+
+        ${this._manageGroupsOpen
+          ? html`
+              <section class="sensor-settings" aria-label="Manage camera groups">
+                <div class="picker-head">
+                  <strong>Camera groups</strong>
+                  <span class="hint">Admin only · shared for all users. Combine streams into one physical camera.</span>
+                </div>
+                <div class="picker-list">
+                  ${(this._streamGroups || []).map(
+                    (g) => html`
+                      <div class="picker-item">
+                        <span class="picker-name">${g.name}</span>
+                        <span class="picker-id">${g.members.join(", ")}</span>
+                        <div class="recording-actions">
+                          <button class="btn" type="button" @click=${() => this._editGroupDraft(g)}>
+                            Edit
+                          </button>
+                          <button
+                            class="btn recording-delete"
+                            type="button"
+                            ?disabled=${this._saving}
+                            @click=${() =>
+                              this._persistStreamGroups(
+                                removeStreamGroup(this._streamGroups, g.id)
+                              )}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    `
+                  )}
+                </div>
+                <div class="quality-row">
+                  <label>
+                    Group name
+                    <input
+                      type="text"
+                      class="aspect-input"
+                      placeholder="Driveway"
+                      .value=${this._groupDraftName || ""}
+                      @input=${(e) => (this._groupDraftName = e.target.value)}
+                    />
+                  </label>
+                  <button class="btn" type="button" @click=${() => this._beginNewGroupDraft()}>
+                    New group
+                  </button>
+                </div>
+                <div class="sensor-candidates">
+                  <p class="hint">Streams in this group</p>
+                  ${cameras.map((c) => {
+                    const checked = draftMembers.has(c.entityId);
+                    const blocked = used.has(c.entityId) && !checked;
+                    return html`
+                      <label class="sensor-item ${blocked ? "disabled" : ""}">
+                        <input
+                          type="checkbox"
+                          .checked=${checked}
+                          ?disabled=${blocked || this._saving}
+                          @change=${(e) =>
+                            this._toggleManageGroupMember(
+                              c.entityId,
+                              e.target.checked
+                            )}
+                        />
+                        <span class="sensor-name">${c.name}</span>
+                        <span class="picker-id">${c.entityId}</span>
+                      </label>
+                    `;
+                  })}
+                </div>
+                <div class="sensor-tools">
+                  <button
+                    class="btn primary"
+                    type="button"
+                    ?disabled=${this._saving}
+                    @click=${() => this._saveGroupDraft()}
+                  >
+                    ${this._saving ? "Saving…" : "Save group"}
+                  </button>
+                  ${this._groupDraftMembers?.[0]
+                    ? html`
+                        <button
+                          class="btn"
+                          type="button"
+                          ?disabled=${this._saving}
+                          @click=${() =>
+                            this._suggestGroupFromDevice(this._groupDraftMembers[0])}
+                        >
+                          Suggest from device
+                        </button>
+                      `
+                    : nothing}
+                </div>
+              </section>
+            `
+          : nothing}
+
+        ${this._manageZonesOpen
+          ? html`
+              <section class="sensor-settings" aria-label="Manage zones">
+                <div class="picker-head">
+                  <strong>Zones</strong>
+                  <span class="hint">Admin only · shared. Assign camera groups to a zone; users switch zones above.</span>
+                </div>
+                <div class="picker-list">
+                  ${(this._zones || []).map(
+                    (z) => html`
+                      <div class="picker-item">
+                        <span class="picker-name">${z.name}</span>
+                        <span class="picker-id">${(z.group_ids || []).length} group(s)</span>
+                        <div class="recording-actions">
+                          <button class="btn" type="button" @click=${() => this._editZoneDraft(z)}>
+                            Edit
+                          </button>
+                          <button
+                            class="btn recording-delete"
+                            type="button"
+                            ?disabled=${this._saving}
+                            @click=${() =>
+                              this._persistZones(
+                                removeZone(this._zones, z.id, this._streamGroups)
+                              )}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    `
+                  )}
+                </div>
+                <div class="quality-row">
+                  <label>
+                    Zone name
+                    <input
+                      type="text"
+                      class="aspect-input"
+                      placeholder="Front"
+                      .value=${this._zoneDraftName || ""}
+                      @input=${(e) => (this._zoneDraftName = e.target.value)}
+                    />
+                  </label>
+                  <button class="btn" type="button" @click=${() => this._beginNewZoneDraft()}>
+                    New zone
+                  </button>
+                </div>
+                <div class="sensor-candidates">
+                  <p class="hint">Groups in this zone</p>
+                  ${(this._streamGroups || []).map((g) => {
+                    const checked = (this._zoneDraftGroupIds || []).includes(g.id);
+                    return html`
+                      <label class="sensor-item">
+                        <input
+                          type="checkbox"
+                          .checked=${checked}
+                          ?disabled=${this._saving}
+                          @change=${(e) =>
+                            this._toggleZoneDraftGroup(g.id, e.target.checked)}
+                        />
+                        <span class="sensor-name">${g.name}</span>
+                        <span class="picker-id">${g.id}</span>
+                      </label>
+                    `;
+                  })}
+                </div>
+                <div class="sensor-tools">
+                  <button
+                    class="btn primary"
+                    type="button"
+                    ?disabled=${this._saving}
+                    @click=${() => this._saveZoneDraft()}
+                  >
+                    ${this._saving ? "Saving…" : "Save zone"}
+                  </button>
+                </div>
+              </section>
+            `
+          : nothing}
+      </div>
     `;
   }
 
@@ -3223,102 +3693,7 @@ export class CctvView extends LitElement {
           More info
         </button>
       </div>
-      ${this.panelMode ? this._renderStreamGroupSettings(cam) : nothing}
       ${this.panelMode ? this._renderSensorSettings(cam) : nothing}
-    `;
-  }
-
-  _renderStreamGroupSettings(cam) {
-    const group = this._groupFor(cam.entityId);
-    const draft = new Set(this._groupDraftMembers || [cam.entityId]);
-    if (!draft.has(cam.entityId)) draft.add(cam.entityId);
-    const cameras = this._cameras();
-    const usedElsewhere = new Set();
-    for (const g of this._streamGroups || []) {
-      if (group && g.id === group.id) continue;
-      for (const mid of g.members || []) usedElsewhere.add(mid);
-    }
-    const candidates = cameras.filter(
-      (c) => c.entityId === cam.entityId || !usedElsewhere.has(c.entityId)
-    );
-    return html`
-      <section class="sensor-settings" aria-label="Physical camera stream group">
-        <div class="picker-head">
-          <strong>Physical camera (stream group)</strong>
-          <span class="hint">
-            Combine high-res + fluent (or other) <code>camera.*</code> streams into one physical camera.
-            Detection sensors are assigned once and apply to <strong>all streams in the group</strong>
-            (shared for all users). Mosaic still selects which stream(s) to show live.
-          </span>
-        </div>
-        <div class="quality-row">
-          <label>
-            Group name
-            <input
-              type="text"
-              class="aspect-input"
-              placeholder="Driveway"
-              .value=${this._groupDraftName || ""}
-              @input=${(e) => (this._groupDraftName = e.target.value)}
-            />
-          </label>
-          <span class="hint">${group ? `Saved as ${group.id}` : "Not grouped yet"}</span>
-        </div>
-        <div class="sensor-candidates">
-          <p class="hint">Streams in this physical camera</p>
-          ${candidates.map((c) => {
-            const checked = draft.has(c.entityId);
-            const locked = c.entityId === cam.entityId;
-            return html`
-              <label class="sensor-item ${locked ? "disabled" : ""}">
-                <input
-                  type="checkbox"
-                  .checked=${checked}
-                  ?disabled=${locked || this._saving}
-                  @change=${(e) =>
-                    this._toggleGroupDraftMember(
-                      cam.entityId,
-                      c.entityId,
-                      e.target.checked
-                    )}
-                />
-                <span class="sensor-name">${c.name}</span>
-                <span class="picker-id">${c.entityId}</span>
-              </label>
-            `;
-          })}
-        </div>
-        <div class="sensor-tools">
-          <button
-            class="btn primary"
-            type="button"
-            ?disabled=${this._saving}
-            @click=${() => this._saveGroupDraft(cam.entityId)}
-          >
-            ${this._saving ? "Saving…" : "Save stream group"}
-          </button>
-          <button
-            class="btn"
-            type="button"
-            ?disabled=${this._saving}
-            @click=${() => this._suggestGroupFromDevice(cam.entityId)}
-          >
-            Suggest from device
-          </button>
-          ${group
-            ? html`
-                <button
-                  class="btn"
-                  type="button"
-                  ?disabled=${this._saving}
-                  @click=${() => this._ungroupCamera(cam.entityId)}
-                >
-                  Ungroup
-                </button>
-              `
-            : nothing}
-        </div>
-      </section>
     `;
   }
 
@@ -3352,8 +3727,8 @@ export class CctvView extends LitElement {
             Link person / car / animal / package sensors for the timeline and recordings.
             Associations are <strong>shared for all Home Assistant users</strong> (site-wide).
             ${group
-              ? html` Assigned once for physical camera <strong>${group.name}</strong> (${group.members.length} streams). `
-              : nothing}
+              ? html` Assigned once for physical camera <strong>${group.name}</strong> (${group.members.length} streams). Manage groups under <strong>Cameras &amp; zones</strong>. `
+              : html` Group streams under <strong>Cameras &amp; zones</strong> (admins) to share sensors. `}
             Suggestions use name + device heuristics; confirm or pick manually.
           </span>
         </div>
